@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import Image from 'next/image';
+import Image from 'next/image'; // นำเข้า Image จาก next/image
 import { useRouter } from 'next/router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebaseConfig'; // ตรวจสอบ path ให้ถูกต้อง
@@ -18,14 +18,19 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
       setMsg({ type: 'success', text: '✅ เข้าสู่ระบบสำเร็จ' });
+
+      // เก็บ email ของผู้ใช้ใน localStorage
+      localStorage.setItem('loggedInEmail', user.email);
 
       // เพิ่มการหน่วงเวลา 1 วินาที ก่อนที่จะเปลี่ยนไปหน้า home
       setIsLoading(true);
       setTimeout(() => {
         setIsLoading(false);
-        router.push('/home');
+        router.push('/home'); // เปลี่ยนไปหน้า home
       }, 1000); // หน่วงเวลา 1 วินาที
     } catch (error) {
       setMsg({ type: 'error', text: error.message || 'Login failed' });
@@ -35,8 +40,8 @@ export default function Login() {
   };
 
   return (
-    <>
-      <main className="main">
+    <main className="main">
+      <div>
         <Image src="/images/Logo.png" alt="PlayMatch Logo" width={70} height={100} priority />
         <h1>Please sign in</h1>
         <form onSubmit={handleSubmit}>
@@ -76,7 +81,7 @@ export default function Login() {
         {isLoading && <p className="loading-msg">Loading...</p>}
 
         <p className="footer-text">© 2024–2025</p>
-      </main>
+      </div>
 
       <style jsx>{`
         .main {
@@ -196,6 +201,6 @@ export default function Login() {
           }
         }
       `}</style>
-    </>
+    </main>
   );
 }
