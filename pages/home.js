@@ -42,8 +42,12 @@ const Home = () => {
     fetchMembers();
   }, []);
 
-  const generateMemberId = (index) => {
-    return `member_${String(index).padStart(3, '0')}`;
+  const generateMemberId = (members) => {
+    // คำนวณหมายเลขสมาชิกถัดไปโดยการเช็คจำนวนสมาชิกที่มีอยู่แล้ว
+    const lastMember = members[members.length - 1]; 
+    const lastMemberId = lastMember ? parseInt(lastMember.memberId.split('_')[1]) : 0; // แยก memberId และนำตัวเลขมาคำนวณ
+    const newId = lastMemberId + 1; // เพิ่มหมายเลขสมาชิกใหม่
+    return `member_${String(newId).padStart(3, '0')}`; // สร้าง memberId ใหม่
   };
 
   const fetchMembers = async () => {
@@ -101,29 +105,32 @@ const Home = () => {
 
       querySnapshot.forEach(async (docSnapshot) => {
         const userId = docSnapshot.id;
-        const memberId = selectedUser ? selectedUser.memberId : generateMemberId(members.length + 1);
+        let memberId;
 
+        // ตรวจสอบว่าเป็นการเพิ่มหรือแก้ไข
         if (isEditing) {
+          // ใช้ memberId เดิมสำหรับการแก้ไข
+          memberId = selectedUser.memberId;
           const memberRef = doc(db, `users/${userId}/Members/${selectedUser.memberId}`);
           await updateDoc(memberRef, {
             ...newUser,
             updatedAt: new Date(),
           });
-
           Swal.fire('สำเร็จ!', 'แก้ไขข้อมูลสมาชิกสำเร็จ!', 'success');
         } else {
+          // สร้าง memberId ใหม่สำหรับการเพิ่ม
+          memberId = generateMemberId(members);  // สร้าง memberId ใหม่ทุกครั้ง
           const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
           await setDoc(memberRef, {
             ...newUser,
             memberId,
             createdAt: new Date(),
           });
-
           Swal.fire('สำเร็จ!', 'เพิ่มสมาชิกสำเร็จ!', 'success');
         }
 
         clearForm();
-        fetchMembers(); // Reload members after adding or editing
+        fetchMembers(); // รีโหลดสมาชิกหลังจากเพิ่มหรือแก้ไข
       });
     } catch (error) {
       Swal.fire('เกิดข้อผิดพลาด', error.message, 'error');
@@ -322,6 +329,7 @@ const Home = () => {
           </div>
         </form>
                
+
         <hr style={{ margin: '20px 0', borderTop: '1px solid #ddd' }} />  {/* เพิ่มเส้นแบ่งระหว่างช่องค้นหาผู้ใช้กับตาราง */}
 
         <div className="search-box" style={{ marginBottom: '15px', display: 'flex', justifyContent: 'flex-end' }}>
