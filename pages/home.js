@@ -43,11 +43,10 @@ const Home = () => {
   }, []);
 
   const generateMemberId = (members) => {
-    // คำนวณหมายเลขสมาชิกถัดไปโดยการเช็คจำนวนสมาชิกที่มีอยู่แล้ว
     const lastMember = members[members.length - 1]; 
-    const lastMemberId = lastMember ? parseInt(lastMember.memberId.split('_')[1]) : 0; // แยก memberId และนำตัวเลขมาคำนวณ
-    const newId = lastMemberId + 1; // เพิ่มหมายเลขสมาชิกใหม่
-    return `member_${String(newId).padStart(3, '0')}`; // สร้าง memberId ใหม่
+    const lastMemberId = lastMember ? parseInt(lastMember.memberId.split('_')[1]) : 0; 
+    const newId = lastMemberId + 1; 
+    return `member_${String(newId).padStart(3, '0')}`;
   };
 
   const fetchMembers = async () => {
@@ -57,13 +56,15 @@ const Home = () => {
       const q = query(usersRef, where("email", "==", email));
       const querySnapshot = await getDocs(q);
 
-      querySnapshot.forEach(async (doc) => {
-        const userId = doc.id;
-        const membersRef = collection(db, `users/${userId}/Members`); // Accessing subcollection Members under user
+      let allMembers = [];
+      for (const docSnapshot of querySnapshot.docs) {
+        const userId = docSnapshot.id;
+        const membersRef = collection(db, `users/${userId}/Members`);
         const membersSnapshot = await getDocs(membersRef);
         const membersData = membersSnapshot.docs.map(doc => doc.data());
-        setMembers(membersData);
-      });
+        allMembers = [...allMembers, ...membersData];
+      }
+      setMembers(allMembers);
     } catch (error) {
       Swal.fire('เกิดข้อผิดพลาดในการโหลดข้อมูลสมาชิก', error.message, 'error');
     }
@@ -71,9 +72,9 @@ const Home = () => {
 
   const handleSelectUser = (user) => {
     if (selectedUser && selectedUser.memberId === user.memberId) {
-      setSelectedUser(null);  // ถ้าเลือกสมาชิกที่ถูกเลือกอยู่แล้ว ให้ยกเลิกการเลือก
-      clearForm();             // รีเซ็ตฟอร์ม
-      setIsEditing(false);     // ปิดโหมดแก้ไข
+      setSelectedUser(null);  
+      clearForm();             
+      setIsEditing(false);     
     } else {
       setSelectedUser(user);
       setName(user.name);
@@ -84,7 +85,7 @@ const Home = () => {
       setAge(user.age);
       setExperience(user.experience);
       setStatus(user.status);
-      setIsEditing(true);      // เปิดโหมดแก้ไข
+      setIsEditing(true);      
     }
   };
 
@@ -107,30 +108,20 @@ const Home = () => {
         const userId = docSnapshot.id;
         let memberId;
 
-        // ตรวจสอบว่าเป็นการเพิ่มหรือแก้ไข
         if (isEditing) {
-          // ใช้ memberId เดิมสำหรับการแก้ไข
           memberId = selectedUser.memberId;
           const memberRef = doc(db, `users/${userId}/Members/${selectedUser.memberId}`);
-          await updateDoc(memberRef, {
-            ...newUser,
-            updatedAt: new Date(),
-          });
+          await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
           Swal.fire('สำเร็จ!', 'แก้ไขข้อมูลสมาชิกสำเร็จ!', 'success');
         } else {
-          // สร้าง memberId ใหม่สำหรับการเพิ่ม
-          memberId = generateMemberId(members);  // สร้าง memberId ใหม่ทุกครั้ง
+          memberId = generateMemberId(members);
           const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
-          await setDoc(memberRef, {
-            ...newUser,
-            memberId,
-            createdAt: new Date(),
-          });
+          await setDoc(memberRef, { ...newUser, memberId, createdAt: new Date() });
           Swal.fire('สำเร็จ!', 'เพิ่มสมาชิกสำเร็จ!', 'success');
         }
 
         clearForm();
-        fetchMembers(); // รีโหลดสมาชิกหลังจากเพิ่มหรือแก้ไข
+        fetchMembers(); 
       });
     } catch (error) {
       Swal.fire('เกิดข้อผิดพลาด', error.message, 'error');
@@ -159,13 +150,12 @@ const Home = () => {
         querySnapshot.forEach(async (docSnapshot) => {
           const userId = docSnapshot.id;
           const memberRef = doc(db, `users/${userId}/Members/${selectedUser.memberId}`);
-          
           await deleteDoc(memberRef);
           Swal.fire('ลบสำเร็จ!', '', 'success');
         });
 
         clearForm();
-        fetchMembers(); // Reload members after delete
+        fetchMembers(); 
       } catch (error) {
         Swal.fire('เกิดข้อผิดพลาดในการลบ', error.message, 'error');
       }
@@ -173,7 +163,7 @@ const Home = () => {
   };
 
   const toggleStatus = async (user) => {
-    const newStatus = user.status === 'มา' ? 'ไม่มา' : 'มา';  // เปลี่ยนสถานะ
+    const newStatus = (user.status === 'มา' || !user.status) ? 'ไม่มา' : 'มา';  
     try {
       const email = localStorage.getItem('loggedInEmail');
       const usersRef = collection(db, 'users');
@@ -183,9 +173,8 @@ const Home = () => {
       querySnapshot.forEach(async (docSnapshot) => {
         const userId = docSnapshot.id;
         const memberRef = doc(db, `users/${userId}/Members/${user.memberId}`);
-        
         await updateDoc(memberRef, { status: newStatus });
-        fetchMembers();  // โหลดข้อมูลสมาชิกใหม่หลังจากการอัปเดตสถานะ
+        fetchMembers();  
       });
     } catch (error) {
       Swal.fire('เกิดข้อผิดพลาดในการอัปเดตสถานะ', error.message, 'error');
@@ -213,46 +202,47 @@ const Home = () => {
       <main className="main-content" style={{ padding: '20px', backgroundColor: '#f7f7f7', borderRadius: '8px', overflowY: 'auto' }}>
         <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>ยินดีต้อนรับ, {loggedInUsername}</h2><hr />
         <form onSubmit={handleSubmit} className="form-box" noValidate style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: '15px', marginBottom: '10px' }}>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>ชื่อ</label>
               <input className="modern-input" type="text" placeholder="ชื่อ" value={name} onChange={(e) => setName(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '95%', borderRadius: '5px' }} />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', color: '#333' }}>ระดับ</label>
-              <select className="modern-input" value={level} onChange={(e) => setLevel(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '100%', borderRadius: '5px' }}>
-                <option value="">เลือกระดับ</option>
-                <option value="S">S</option>
-                <option value="P-">P-</option>
-                <option value="P">P</option>
-                <option value="P+/C">P+/C</option>
-                <option value="C">C</option>
-              </select>
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>Line ID</label>
               <input className="modern-input" type="text" placeholder="Line ID" value={lineId} onChange={(e) => setLineId(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '95%', borderRadius: '5px' }} />
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
             </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '10px' }}>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>เบอร์โทร</label>
-              <input className="modern-input" type="text" placeholder="เบอร์โทร" value={phone} onChange={(e) => setPhone(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '95%', borderRadius: '5px' }} />
-            </div>
+              <input 
+                className="modern-input" type="text" placeholder="เบอร์โทร" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength="10"  
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
+              </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>อายุ</label>
               <input className="modern-input" type="number" placeholder="อายุ" value={age} onChange={(e) => setAge(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '95%', borderRadius: '5px' }} />
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', color: '#333' }}>ระดับ</label>
+              <select className="modern-input" value={level} onChange={(e) => setLevel(e.target.value)} 
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
+                <option value="">เลือกระดับ</option>
+                <option value="S">BG</option>
+                <option value="S">S-</option>
+                <option value="S">S</option>
+                <option value="S">N-</option>
+                <option value="S">N</option>
+                <option value="P-">P-</option>
+                <option value="P">P</option>
+                <option value="C">C</option>
+              </select>
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>ประสบการณ์</label>
               <select className="modern-input" value={experience} onChange={(e) => setExperience(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '100%', borderRadius: '5px' }}>
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
                 <option value="">ประสบการณ์</option>
                 {[...Array(10)].map((_, i) => (
                   <option key={i + 1} value={`${i + 1} ปี`}>{i + 1} ปี</option>
@@ -260,13 +250,10 @@ const Home = () => {
                 <option value=">10 ปี">มากกว่า 10 ปี</option>
               </select>
             </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '10px' }}>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>เลือกมือ</label>
               <select className="modern-input" value={handed} onChange={(e) => setHanded(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '100%', borderRadius: '5px' }}>
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
                 <option value="">เลือกมือ</option>
                 <option value="Right">ขวา</option>
                 <option value="Left">ซ้าย</option>
@@ -275,14 +262,14 @@ const Home = () => {
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>สถานะ</label>
               <select className="modern-input" value={status} onChange={(e) => setStatus(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#ccc', width: '100%', borderRadius: '5px' }}>
+                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
                 <option value="มา">มา</option>
                 <option value="ไม่มา">ไม่มา</option>
               </select>
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
             <button 
               type="submit" 
               className={`submit-btn ${isEditing ? 'edit' : ''}`} 
@@ -296,7 +283,8 @@ const Home = () => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease-in-out',
                 boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                width: '10%'  
+                width: 'auto',  // ใช้ความกว้างที่ยืดหยุ่นตามขนาด
+                minWidth: '100px',  // กำหนดขนาดขั้นต่ำ
               }}
               onMouseOver={(e) => e.target.style.backgroundColor = isEditing ? '#ffa500' : '#3fc57b'}
               onMouseOut={(e) => e.target.style.backgroundColor = isEditing ? '#ff9800' : '#57e497'}
@@ -319,7 +307,8 @@ const Home = () => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease-in-out',
                 boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                width: '10%'  
+                width: 'auto',  // ใช้ความกว้างที่ยืดหยุ่นตามขนาด
+                minWidth: '100px',  // กำหนดขนาดขั้นต่ำ
               }}
               onMouseOver={(e) => e.target.style.backgroundColor = '#757575'}
               onMouseOut={(e) => e.target.style.backgroundColor = '#9e9e9e'}
@@ -329,8 +318,7 @@ const Home = () => {
           </div>
         </form>
                
-
-        <hr style={{ margin: '20px 0', borderTop: '1px solid #ddd' }} />  {/* เพิ่มเส้นแบ่งระหว่างช่องค้นหาผู้ใช้กับตาราง */}
+        <hr style={{ margin: '20px 0', borderTop: '1px solid #ddd' }} />  
 
         <div className="search-box" style={{ marginBottom: '15px', display: 'flex', justifyContent: 'flex-end' }}>
           <input
@@ -339,7 +327,7 @@ const Home = () => {
             placeholder="ค้นหาผู้ใช้"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}  
+            style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}  
           />
         </div>
 
