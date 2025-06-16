@@ -197,10 +197,10 @@ const Home = () => {
   const filteredMembers = members.filter(user => user.name?.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', height: '100vh' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr', height: '100vh' }}>
       <Sidebar />
       <main className="main-content" style={{ padding: '20px', backgroundColor: '#f7f7f7', borderRadius: '8px', overflowY: 'auto' }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>ยินดีต้อนรับ, {loggedInUsername}</h2><hr />
+        <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>สมาชิก</h2><hr />
         <form onSubmit={handleSubmit} className="form-box" noValidate style={{ marginBottom: '20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: '15px', marginBottom: '10px' }}>
             <div>
@@ -333,7 +333,7 @@ const Home = () => {
 
         <table className="user-table" style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)' }}>
           <thead>
-            <tr style={{ backgroundColor: '#31373e', textAlign: 'center', fontSize: '11px', color: 'white' }}>
+            <tr style={{ backgroundColor: '#323943', textAlign: 'center', fontSize: '11px', color: 'white' }}>
               <th style={{ borderRight: '1px solid #ddd', padding: '10px' }}>เลือก</th>
               <th style={{ borderRight: '1px solid #ddd', padding: '10px' }}>ชื่อ</th>
               <th style={{ borderRight: '1px solid #ddd', padding: '10px' }}>ระดับ</th>
@@ -342,7 +342,7 @@ const Home = () => {
               <th style={{ borderRight: '1px solid #ddd', padding: '10px' }}>เบอร์โทร</th>
               <th style={{ borderRight: '1px solid #ddd', padding: '10px' }}>อายุ</th>
               <th style={{ borderRight: '1px solid #ddd', padding: '10px' }}>ประสบการณ์</th>
-              <th style={{ padding: '10px' }}>สถานะ มา-ไม่มา</th>
+              <th style={{ padding: '10px' }}>สถานะ</th>
             </tr>
           </thead>
           <tbody>
