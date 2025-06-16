@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 
 export default function Sidebar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -31,9 +30,9 @@ export default function Sidebar() {
     <div className="sidebar">
       {/* Logo Section */}
       <div className="logo">
-        <Link href="/">
+        <div>
           <img src="/images/Logo.png" alt="Logo" width={70} height={100} />
-        </Link>
+        </div>
         <span>{groupName || 'PlayMatch'}</span> {/* แสดง groupName ถ้ามี */}
       </div>
 
@@ -42,22 +41,22 @@ export default function Sidebar() {
 
       {/* Menu Section */}
       <div className="menu">
-        <Link href="/home" className="menu-item">
-          <img src="/images/Home-icon.png" alt="Home" width={24} height={24} />
-          <span>Home</span>
-        </Link>
-        <Link href="/match" className="menu-item">
-          <img src="/images/Match-icon.png" alt="match" width={24} height={24} />
+        <span href="/home" className="menu-item">
+          <img src="/images/members-icon.png" alt="members" width={35} height={50} />
+          <span>Members</span>
+        </span>
+        <span href="/match" className="menu-item">
+          <img src="/images/Match-icon.png" alt="match" width={35} height={50} />
           <span>Match</span>
-        </Link>
-        <Link href="/history" className="menu-item">
-          <img src="/images/history-icon.png" alt="history" width={24} height={24} />
-          <span>Orders</span>
-        </Link>
-        <Link href="/ranking" className="menu-item">
-          <img src="/images/ranking-icon.png" alt="ranking" width={24} height={24} />
-          <span>Products</span>
-        </Link>
+        </span>
+        <span href="/history" className="menu-item">
+          <img src="/images/history-icon.png" alt="history" width={35} height={50} />
+          <span>History</span>
+        </span>
+        <span href="/ranking" className="menu-item">
+          <img src="/images/ranking-icon.png" alt="ranking" width={35} height={50} />
+          <span>Ranking</span>
+        </span>
       </div>
 
       {/* User Section */}
@@ -68,10 +67,9 @@ export default function Sidebar() {
         </div>
         {isDropdownOpen && (
           <div className="dropdown-menu">
-            <div className="dropdown-item">Group: {groupName || 'No Group'}</div>
-            <Link href="/settings" className="dropdown-item">
-              Settings
-            </Link>
+            <button onClick={handleLogout} className="dropdown-item">
+              settings
+            </button>
             <button onClick={handleLogout} className="dropdown-item">
               Logout
             </button>
@@ -81,9 +79,9 @@ export default function Sidebar() {
 
       <style jsx>{`
         .sidebar {
-          width: 250px;
+          width: 200px;
           height: 100vh;
-          background-color: #282c34;
+          background-color: #323943;
           color: #fff;
           display: flex;
           flex-direction: column;
@@ -107,24 +105,25 @@ export default function Sidebar() {
 
         .logo img {
           width: 50px;
-          height: 50px;
+          height: 60px;
         }
 
         .logo span {
           color: #ffffff;
-          font-size: 1.8rem;
+          font-size: 1.2rem;
         }
 
         .divider {
           height: 2px;
           background-color: #444;
           margin-bottom: 20px;
+          margin-top: -30px;
         }
 
         .menu {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 5px;
         }
 
         .menu-item {
@@ -132,9 +131,9 @@ export default function Sidebar() {
           align-items: center;
           color: #f8f9f9;
           text-decoration: none;
-          font-size: 1.2rem;
-          gap: 12px;
-          padding: 12px 18px;
+          font-size: 1rem;
+          gap: 10px;
+          padding: 0px 18px;
           border-radius: 8px;
           transition: background-color 0.3s, color 0.3s, transform 0.3s;
           border-bottom: 2px solid #444; /* ขีดล่างเมนู */
@@ -160,7 +159,7 @@ export default function Sidebar() {
         .user-section {
           margin-top: auto;
           border-top: 2px solid #444;
-          padding-top: 20px;
+          padding-top: 40px;
           text-align: center;
         }
 
@@ -183,7 +182,7 @@ export default function Sidebar() {
         .dropdown-menu {
           background-color: #2a3047;
           border-radius: 6px;
-          margin-top: 10px;
+          margin-top: 40px;
           display: flex;
           flex-direction: column;
           gap: 10px;
