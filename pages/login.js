@@ -2,7 +2,8 @@ import { useState } from 'react';
 import Image from 'next/image'; // นำเข้า Image จาก next/image
 import { useRouter } from 'next/router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebaseConfig'; // ตรวจสอบ path ให้ถูกต้อง
+import { auth, db } from '../lib/firebaseConfig'; // ตรวจสอบ path ให้ถูกต้อง
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function Login() {
   const router = useRouter();
@@ -20,13 +21,25 @@ export default function Login() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      
+      // ดึงข้อมูลจาก Firebase
+      const userRef = doc(db, 'users', user.uid); // ใช้ user.uid ในการดึงข้อมูล
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const username = userData.username;
+        const groupName = userData.groupName;
+        
+        // เก็บข้อมูลใน localStorage
+        localStorage.setItem('loggedInUsername', username);
+        localStorage.setItem('groupName', groupName);
+      }
 
       setMsg({ type: 'success', text: '✅ เข้าสู่ระบบสำเร็จ' });
 
       // เก็บ email ของผู้ใช้ใน localStorage
       localStorage.setItem('loggedInEmail', user.email);
 
-      // เพิ่มการหน่วงเวลา 1 วินาที ก่อนที่จะเปลี่ยนไปหน้า home
       setIsLoading(true);
       setTimeout(() => {
         setIsLoading(false);
