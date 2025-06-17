@@ -1,29 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 
 export default function Sidebar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [loggedInUsername, setLoggedInUsername] = useState('');
-  const [groupName, setGroupName] = useState('');
+  const [loggedInUsername, setLoggedInUsername] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const router = useRouter();
 
   const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
 
   // เมื่อหน้าโหลด จะเช็คว่า ผู้ใช้ล็อกอินหรือไม่
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const username = localStorage.getItem('loggedInUsername');
-      const group = localStorage.getItem('groupName'); // รับข้อมูล groupName จาก localStorage
-      if (username) {
+    if (typeof window !== "undefined") {
+      const username = localStorage.getItem("loggedInUsername");
+      const group = localStorage.getItem("groupName"); // รับข้อมูล groupName จาก localStorage
+      if (username && group) {
         setLoggedInUsername(username);
         setGroupName(group); // ตั้งค่า groupName ถ้ามี
       }
     }
+
+    // ตรวจสอบการคลิกภายนอก dropdown เพื่อปิด dropdown
+    const handleClickOutside = (event) => {
+      if (!event.target.closest(".user-section")) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('loggedInEmail');
-    localStorage.removeItem('loggedInUsername');
-    localStorage.removeItem('groupName'); // ลบข้อมูล groupName ด้วย
-    window.location.href = '/login'; // นำทางไปที่หน้า login
+    localStorage.removeItem("loggedInEmail");
+    localStorage.removeItem("loggedInUsername");
+    localStorage.removeItem("groupName");
+    router.push("/login");
   };
 
   return (
@@ -33,7 +47,7 @@ export default function Sidebar() {
         <div>
           <img src="/images/Logo.png" alt="Logo" width={70} height={100} />
         </div>
-        <span>{groupName || 'PlayMatch'}</span> {/* แสดง groupName ถ้ามี */}
+        <span>{groupName || "PlayMatch"}</span> {/* แสดง groupName ถ้ามี */}
       </div>
 
       {/* Divider Line */}
@@ -41,28 +55,48 @@ export default function Sidebar() {
 
       {/* Menu Section */}
       <div className="menu">
-        <span href="/home" className="menu-item">
-          <img src="/images/members-icon.png" alt="members" width={35} height={50} />
+        <a href="/home" className="menu-item">
+          <img
+            src="/images/Members-icon.png"
+            alt="members"
+            width={35}
+            height={50}
+          />
           <span>Members</span>
-        </span>
-        <span href="/match" className="menu-item">
-          <img src="/images/Match-icon.png" alt="match" width={35} height={50} />
+        </a>
+        <a href="/match" className="menu-item">
+          <img
+            src="/images/Match-icon.png"
+            alt="match"
+            width={35}
+            height={50}
+          />
           <span>Match</span>
-        </span>
-        <span href="/history" className="menu-item">
-          <img src="/images/history-icon.png" alt="history" width={35} height={50} />
+        </a>
+        <a href="/history" className="menu-item">
+          <img
+            src="/images/History-icon.png"
+            alt="history"
+            width={35}
+            height={50}
+          />
           <span>History</span>
-        </span>
-        <span href="/ranking" className="menu-item">
-          <img src="/images/ranking-icon.png" alt="ranking" width={35} height={50} />
+        </a>
+        <a href="/ranking" className="menu-item">
+          <img
+            src="/images/Ranking-icon.png"
+            alt="ranking"
+            width={35}
+            height={50}
+          />
           <span>Ranking</span>
-        </span>
+        </a>
       </div>
 
       {/* User Section */}
       <div className="user-section">
         <div className="user-dropdown" onClick={toggleDropdown}>
-          <span>{loggedInUsername || 'Demo'}</span>
+          <span>{loggedInUsername || "Demo"}</span>
           <div className="dropdown-icon">▼</div>
         </div>
         {isDropdownOpen && (
@@ -90,13 +124,13 @@ export default function Sidebar() {
           padding-right: 20px;
           box-sizing: border-box;
           border-right: 2px solid #444;
-          font-family: 'Arial', sans-serif;
+          font-family: "Arial", sans-serif;
         }
 
         .logo {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 1px;
           margin-bottom: 30px;
           font-size: 1.8rem;
           font-weight: bold;
@@ -159,7 +193,7 @@ export default function Sidebar() {
         .user-section {
           margin-top: auto;
           border-top: 2px solid #444;
-          padding-top: 40px;
+          padding-top: 20px;
           text-align: center;
         }
 
@@ -169,7 +203,7 @@ export default function Sidebar() {
           justify-content: center;
           align-items: center;
           gap: 10px;
-          font-size: 1.2rem;
+          font-size: 1rem;
           color: #ffffff;
           font-weight: 600;
           transition: color 0.3s;
