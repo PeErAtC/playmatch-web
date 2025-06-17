@@ -1,17 +1,17 @@
-import { useState } from 'react';
-import Image from 'next/image'; // นำเข้า Image จาก next/image
-import { useRouter } from 'next/router';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../lib/firebaseConfig'; // ตรวจสอบ path ให้ถูกต้อง
-import { doc, getDoc } from 'firebase/firestore';
+import { useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/router";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "../lib/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function Login() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // state ใหม่สำหรับแสดงโหลด
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,34 +19,34 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       const user = userCredential.user;
-      
-      // ดึงข้อมูลจาก Firebase
-      const userRef = doc(db, 'users', user.uid); // ใช้ user.uid ในการดึงข้อมูล
+
+      const userRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         const userData = userSnap.data();
         const username = userData.username;
         const groupName = userData.groupName;
-        
-        // เก็บข้อมูลใน localStorage
-        localStorage.setItem('loggedInUsername', username);
-        localStorage.setItem('groupName', groupName);
+
+        localStorage.setItem("loggedInUsername", username);
+        localStorage.setItem("groupName", groupName);
       }
 
-      setMsg({ type: 'success', text: '✅ เข้าสู่ระบบสำเร็จ' });
-
-      // เก็บ email ของผู้ใช้ใน localStorage
-      localStorage.setItem('loggedInEmail', user.email);
+      setMsg({ type: "success", text: "✅ เข้าสู่ระบบสำเร็จ" });
+      localStorage.setItem("loggedInEmail", user.email);
 
       setIsLoading(true);
       setTimeout(() => {
         setIsLoading(false);
-        router.push('/home'); // เปลี่ยนไปหน้า home
-      }, 1000); // หน่วงเวลา 1 วินาที
+        router.push("/home");
+      }, 1000);
     } catch (error) {
-      setMsg({ type: 'error', text: error.message || 'Login failed' });
+      setMsg({ type: "error", text: error.message || "Login failed" });
     } finally {
       setLoading(false);
     }
@@ -54,9 +54,15 @@ export default function Login() {
 
   return (
     <main className="main">
-      <div>
-        <Image src="/images/Logo.png" alt="PlayMatch Logo" width={70} height={100} priority />
-        <h1>Please sign in</h1>
+      <div className="form-container">
+        <Image
+          src="/images/Logo.png"
+          alt="PlayMatch Logo"
+          width={80}
+          height={100}
+          priority
+        />
+        <h1>Login to your Account</h1>
         <form onSubmit={handleSubmit}>
           <input
             type="email"
@@ -80,17 +86,16 @@ export default function Login() {
             <label htmlFor="rememberMe">Remember me</label>
           </div>
           <button type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
         {msg && (
-          <p className={msg.type === 'success' ? 'success-msg' : 'error-msg'}>
+          <p className={msg.type === "success" ? "success-msg" : "error-msg"}>
             {msg.text}
           </p>
         )}
 
-        {/* เพิ่มข้อความ Loading ถ้า isLoading เป็น true */}
         {isLoading && <p className="loading-msg">Loading...</p>}
 
         <p className="footer-text">© 2024–2025</p>
@@ -99,40 +104,44 @@ export default function Login() {
       <style jsx>{`
         .main {
           min-height: 100vh;
-          padding-top: 80px;
           display: flex;
           flex-direction: column;
-          justify-content: flex-start;
+          justify-content: center;
           align-items: center;
-          padding-left: 20px;
-          padding-right: 20px;
+          background-color: #f3f4f6;
+          padding: 0 20px;
+        }
+
+        .form-container {
+          background-color: #ffffff;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          padding: 40px 30px;
+          width: 100%;
+          max-width: 400px;
           text-align: center;
-          background-color: #f8f9fa;
-          color: #333;
-          transition: background-color 0.3s, color 0.3s;
         }
 
         h1 {
-          margin-top: 16px;
-          margin-bottom: 24px;
-          font-weight: 400;
+          font-size: 1.8rem;
+          color: #333;
+          margin-bottom: 20px;
         }
 
         form {
           display: flex;
           flex-direction: column;
           width: 100%;
-          max-width: 320px;
         }
 
-        input[type='email'],
-        input[type='password'] {
-          height: 44px;
-          margin-bottom: 12px;
-          padding: 10px 12px;
+        input[type="email"],
+        input[type="password"] {
+          height: 48px;
+          margin-bottom: 16px;
+          padding: 10px;
+          border-radius: 8px;
+          border: 1px solid #ddd;
           font-size: 1rem;
-          border: 1px solid #ccc;
-          border-radius: 4px;
         }
 
         .remember-me {
@@ -143,25 +152,24 @@ export default function Login() {
           color: #555;
         }
 
-        .remember-me input[type='checkbox'] {
+        .remember-me input {
           margin-right: 8px;
-          width: 16px;
-          height: 16px;
-          cursor: pointer;
+          width: 18px;
+          height: 18px;
         }
 
-        button[type='submit'] {
+        button[type="submit"] {
           background-color: #0d6efd;
           color: white;
           border: none;
           padding: 12px;
           font-size: 1.1rem;
-          border-radius: 6px;
+          border-radius: 8px;
           cursor: pointer;
           transition: background-color 0.3s;
         }
 
-        button[type='submit']:hover {
+        button[type="submit"]:hover {
           background-color: #0b5ed7;
         }
 
@@ -198,19 +206,18 @@ export default function Login() {
           font-weight: 600;
         }
 
-        @media (min-width: 768px) and (max-width: 1366px) {
-          .main {
-            padding-top: 60px;
-          }
-        }
-
         @media (max-width: 480px) {
-          .main {
-            padding-top: 40px;
+          .form-container {
+            padding: 30px 20px;
           }
 
-          form {
-            max-width: 100%;
+          h1 {
+            font-size: 1.5rem;
+          }
+
+          input[type="email"],
+          input[type="password"] {
+            font-size: 0.95rem;
           }
         }
       `}</style>
