@@ -165,7 +165,7 @@ export default function Login() {
 
         input[type="email"],
         input[type="password"] {
-          height: 48px;
+          height: 30px;
           margin-bottom: 16px;
           padding: 10px;
           border-radius: 8px;
