@@ -197,7 +197,7 @@ const Home = () => {
   const filteredMembers = members.filter(user => user.name?.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr', height: '100vh' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100vh' }}>
       <Sidebar />
       <main className="main-content" style={{ padding: '20px', backgroundColor: '#f7f7f7', borderRadius: '8px', overflowY: 'auto' }}>
         <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>สมาชิก</h2><hr />
