@@ -99,6 +99,33 @@ export default function Login() {
         {isLoading && <p className="loading-msg">Loading...</p>}
 
         <p className="footer-text">© 2024–2025</p>
+
+        {/* Icons for Line and Email */}
+        <div className="contact-icons">
+          <a
+            href="https://page.line.me/136rjkgt"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="contact-icon"
+          >
+            <img
+              src="/images/line.png"
+              alt="Line Icon"
+              className="line-icon"
+            />
+          </a>
+
+          <a
+            href="mailto:playmatch.web@gmail.com"
+            className="contact-icon"
+          >
+            <img
+              src="/images/Email.png"
+              alt="Email Icon"
+              className="email-icon"
+            />
+          </a>
+        </div>
       </div>
 
       <style jsx>{`
@@ -110,6 +137,7 @@ export default function Login() {
           align-items: center;
           background-color: #f3f4f6;
           padding: 0 20px;
+          font-family: 'Poppins', sans-serif;
         }
 
         .form-container {
@@ -126,6 +154,7 @@ export default function Login() {
           font-size: 1.8rem;
           color: #333;
           margin-bottom: 20px;
+          font-weight: 600;
         }
 
         form {
@@ -142,6 +171,7 @@ export default function Login() {
           border-radius: 8px;
           border: 1px solid #ddd;
           font-size: 1rem;
+          font-family: 'Poppins', sans-serif;
         }
 
         .remember-me {
@@ -164,6 +194,7 @@ export default function Login() {
           border: none;
           padding: 12px;
           font-size: 1.1rem;
+          font-family: 'Poppins', sans-serif;
           border-radius: 8px;
           cursor: pointer;
           transition: background-color 0.3s;
@@ -204,6 +235,23 @@ export default function Login() {
           color: #0d6efd;
           margin-top: 20px;
           font-weight: 600;
+        }
+
+        .contact-icons {
+          display: flex;
+          justify-content: center;
+          gap: 20px;
+          margin-top: 20px;
+        }
+
+        .contact-icon {
+          display: inline-block;
+        }
+
+        .line-icon, .email-icon {
+          width: 40px;
+          height: 40px;
+          cursor: pointer;
         }
 
         @media (max-width: 480px) {
