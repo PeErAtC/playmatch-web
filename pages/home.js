@@ -1,9 +1,92 @@
 import { useState, useEffect } from 'react';
-import Sidebar from './components/sidebar'; // นำเข้า Sidebar
 import Swal from 'sweetalert2';
 import { db } from '../lib/firebaseConfig';
 import { collection, getDocs, setDoc, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import './styles/sidebar.css'; // นำเข้าไฟล์ CSS สำหรับ Sidebar
 
+// Sidebar Component
+const Sidebar = () => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [loggedInUsername, setLoggedInUsername] = useState('');
+  const [groupName, setGroupName] = useState('');
+  
+  const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const username = localStorage.getItem("loggedInUsername");
+      const group = localStorage.getItem("groupName");
+      if (username && group) {
+        setLoggedInUsername(username);
+        setGroupName(group);
+      }
+    }
+
+
+    const handleClickOutside = (event) => {
+      if (!event.target.closest(".user-section")) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("loggedInEmail");
+    localStorage.removeItem("loggedInUsername");
+    localStorage.removeItem("groupName");
+  };
+
+  return (
+    <div className="sidebar">
+      <div className="logo">
+        <div>
+          <img src="/images/Logo.png" alt="Logo" width={70} height={100} />
+        </div>
+        <span>{groupName || "PlayMatch"}</span>
+      </div>
+
+      <div className="divider"></div>
+
+      <div className="menu">
+        <a href="/home" className="menu-item">
+          <img src="/images/Members-icon.png" alt="members" width={35} height={50} />
+          <span>Members</span>
+        </a>
+        <a href="/match" className="menu-item">
+          <img src="/images/Match-icon.png" alt="match" width={35} height={50} />
+          <span>Match</span>
+        </a>
+        <a href="/history" className="menu-item">
+          <img src="/images/History-icon.png" alt="history" width={35} height={50} />
+          <span>History</span>
+        </a>
+        <a href="/ranking" className="menu-item">
+          <img src="/images/Ranking-icon.png" alt="ranking" width={35} height={50} />
+          <span>Ranking</span>
+        </a>
+      </div>
+
+      <div className="user-section">
+        <div className="user-dropdown" onClick={toggleDropdown}>
+          <span>{loggedInUsername || "Demo"}</span>
+          <div className="dropdown-icon">▼</div>
+        </div>
+        {isDropdownOpen && (
+          <div className="dropdown-menu">
+            <button onClick={handleLogout} className="dropdown-item">Logout</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Home Component
 const Home = () => {
   const [search, setSearch] = useState('');
   const [name, setName] = useState('');
@@ -215,29 +298,23 @@ const Home = () => {
             {/* ฟอร์มทั้งหมด */}
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>ชื่อ</label>
-              <input className="modern-input" type="text" placeholder="ชื่อ" value={name} onChange={(e) => setName(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
+              <input className="modern-input" type="text" placeholder="ชื่อ" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>Line ID</label>
-              <input className="modern-input" type="text" placeholder="Line ID" value={lineId} onChange={(e) => setLineId(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
+              <input className="modern-input" type="text" placeholder="Line ID" value={lineId} onChange={(e) => setLineId(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>เบอร์โทร</label>
-              <input 
-                className="modern-input" type="text" placeholder="เบอร์โทร" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength="10"  
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
-              </div>
+              <input className="modern-input" type="text" placeholder="เบอร์โทร" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength="10" />
+            </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>อายุ</label>
-              <input className="modern-input" type="number" placeholder="อายุ" value={age} onChange={(e) => setAge(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '95%', borderRadius: '5px' }} />
+              <input className="modern-input" type="number" placeholder="อายุ" value={age} onChange={(e) => setAge(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>ระดับ</label>
-              <select className="modern-input" value={level} onChange={(e) => setLevel(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
+              <select className="modern-input" value={level} onChange={(e) => setLevel(e.target.value)}>
                 <option value="">เลือกระดับ</option>
                 <option value="S">BG</option>
                 <option value="S">S-</option>
@@ -251,8 +328,7 @@ const Home = () => {
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>ประสบการณ์</label>
-              <select className="modern-input" value={experience} onChange={(e) => setExperience(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
+              <select className="modern-input" value={experience} onChange={(e) => setExperience(e.target.value)}>
                 <option value="">ประสบการณ์</option>
                 {[...Array(10)].map((_, i) => (
                   <option key={i + 1} value={`${i + 1} ปี`}>{i + 1} ปี</option>
@@ -262,8 +338,7 @@ const Home = () => {
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>เลือกมือ</label>
-              <select className="modern-input" value={handed} onChange={(e) => setHanded(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
+              <select className="modern-input" value={handed} onChange={(e) => setHanded(e.target.value)}>
                 <option value="">เลือกมือ</option>
                 <option value="Right">ขวา</option>
                 <option value="Left">ซ้าย</option>
@@ -271,8 +346,7 @@ const Home = () => {
             </div>
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>สถานะ</label>
-              <select className="modern-input" value={status} onChange={(e) => setStatus(e.target.value)} 
-                style={{ outline: 'none', border: '1px solid #ccc', padding: '8px', fontSize: '12px', color: '#333', width: '100%', borderRadius: '5px' }}>
+              <select className="modern-input" value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="มา">มา</option>
                 <option value="ไม่มา">ไม่มา</option>
               </select>
@@ -293,8 +367,8 @@ const Home = () => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease-in-out',
                 boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                width: 'auto',  // ใช้ความกว้างที่ยืดหยุ่นตามขนาด
-                minWidth: '100px',  // กำหนดขนาดขั้นต่ำ
+                width: 'auto',
+                minWidth: '100px',
               }}
               onMouseOver={(e) => e.target.style.backgroundColor = isEditing ? '#ffa500' : '#3fc57b'}
               onMouseOut={(e) => e.target.style.backgroundColor = isEditing ? '#ff9800' : '#57e497'}
@@ -317,8 +391,8 @@ const Home = () => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease-in-out',
                 boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                width: 'auto',  // ใช้ความกว้างที่ยืดหยุ่นตามขนาด
-                minWidth: '100px',  // กำหนดขนาดขั้นต่ำ
+                width: 'auto',
+                minWidth: '100px',
               }}
               onMouseOver={(e) => e.target.style.backgroundColor = '#757575'}
               onMouseOut={(e) => e.target.style.backgroundColor = '#9e9e9e'}
