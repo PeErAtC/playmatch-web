@@ -261,7 +261,7 @@ const Match = () => {
               onChange={(e) => setMatchDate(e.target.value)}
               disabled={isOpen}
               style={{
-                fontSize: "15px",
+                fontSize: "14px",
                 border: "1px solid #ccc",
                 borderRadius: "6px",
                 padding: "7px 14px",
@@ -287,7 +287,7 @@ const Match = () => {
                 placeholder="กรุณากรอกหัวเรื่อง"
                 disabled={isOpen}
                 style={{
-                  fontSize: "15px",
+                  fontSize: "14px",
                   border: "1px solid #ccc",
                   borderRadius: "6px",
                   padding: "7px 14px",
@@ -309,11 +309,10 @@ const Match = () => {
             <button
               onClick={isOpen ? handleEndGroup : handleStartGroup}
               style={{
-                backgroundColor: isOpen ? "#f44336" : "#37e54d",
-                color: "white",
+                backgroundColor: isOpen ? "#f44336" : "#4bf196",
+                color: "#black",
                 padding: "10px 32px",
-                fontSize: "15px",
-                fontWeight: 500,
+                fontSize: "14px",
                 borderRadius: "7px",
                 border: "none",
                 marginRight: "4px",
@@ -332,8 +331,7 @@ const Match = () => {
                 border: "1px solid #3ec5e0",
                 borderRadius: "7px",
                 padding: "8px 20px",
-                fontSize: "15px",
-                fontWeight: 500,
+                fontSize: "14px",
                 color: "#0a6179",
                 minWidth: "180px",
                 display: "flex",
@@ -358,7 +356,7 @@ const Match = () => {
             justifyContent: "flex-end",
             alignItems: "center",
             marginBottom: "10px",
-            fontSize: "15px",
+            fontSize: "14px",
             color: "#353535",
             fontWeight: 500,
           }}
@@ -381,7 +379,7 @@ const Match = () => {
               backgroundColor: "#fff",
               borderRadius: "13px",
               boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
-              fontSize: "15px",
+              fontSize: "14px",
               minWidth: "1250px",
             }}
           >
@@ -390,9 +388,9 @@ const Match = () => {
                 style={{
                   backgroundColor: "#323943",
                   color: "white",
-                  fontSize: "15px",
+                  fontSize: "12px",
                   textAlign: "center",
-                  height: "45px",
+                  height: "20px",
                 }}
               >
                 <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
@@ -463,7 +461,7 @@ const Match = () => {
                         textAlign: "center",
                         borderRight: "1px solid #e3e3e3",
                         fontWeight: 500,
-                        fontSize: "15.5px",
+                        fontSize: "12px",
                       }}
                     >
                       {match.matchId}
@@ -485,7 +483,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         <option value="">เลือกสนาม</option>
@@ -514,7 +512,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
@@ -543,7 +541,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
@@ -572,7 +570,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
@@ -601,7 +599,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
@@ -630,7 +628,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         <option value="">เลือก</option>
@@ -659,7 +657,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                         }}
                       >
                         {RESULT_OPTIONS.map((op) => (
@@ -675,7 +673,7 @@ const Match = () => {
                         textAlign: "center",
                         borderRight: "1px solid #e3e3e3",
                         fontWeight: 600,
-                        fontSize: "15px",
+                        fontSize: "12px",
                         color: "#138c0f",
                       }}
                     >
@@ -700,7 +698,7 @@ const Match = () => {
                           padding: "7px",
                           borderRadius: "5px",
                           border: "1px solid #bbb",
-                          fontSize: "15px",
+                          fontSize: "12px",
                           background:
                             STATUS_COLORS[match.status] || "#fff8d8",
                           color:
@@ -775,6 +773,7 @@ const Match = () => {
                                 style={{
                                   padding: "9px 28px 9px 22px",
                                   fontSize: "15px",
+                                  minWidth: "110px",
                                   color: "#b71c1c",
                                   background: "none",
                                   border: "none",
@@ -810,8 +809,8 @@ const Match = () => {
             onClick={handleAddMatch}
             disabled={!isOpen}
             style={{
-              width: "43px",
-              height: "43px",
+              width: "33px",
+              height: "33px",
               borderRadius: "50%",
               backgroundColor: isOpen ? "#40c2ec" : "#bbb",
               border: "none",
@@ -832,7 +831,7 @@ const Match = () => {
           </button>
           <span
             style={{
-              fontSize: "17px",
+              fontSize: "15px",
               color: "#222",
               borderBottom: "2px solid #40c2ec",
               fontWeight: 500,
@@ -850,62 +849,52 @@ const Match = () => {
         <div
           style={{
             display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: "7px",
-            marginTop: "7px",
-            marginBottom: "30px",
+            justifyContent: "flex-start",
+            marginBottom: "20px",
           }}
         >
           <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
             style={{
-              padding: "8px 22px",
-              border: "1px solid #bbb",
+              padding: "6px 12px",
+              border: "1px solid #ddd",
               borderRadius: "5px",
               backgroundColor: "#f1f1f1",
-              color: "#333",
-              fontSize: "15px",
-              fontWeight: 500,
+              marginRight: "5px",
               cursor: currentPage === 1 ? "not-allowed" : "pointer",
             }}
           >
             ย้อนกลับ
           </button>
-          {Array.from({ length: totalPages }, (_, idx) => (
+          {Array.from({ length: totalPages }, (_, index) => (
             <button
-              key={idx + 1}
-              onClick={() => setCurrentPage(idx + 1)}
+              key={index + 1}
+              onClick={() => setCurrentPage(index + 1)}
               style={{
-                padding: "8px 14px",
-                border: "1px solid #bbb",
+                padding: "6px 12px",
+                border: "1px solid #ddd",
                 borderRadius: "5px",
-                margin: "0 2px",
                 backgroundColor:
-                  currentPage === idx + 1 ? "#6c757d" : "#f1f1f1",
-                color: currentPage === idx + 1 ? "#fff" : "#222",
-                fontWeight: currentPage === idx + 1 ? 600 : 500,
-                fontSize: "15px",
+                  currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
+                marginRight: "5px",
                 cursor: "pointer",
+                color: currentPage === index + 1 ? "white" : "black",
               }}
             >
-              {idx + 1}
+              {index + 1}
             </button>
           ))}
           <button
             onClick={() =>
-              setCurrentPage((p) => Math.min(totalPages, p + 1))
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
             }
             disabled={currentPage === totalPages || totalPages === 0}
             style={{
-              padding: "8px 22px",
-              border: "1px solid #bbb",
+              padding: "6px 12px",
+              border: "1px solid #ddd",
               borderRadius: "5px",
               backgroundColor: "#f1f1f1",
-              color: "#333",
-              fontSize: "15px",
-              fontWeight: 500,
               cursor:
                 currentPage === totalPages || totalPages === 0
                   ? "not-allowed"
