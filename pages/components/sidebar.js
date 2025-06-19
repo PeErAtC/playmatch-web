@@ -1,270 +1,302 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+import {
+  Users,
+  Sword,
+  History,
+  Trophy,
+  ChevronDown,
+  ChevronUp,
+  User2,
+} from "lucide-react";
+
+const menuList = [
+  {
+    label: "Members",
+    path: "/home",
+    icon: <Users size={20} strokeWidth={1.7} />,
+  },
+  {
+    label: "Match",
+    path: "/match",
+    icon: <Sword size={20} strokeWidth={1.7} />,
+  },
+  {
+    label: "History",
+    path: "/history",
+    icon: <History size={20} strokeWidth={1.7} />,
+  },
+  {
+    label: "Ranking",
+    path: "/ranking",
+    icon: <Trophy size={20} strokeWidth={1.7} />,
+  },
+];
 
 export default function Sidebar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [loggedInUsername, setLoggedInUsername] = useState('');
-  const [groupName, setGroupName] = useState('');
+  const [loggedInUsername, setLoggedInUsername] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [activePath, setActivePath] = useState("");
 
-  const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
-
-  // เมื่อหน้าโหลด จะเช็คว่า ผู้ใช้ล็อกอินหรือไม่
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const username = localStorage.getItem('loggedInUsername');
-      const group = localStorage.getItem('groupName'); // รับข้อมูล groupName จาก localStorage
-      if (username) {
-        setLoggedInUsername(username);
-        setGroupName(group); // ตั้งค่า groupName ถ้ามี
-      }
+    setActivePath(window.location.pathname);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const username = localStorage.getItem("loggedInUsername");
+      const group = localStorage.getItem("groupName");
+      if (username) setLoggedInUsername(username);
+      if (group) setGroupName(group);
     }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('loggedInEmail');
-    localStorage.removeItem('loggedInUsername');
-    localStorage.removeItem('groupName'); // ลบข้อมูล groupName ด้วย
-    window.location.href = '/login'; // นำทางไปที่หน้า login
+    localStorage.removeItem("loggedInEmail");
+    localStorage.removeItem("loggedInUsername");
+    localStorage.removeItem("groupName");
+    window.location.href = "/login";
   };
 
   return (
-    <div className="sidebar">
-      {/* Logo Section */}
-      <div className="logo">
-        <div>
-          <img src="/images/Logo.png" alt="Logo" width={70} height={100} />
-        </div>
-        <span>{groupName || 'PlayMatch'}</span> {/* แสดง groupName ถ้ามี */}
+    <aside className="sidebar">
+      {/* Logo & GroupName */}
+      <div className="sidebar-logo">
+        <div className="logo-icon">B</div>
+        <span className="logo-text">{groupName || "PlayMatch"}</span>
       </div>
+      <hr className="sidebar-divider" />
 
-      {/* Divider Line */}
-      <div className="divider"></div>
+      {/* Menu */}
+      <nav className="sidebar-menu">
+        {menuList.map((item) => (
+          <a
+            key={item.path}
+            href={item.path}
+            className={`sidebar-menu-item ${
+              activePath === item.path ? "active" : ""
+            }`}
+          >
+            <span className="menu-icon">{item.icon}</span>
+            <span className="menu-label">{item.label}</span>
+          </a>
+        ))}
+      </nav>
 
-      {/* Menu Section */}
-      <div className="menu">
-        <a href="/home" className="menu-item">
-          <img src="/images/members-icon.png" alt="members" width={35} height={50} />
-          <span>Members</span>
-        </a>
-        <a href="/match" className="menu-item">
-          <img src="/images/Match-icon.png" alt="match" width={35} height={50} />
-          <span>Match</span>
-        </a>
-        <a href="/history" className="menu-item">
-          <img src="/images/history-icon.png" alt="history" width={35} height={50} />
-          <span>History</span>
-        </a>
-        <a href="/ranking" className="menu-item">
-          <img src="/images/ranking-icon.png" alt="ranking" width={35} height={50} />
-          <span>Ranking</span>
-        </a>
-      </div>
-
-      {/* User Section */}
-      <div className="user-section">
-        <div className="user-dropdown" onClick={toggleDropdown}>
-          <span>{loggedInUsername || 'Demo'}</span>
-          <div className="dropdown-icon">▼</div>
+      {/* User Bottom */}
+      <div className="sidebar-user">
+        <div
+          className="user-info"
+          onClick={() => setIsDropdownOpen((p) => !p)}
+          tabIndex={0}
+        >
+          <div className="user-avatar">
+            <User2 size={21} />
+          </div>
+          <span className="user-name">{loggedInUsername || "Demo"}</span>
+          {isDropdownOpen ? (
+            <ChevronUp size={18} className="user-chevron" />
+          ) : (
+            <ChevronDown size={18} className="user-chevron" />
+          )}
         </div>
         {isDropdownOpen && (
-          <div className="dropdown-menu">
-            <button onClick={handleLogout} className="dropdown-item">
-              settings
+          <div className="user-dropdown-menu">
+            <button
+              className="dropdown-item"
+              onClick={() => alert("Settings ยังไม่เปิดใช้งาน")}
+            >
+              Settings
             </button>
-            <button onClick={handleLogout} className="dropdown-item">
+            <button className="dropdown-item" onClick={handleLogout}>
               Logout
             </button>
           </div>
         )}
       </div>
 
+      {/* CSS-in-JS */}
       <style jsx>{`
         .sidebar {
           width: 240px;
           height: 100vh;
-          background-color: #323943;
+          background: #212529;
           color: #fff;
           display: flex;
           flex-direction: column;
-          padding-top: 20px;
-          padding-left: 20px;
-          padding-right: 20px;
-          box-sizing: border-box;
-          border-right: 2px solid #444;
-          font-family: 'Arial', sans-serif;
+          position: relative;
+          box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
+          z-index: 100;
         }
-
-        .logo {
+        .sidebar-logo {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 32px 22px 17px 22px;
+        }
+        .logo-icon {
+          width: 38px;
+          height: 38px;
+          background: #0d6efd;
+          border-radius: 10px;
+          color: #fff;
+          font-weight: 700;
+          font-size: 1.45rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .logo-text {
+          font-size: 1.25rem;
+          font-weight: bold;
+          color: #fff;
+          letter-spacing: 0.01em;
+        }
+        .sidebar-divider {
+          border: none;
+          border-top: 1px solid #353945;
+          margin: 0 22px 13px 22px;
+        }
+        .sidebar-menu {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 6px 0;
+        }
+        .sidebar-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 8px 16px; /* ลด padding ซ้ายขวา */
+          margin: 2px 16px; /* เพิ่ม margin ซ้ายขวา กรอบ active จะสั้นลง */
+          font-size: 1rem;
+          color: #d1d7e0;
+          text-decoration: none;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background 0.18s, color 0.18s;
+          font-weight: 500;
+          position: relative;
+        }
+        .sidebar-menu-item .menu-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .sidebar-menu-item.active,
+        .sidebar-menu-item:hover {
+          background: #146cfa;
+          color: #fff;
+        }
+        .sidebar-menu-item.active .menu-icon,
+        .sidebar-menu-item:hover .menu-icon {
+          color: #fff;
+        }
+        .sidebar-menu-item:active {
+          background: #19447b;
+        }
+        .sidebar-menu-item .menu-label {
+          letter-spacing: 0.01em;
+        }
+        .sidebar-user {
+          margin-top: auto;
+          padding: 22px 16px 24px 22px;
+          position: relative;
+        }
+        .user-info {
           display: flex;
           align-items: center;
           gap: 12px;
-          margin-bottom: 30px;
-          font-size: 1.8rem;
-          font-weight: bold;
-          color: #42a5f5;
-        }
-
-        .logo img {
-          width: 50px;
-          height: 60px;
-        }
-
-        .logo span {
-          color: #ffffff;
-          font-size: 1.2rem;
-        }
-
-        .divider {
-          height: 2px;
-          background-color: #444;
-          margin-bottom: 20px;
-          margin-top: -30px;
-        }
-
-        .menu {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-
-        .menu-item {
-          display: flex;
-          align-items: center;
-          color: #f8f9f9;
-          text-decoration: none;
-          font-size: 1rem;
-          gap: 10px;
-          padding: 0px 18px;
-          border-radius: 8px;
-          transition: background-color 0.3s, color 0.3s, transform 0.3s;
-          border-bottom: 2px solid #444; /* ขีดล่างเมนู */
-          position: relative;
-          transition: box-shadow 0.3s ease-in-out, transform 0.2s ease;
-        }
-
-        .menu-item:hover {
-          background-color: #42a5f5;
-          color: #010102;
-          transform: scale(1.05); /* ขยายขนาด */
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* เพิ่มเงา */
-        }
-
-        .menu-item img {
-          transition: transform 0.3s ease;
-        }
-
-        .menu-item:hover img {
-          transform: scale(1.2); /* ขยายไอคอนเมนู */
-        }
-
-        .user-section {
-          margin-top: auto;
-          border-top: 2px solid #444;
-          padding-top: 40px;
-          text-align: center;
-        }
-
-        .user-dropdown {
           cursor: pointer;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 10px;
-          font-size: 1.2rem;
-          color: #ffffff;
+          font-size: 1rem;
           font-weight: 600;
-          transition: color 0.3s;
+          color: #f1f1f1;
+          padding: 8px 8px 8px 10px;
+          border-radius: 7px;
+          transition: background 0.2s, color 0.2s;
         }
-
-        .user-dropdown:hover {
-          color: #3c83ff;
+        .user-info:hover {
+          background: #146cfa;
+          color: #fff;
         }
-
-        .dropdown-menu {
-          background-color: #2a3047;
-          border-radius: 6px;
-          margin-top: 40px;
+        .user-avatar {
+          width: 32px;
+          height: 32px;
+          background: #353945;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .user-name {
+          flex: 1;
+          font-size: 1rem;
+        }
+        .user-chevron {
+          color: #b5b5b5;
+        }
+        .user-dropdown-menu {
+          position: absolute;
+          left: 25px;
+          bottom: 60px;
+          min-width: 155px;
+          background: #232836;
+          border-radius: 8px;
+          box-shadow: 0 8px 22px rgba(20, 30, 50, 0.1);
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          padding: 12px 0;
-          position: absolute;
-          bottom: 20px;
-          width: 220px;
-          color: #eff1ffff;
-          box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2); /* เพิ่มเงา */
+          z-index: 1000;
+          border: 1px solid #2e3242;
+          overflow: hidden;
         }
-
         .dropdown-item {
-          text-decoration: none;
-          color: #fff;
-          padding: 12px 18px;
-          transition: background-color 0.3s;
-          font-size: 1.1rem;
-          background-color: #282c34;
+          width: 100%;
+          background: none;
+          border: none;
+          color: #e5e6ee;
           text-align: left;
+          font-size: 1rem;
+          font-weight: 500;
+          padding: 12px 18px;
+          cursor: pointer;
+          transition: background 0.18s, color 0.18s;
         }
-
         .dropdown-item:hover {
-          background-color: #ffffff;
-          color: #282c34;
+          background: #146cfa;
+          color: #fff;
         }
-
-        .dropdown-icon {
-          font-size: 1.2rem;
-          color: #dadada;
-        }
-
-        /* Responsive Styles for smaller screens */
         @media (max-width: 768px) {
           .sidebar {
-            width: 200px;
-            padding-left: 15px;
-            padding-right: 15px;
-          }
-
-          .logo span {
-            font-size: 1.5rem;
-          }
-
-          .menu-item {
-            font-size: 1rem;
-            padding: 10px 14px;
-          }
-
-          .user-dropdown {
-            font-size: 1rem;
-          }
-
-          .dropdown-menu {
             width: 180px;
           }
+          .sidebar-logo {
+            padding-left: 12px;
+          }
+          .sidebar-divider {
+            margin-left: 12px;
+            margin-right: 12px;
+          }
+          .sidebar-menu-item {
+            padding-left: 8px;
+            padding-right: 8px;
+            margin-left: 7px;
+            margin-right: 7px;
+          }
+          .sidebar-user {
+            padding-left: 10px;
+            padding-right: 7px;
+          }
         }
-
         @media (max-width: 480px) {
           .sidebar {
-            width: 100%;
-            padding-left: 10px;
-            padding-right: 10px;
-          }
-
-          .logo {
-            font-size: 1.5rem;
-          }
-
-          .menu-item {
-            font-size: 1rem;
-            padding: 10px 12px;
-          }
-
-          .user-dropdown {
-            font-size: 1rem;
-          }
-
-          .dropdown-menu {
-            width: 100%;
+            width: 100vw;
+            min-width: unset;
+            max-width: unset;
+            padding: 0;
           }
         }
       `}</style>
-    </div>
+    </aside>
   );
 }
