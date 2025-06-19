@@ -18,6 +18,9 @@ const Home = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState('');
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [membersPerPage] = useState(20);
 
   // Fetch logged-in user details
   const fetchUsername = async () => {
@@ -195,6 +198,12 @@ const Home = () => {
   };
 
   const filteredMembers = members.filter(user => user.name?.toLowerCase().includes(search.toLowerCase()));
+  
+  // Pagination logic
+  const indexOfLastMember = currentPage * membersPerPage;
+  const indexOfFirstMember = indexOfLastMember - membersPerPage;
+  const currentMembers = filteredMembers.slice(indexOfFirstMember, indexOfLastMember);
+  const totalPages = Math.ceil(filteredMembers.length / membersPerPage);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100vh' }}>
@@ -203,6 +212,7 @@ const Home = () => {
         <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>สมาชิก</h2><hr />
         <form onSubmit={handleSubmit} className="form-box" noValidate style={{ marginBottom: '20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: '15px', marginBottom: '10px' }}>
+            {/* ฟอร์มทั้งหมด */}
             <div>
               <label style={{ fontSize: '12px', color: '#333' }}>ชื่อ</label>
               <input className="modern-input" type="text" placeholder="ชื่อ" value={name} onChange={(e) => setName(e.target.value)} 
@@ -298,7 +308,7 @@ const Home = () => {
               disabled={!selectedUser} 
               className="delete-btn" 
               style={{
-                backgroundColor: '#9e9e9e',
+                backgroundColor: '#6c757d',
                 color: 'white', 
                 padding: '8px 20px', 
                 borderRadius: '6px', 
@@ -331,6 +341,57 @@ const Home = () => {
           />
         </div>
 
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+          <span style={{ fontSize: '14px', color: '#333' }}>
+            จำนวนสมาชิก: {filteredMembers.length} 
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '20px' }}>
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '5px',
+              backgroundColor: '#f1f1f1',
+              marginRight: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            ย้อนกลับ
+          </button>
+          {Array.from({ length: totalPages }, (_, index) => (
+            <button
+              key={index + 1}
+              onClick={() => setCurrentPage(index + 1)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                backgroundColor: currentPage === index + 1 ? '#6c757d' : '#f1f1f1',
+                marginRight: '5px',
+                cursor: 'pointer',
+                color: currentPage === index + 1 ? 'white' : 'black'
+              }}
+            >
+              {index + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '5px',
+              backgroundColor: '#f1f1f1',
+              cursor: 'pointer'
+            }}
+          >
+            ถัดไป
+          </button>
+        </div>
+
         <table className="user-table" style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)' }}>
           <thead>
             <tr style={{ backgroundColor: '#323943', textAlign: 'center', fontSize: '11px', color: 'white' }}>
@@ -346,7 +407,7 @@ const Home = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredMembers.map(user => (
+            {currentMembers.map(user => (
               <tr key={user.memberId} style={{ backgroundColor: selectedUser?.memberId === user.memberId ? '#e8f7e8' : '', cursor: 'pointer', transition: 'background-color 0.3s', background: (members.indexOf(user) % 2 === 0) ? '#f9f9f9' : '#fff' }}>
                 <td style={{ textAlign: 'center', borderRight: '1px solid #ddd', padding: '8px' }}>
                   <input type="checkbox" checked={selectedUser?.memberId === user.memberId} onChange={() => handleSelectUser(user)} />
