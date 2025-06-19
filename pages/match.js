@@ -14,7 +14,18 @@ import {
 } from "firebase/firestore";
 
 // MOCK DATA (เปลี่ยนภายหลังได้)
-const courts = ["สนาม 1", "สนาม 2", "สนาม 3"];
+const courts = [
+  "สนาม 1",
+  "สนาม 2",
+  "สนาม 3",
+  "สนาม 4",
+  "สนาม 5",
+  "สนาม 6",
+  "สนาม 7",
+  "สนาม 8",
+  "สนาม 9",
+  "สนาม 10",
+];
 const players = [
   "สมชาย",
   "วิชัย",
@@ -233,7 +244,7 @@ const Match = () => {
           overflowY: "auto",
         }}
       >
-        <h2 style={{ fontSize: "22px", marginBottom: "12px" }}>Match</h2>
+        <h2 style={{ fontSize: "18px", marginBottom: "10px" }}>จัดก๊วน</h2>
         <hr />
 
         {/* Row 1 - Top filter/form */}
@@ -342,7 +353,9 @@ const Match = () => {
               <span style={{ color: "#2196f3", fontWeight: 600 }}>
                 Total Activity Time
               </span>
-              <span style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}>
+              <span
+                style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}
+              >
                 - {formatTime(activityTime)}
               </span>
             </div>
@@ -393,34 +406,54 @@ const Match = () => {
                   height: "20px",
                 }}
               >
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   Match ID
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   court
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   A1
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   A2
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   B1
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   B2
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   ลูกที่ใช้/เกม
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   ผลการแข่งขัน
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   score
                 </th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
                   status
                 </th>
                 <th style={{ padding: "11px 9px" }}></th>
@@ -450,8 +483,7 @@ const Match = () => {
                   <tr
                     key={match.matchId}
                     style={{
-                      background:
-                        globalIdx % 2 === 0 ? "#f8fcfe" : "#f4f7fa",
+                      background: globalIdx % 2 === 0 ? "#f8fcfe" : "#f4f7fa",
                       height: "53px",
                       transition: "background 0.25s",
                     }}
@@ -699,12 +731,8 @@ const Match = () => {
                           borderRadius: "5px",
                           border: "1px solid #bbb",
                           fontSize: "12px",
-                          background:
-                            STATUS_COLORS[match.status] || "#fff8d8",
-                          color:
-                            match.status === "finished"
-                              ? "#fff"
-                              : "#666",
+                          background: STATUS_COLORS[match.status] || "#fff8d8",
+                          color: match.status === "finished" ? "#fff" : "#666",
                           fontWeight: 600,
                         }}
                       >
@@ -809,8 +837,8 @@ const Match = () => {
             onClick={handleAddMatch}
             disabled={!isOpen}
             style={{
-              width: "33px",
-              height: "33px",
+              width: "25px",
+              height: "25px",
               borderRadius: "50%",
               backgroundColor: isOpen ? "#40c2ec" : "#bbb",
               border: "none",
@@ -840,9 +868,7 @@ const Match = () => {
               marginRight: "12px",
             }}
             onClick={() => isOpen && handleAddMatch()}
-          >
-            Item
-          </span>
+          ></span>
         </div>
 
         {/* Pagination */}
