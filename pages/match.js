@@ -12,6 +12,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
+// รายการสนาม
 const courts = [
   "สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนาม 5",
   "สนาม 6", "สนาม 7", "สนาม 8", "สนาม 9", "สนาม 10",
@@ -46,24 +47,26 @@ const Match = () => {
     const now = new Date();
     return now.toISOString().slice(0, 10);
   });
-  const [topic, setTopic] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-  const [matches, setMatches] = useState([]);
-  const [activityTime, setActivityTime] = useState(0);
+  const [topic, setTopic] = useState(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("topic") || "" : ""; // Check for window object
+  });
+  const [isOpen, setIsOpen] = useState(false); // สถานะเปิดก๊วน
+  const [matches, setMatches] = useState([]); // รายการ Match
+  const [activityTime, setActivityTime] = useState(0); // เวลากิจกรรม
   const [timer, setTimer] = useState(null);
   const timerRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [showMenuId, setShowMenuId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
-  const [members, setMembers] = useState([]);
+  const [members, setMembers] = useState([]); // สมาชิก
   const [balls] = useState(Array.from({ length: 10 }, (_, i) => (i + 1).toString()));
 
-  // Fetch logged in email
+  // ดึงข้อมูลอีเมลผู้ใช้
   useEffect(() => {
     setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
   }, []);
 
-  // Fetch members (status === "มา")
+  // ดึงสมาชิกที่สถานะเป็น "มา"
   useEffect(() => {
     const fetchMembers = async () => {
       try {
@@ -98,6 +101,16 @@ const Match = () => {
     fetchMembers();
   }, [loggedInEmail]);
 
+  // ตรวจสอบว่าโค้ดทำงานในฝั่งเบราว์เซอร์หรือไม่ก่อนเรียกใช้ localStorage
+  const isBrowser = typeof window !== "undefined";
+
+  // เก็บหัวเรื่องไว้ใน localStorage
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("topic", topic);
+    }
+  }, [topic]);
+
   // Reset session
   const resetSession = () => {
     setMatches([]);
@@ -108,8 +121,18 @@ const Match = () => {
     setTimer(null);
   };
 
-  // Handle timer
+  // เริ่มจับเวลา
   useEffect(() => {
+    const savedIsOpen = localStorage.getItem("isOpen");
+    const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
+    const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
+
+    if (savedIsOpen === "true") {
+      setIsOpen(true);
+      setMatches(savedMatches);
+      setActivityTime(savedActivityTime);
+    }
+
     if (isOpen) {
       timerRef.current = setInterval(() => {
         setActivityTime((prev) => prev + 1);
@@ -119,38 +142,43 @@ const Match = () => {
       clearInterval(timerRef.current);
       setTimer(null);
     }
+
     return () => clearInterval(timerRef.current);
   }, [isOpen]);
 
-  // Format time
-  const formatTime = (sec) => {
-    const m = Math.floor(sec / 60).toString().padStart(2, "0");
-    const s = (sec % 60).toString().padStart(2, "0");
-    return `${m}:${s} นาที`;
-  };
-
   // เพิ่มแถวใหม่ (Match)
   const handleAddMatch = () => {
-    setMatches((prev) => [
-      ...prev,
-      {
-        matchId: padId(prev.length + 1, 4),
-        court: "",
-        A1: "",
-        A2: "",
-        B1: "",
-        B2: "",
-        balls: "",
-        result: "",
-        score: "",
-        status: "",
-      },
-    ]);
+    setMatches((prev) => {
+      const newMatches = [
+        ...prev,
+        {
+          matchId: padId(prev.length + 1, 4),
+          court: "",
+          A1: "",
+          A2: "",
+          B1: "",
+          B2: "",
+          balls: "",
+          result: "",
+          score: "",
+          status: "",
+        },
+      ];
+      if (isBrowser) {
+        localStorage.setItem("matches", JSON.stringify(newMatches));
+      }
+      return newMatches;
+    });
     setShowMenuId(null);
     setTimeout(() => {
       const newTotal = matches.length + 1;
       setCurrentPage(Math.ceil(newTotal / ITEMS_PER_PAGE));
     }, 100);
+  };
+
+  // กรองสมาชิกที่เลือกแล้ว (เอาเงื่อนไขไม่ให้เลือกซ้ำออก)
+  const getAvailableMembers = (currentMatch) => {
+    return members;  // ไม่กรองสมาชิกที่ถูกเลือกแล้ว
   };
 
   // แก้ไขข้อมูลในแถว
@@ -168,24 +196,22 @@ const Match = () => {
           updated[idx].status = "";
         }
       }
+      if (isBrowser) {
+        localStorage.setItem("matches", JSON.stringify(updated)); // เก็บข้อมูลลง localStorage
+      }
       return updated;
     });
   };
 
-  // ลบแถว Match
-  const handleDeleteMatch = (idx) => {
-    setMatches((prev) =>
-      prev
-        .filter((_, i) => i !== idx)
-        .map((item, i) => ({
-          ...item,
-          matchId: padId(i + 1, 4),
-        }))
-    );
-    setShowMenuId(null);
-  };
+  // เพิ่มเงื่อนไขในการเลือกสมาชิก
+  const renderMemberOptions = (currentMatch) =>
+    getAvailableMembers(currentMatch).map((mem) => (
+      <option key={mem.memberId} value={mem.name}>
+        {mem.name} ({mem.level})
+      </option>
+    ));
 
-  // เปิด/ปิดก๊วน
+  // ฟังก์ชัน เริ่มจับก๊วน
   const handleStartGroup = () => {
     if (!topic) {
       Swal.fire("กรุณาระบุหัวเรื่อง", "", "warning");
@@ -195,6 +221,12 @@ const Match = () => {
     setActivityTime(0);
     setMatches([]);
     setCurrentPage(1);
+
+    // เก็บสถานะใน localStorage
+    if (isBrowser) {
+      localStorage.setItem("isOpen", "true");
+      localStorage.setItem("matches", JSON.stringify([])); // เก็บข้อมูล match ใน localStorage
+    }
   };
 
   // ปิดก๊วน (บันทึก)
@@ -244,6 +276,12 @@ const Match = () => {
       });
       Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติแล้ว", "success");
       resetSession();
+
+      // ลบสถานะจาก localStorage เมื่อปิดก๊วน
+      if (isBrowser) {
+        localStorage.removeItem("isOpen");
+        localStorage.removeItem("matches");
+      }
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
@@ -254,6 +292,13 @@ const Match = () => {
   const indexOfFirst = indexOfLast - ITEMS_PER_PAGE;
   const currentMatches = matches.slice(indexOfFirst, indexOfLast);
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
+
+  // ฟังก์ชันแปลงเวลา
+  const formatTime = (sec) => {
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s} นาที`;
+  };
 
   return (
     <div
@@ -275,7 +320,6 @@ const Match = () => {
       >
         <h2 style={{ fontSize: "18px", marginBottom: "10px" }}>จัดก๊วน</h2>
         <hr />
-
         {/* Row 1 - Top filter/form */}
         <div
           style={{
@@ -390,7 +434,6 @@ const Match = () => {
             </div>
           </div>
         </div>
-
         {/* Row 2 - จำนวนเกม */}
         <div
           style={{
@@ -471,14 +514,6 @@ const Match = () => {
                 // เงื่อนไข disabled "จบการแข่งขัน"
                 const cannotFinish = !match.balls || !match.result;
 
-                // สำหรับ dropdown รายชื่อ
-                const renderMemberOptions = () =>
-                  members.map((mem) => (
-                    <option key={mem.memberId} value={mem.name}>
-                      {mem.name} ({mem.level})
-                    </option>
-                  ));
-
                 return (
                   <tr
                     key={match.matchId}
@@ -510,6 +545,7 @@ const Match = () => {
                         ))}
                       </select>
                     </td>
+
                     {/* ผู้เล่น A1 */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
@@ -525,9 +561,10 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions()}
+                        {renderMemberOptions(match)}
                       </select>
                     </td>
+
                     {/* ผู้เล่น A2 */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
@@ -543,9 +580,10 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions()}
+                        {renderMemberOptions(match)}
                       </select>
                     </td>
+
                     {/* ผู้เล่น B1 */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
@@ -561,9 +599,10 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions()}
+                        {renderMemberOptions(match)}
                       </select>
                     </td>
+
                     {/* ผู้เล่น B2 */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
@@ -579,9 +618,10 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions()}
+                        {renderMemberOptions(match)}
                       </select>
                     </td>
+
                     {/* ลูกที่ใช้/เกม */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
@@ -602,6 +642,7 @@ const Match = () => {
                         ))}
                       </select>
                     </td>
+
                     {/* ผลการแข่งขัน */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
@@ -623,6 +664,7 @@ const Match = () => {
                         ))}
                       </select>
                     </td>
+
                     {/* Score */}
                     <td style={{
                       textAlign: "center",
@@ -633,6 +675,7 @@ const Match = () => {
                     }}>
                       {match.score}
                     </td>
+
                     {/* Status */}
                     <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3", position: "relative" }}>
                       <select
@@ -655,6 +698,7 @@ const Match = () => {
                         <option value="finished" disabled={cannotFinish}>จบการแข่งขัน</option>
                       </select>
                     </td>
+                    
                     {/* จุด 3 จุด (Dropdown Action) */}
                     <td style={{ textAlign: "center", minWidth: "48px" }}>
                       {isOpen && (
@@ -808,7 +852,7 @@ const Match = () => {
                 border: "1px solid #ddd",
                 borderRadius: "5px",
                 backgroundColor:
-                  currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
+                currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
                 marginRight: "5px",
                 cursor: "pointer",
                 color: currentPage === index + 1 ? "white" : "black",
