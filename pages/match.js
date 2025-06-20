@@ -6,37 +6,16 @@ import {
   collection,
   addDoc,
   doc,
-  setDoc,
   getDocs,
   query,
   where,
   serverTimestamp,
 } from "firebase/firestore";
 
-// MOCK DATA (เปลี่ยนภายหลังได้)
 const courts = [
-  "สนาม 1",
-  "สนาม 2",
-  "สนาม 3",
-  "สนาม 4",
-  "สนาม 5",
-  "สนาม 6",
-  "สนาม 7",
-  "สนาม 8",
-  "สนาม 9",
-  "สนาม 10",
+  "สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนาม 5",
+  "สนาม 6", "สนาม 7", "สนาม 8", "สนาม 9", "สนาม 10",
 ];
-const players = [
-  "สมชาย",
-  "วิชัย",
-  "อารีย์",
-  "อภิวัฒน์",
-  "ณัฐวุฒิ",
-  "ธีรยุทธ",
-  "วราพงษ์",
-  "ธนกร",
-];
-const balls = Array.from({ length: 10 }, (_, i) => (i + 1).toString());
 
 const RESULT_OPTIONS = [
   { value: "", label: "เลือกผล" },
@@ -44,18 +23,16 @@ const RESULT_OPTIONS = [
   { value: "B", label: "ทีม B ชนะ" },
   { value: "DRAW", label: "เสมอ" },
 ];
-const STATUS_OPTIONS = [
-  { value: "", label: "ยังไม่ได้กรอก" }, // สีเหลือง
-  { value: "playing", label: "กำลังแข่งขัน" }, // สีเหลือง
-  { value: "finished", label: "จบการแข่งขัน" }, // สีแดง
-];
 
 const STATUS_COLORS = {
-  "": "#fff8d8", // เหลืองอ่อน
+  "": "#fff8d8",
   playing: "#fff8d8",
-  finished: "#f44336", // แดง
+  finished: "#f44336",
 };
 
+const ITEMS_PER_PAGE = 30;
+
+const padId = (id, len = 4) => String(id).padStart(len, "0");
 const getScoreByResult = (result) => {
   if (result === "A") return "2/0";
   if (result === "B") return "0/2";
@@ -63,33 +40,65 @@ const getScoreByResult = (result) => {
   return "";
 };
 
-const padId = (id, len = 4) => String(id).padStart(len, "0");
-
-const ITEMS_PER_PAGE = 30;
-
 const Match = () => {
-  // State สำหรับฟอร์ม
+  // State
   const [matchDate, setMatchDate] = useState(() => {
     const now = new Date();
-    return now.toISOString().slice(0, 10); // yyyy-mm-dd
+    return now.toISOString().slice(0, 10);
   });
   const [topic, setTopic] = useState("");
-  const [isOpen, setIsOpen] = useState(false); // เปิดก๊วน/ปิดก๊วน
+  const [isOpen, setIsOpen] = useState(false);
   const [matches, setMatches] = useState([]);
-  const [activityTime, setActivityTime] = useState(0); // วินาที
+  const [activityTime, setActivityTime] = useState(0);
   const [timer, setTimer] = useState(null);
   const timerRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [showMenuId, setShowMenuId] = useState(null); // สำหรับ 3 จุด (ลบ)
-
-  // ตรวจสอบอีเมลล็อกอิน (กรณีจะบันทึกลง collection history ของ user)
+  const [showMenuId, setShowMenuId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
+  const [members, setMembers] = useState([]);
+  const [balls] = useState(Array.from({ length: 10 }, (_, i) => (i + 1).toString()));
 
+  // Fetch logged in email
   useEffect(() => {
     setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
   }, []);
 
-  // Reset เมื่อปิดก๊วน
+  // Fetch members (status === "มา")
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        if (!loggedInEmail) return;
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", loggedInEmail));
+        const userSnap = await getDocs(q);
+        let userId = null;
+        userSnap.forEach((doc) => {
+          userId = doc.id;
+        });
+        if (!userId) return;
+
+        const membersRef = collection(db, `users/${userId}/Members`);
+        const memSnap = await getDocs(membersRef);
+        const memberList = [];
+        memSnap.forEach((doc) => {
+          const data = doc.data();
+          if (data.status === "มา") {
+            memberList.push({
+              memberId: doc.id,
+              name: data.name,
+              level: data.level,
+            });
+          }
+        });
+        setMembers(memberList);
+      } catch (err) {
+        setMembers([]);
+      }
+    };
+    fetchMembers();
+  }, [loggedInEmail]);
+
+  // Reset session
   const resetSession = () => {
     setMatches([]);
     setActivityTime(0);
@@ -113,11 +122,9 @@ const Match = () => {
     return () => clearInterval(timerRef.current);
   }, [isOpen]);
 
-  // Format เวลา
+  // Format time
   const formatTime = (sec) => {
-    const m = Math.floor(sec / 60)
-      .toString()
-      .padStart(2, "0");
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
     const s = (sec % 60).toString().padStart(2, "0");
     return `${m}:${s} นาที`;
   };
@@ -140,7 +147,6 @@ const Match = () => {
       },
     ]);
     setShowMenuId(null);
-    // ถ้าเพิ่มแล้วข้าม page ให้กระโดดไปหน้าสุดท้าย
     setTimeout(() => {
       const newTotal = matches.length + 1;
       setCurrentPage(Math.ceil(newTotal / ITEMS_PER_PAGE));
@@ -155,6 +161,12 @@ const Match = () => {
       // เมื่อผลการแข่งขันเปลี่ยน ให้เปลี่ยน score อัตโนมัติ
       if (field === "result") {
         updated[idx].score = getScoreByResult(value);
+      }
+      // ถ้าเปลี่ยน balls/result แล้ว status เป็น finished แต่ข้อมูลยังไม่ครบ จะรีเซต status
+      if ((field === "balls" || field === "result") && updated[idx].status === "finished") {
+        if (!updated[idx].balls || !updated[idx].result) {
+          updated[idx].status = "";
+        }
       }
       return updated;
     });
@@ -185,14 +197,33 @@ const Match = () => {
     setCurrentPage(1);
   };
 
+  // ปิดก๊วน (บันทึก)
   const handleEndGroup = async () => {
+    // เช็คก่อนว่าทุก match ต้อง status เป็น finished ทั้งหมด
+    const hasUnfinished = matches.some((m) => m.status !== "finished");
+    if (hasUnfinished) {
+      Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
+      return;
+    }
+
+    // Confirm ก่อนบันทึก
+    const result = await Swal.fire({
+      title: "คุณต้องการบันทึกและปิดก๊วนหรือไม่?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "ยืนยัน",
+      cancelButtonText: "ยกเลิก",
+    });
+
+    if (!result.isConfirmed) return;
+
     if (matches.length === 0) {
       Swal.fire("ไม่มี match ที่จะบันทึก", "", "info");
       setIsOpen(false);
       setActivityTime(0);
       return;
     }
-    // บันทึกลง History (Firebase)
+    // บันทึกลง Matches (Firebase)
     try {
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("email", "==", loggedInEmail));
@@ -203,8 +234,8 @@ const Match = () => {
       });
       if (!userId) throw new Error("User not found");
 
-      const historyRef = collection(db, `users/${userId}/MatchHistory`);
-      await addDoc(historyRef, {
+      const matchesRef = collection(db, `users/${userId}/Matches`);
+      await addDoc(matchesRef, {
         topic,
         matchDate,
         totalTime: activityTime,
@@ -223,8 +254,6 @@ const Match = () => {
   const indexOfFirst = indexOfLast - ITEMS_PER_PAGE;
   const currentMatches = matches.slice(indexOfFirst, indexOfLast);
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
-
-  // หลีกเลี่ยงเลือกซ้ำในผู้เล่น (A1, A2, B1, B2) ได้ด้วยตัวเองภายหลัง
 
   return (
     <div
@@ -406,64 +435,23 @@ const Match = () => {
                   height: "20px",
                 }}
               >
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  Match ID
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  court
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  A1
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  A2
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  B1
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  B2
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  ลูกที่ใช้/เกม
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  ผลการแข่งขัน
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  score
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  status
-                </th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>Match ID</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>court</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>A1</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>A2</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>B1</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>B2</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>ลูกที่ใช้/เกม</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>ผลการแข่งขัน</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>score</th>
+                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>status</th>
                 <th style={{ padding: "11px 9px" }}></th>
               </tr>
             </thead>
             <tbody>
               {currentMatches.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={11}
+                  <td colSpan={11}
                     style={{
                       padding: "34px 0",
                       color: "#999",
@@ -479,6 +467,18 @@ const Match = () => {
               )}
               {currentMatches.map((match, idx) => {
                 const globalIdx = indexOfFirst + idx;
+
+                // เงื่อนไข disabled "จบการแข่งขัน"
+                const cannotFinish = !match.balls || !match.result;
+
+                // สำหรับ dropdown รายชื่อ
+                const renderMemberOptions = () =>
+                  members.map((mem) => (
+                    <option key={mem.memberId} value={mem.name}>
+                      {mem.name} ({mem.level})
+                    </option>
+                  ));
+
                 return (
                   <tr
                     key={match.matchId}
@@ -488,27 +488,13 @@ const Match = () => {
                       transition: "background 0.25s",
                     }}
                   >
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                        fontWeight: 500,
-                        fontSize: "12px",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3", fontWeight: 500, fontSize: "12px" }}>
                       {match.matchId}
                     </td>
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.court}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "court", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "court", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "110px",
@@ -520,24 +506,15 @@ const Match = () => {
                       >
                         <option value="">เลือกสนาม</option>
                         {courts.map((court) => (
-                          <option key={court} value={court}>
-                            {court}
-                          </option>
+                          <option key={court} value={court}>{court}</option>
                         ))}
                       </select>
                     </td>
                     {/* ผู้เล่น A1 */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.A1}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "A1", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "A1", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "120px",
@@ -548,25 +525,14 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {players.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
+                        {renderMemberOptions()}
                       </select>
                     </td>
                     {/* ผู้เล่น A2 */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.A2}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "A2", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "A2", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "120px",
@@ -577,25 +543,14 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {players.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
+                        {renderMemberOptions()}
                       </select>
                     </td>
                     {/* ผู้เล่น B1 */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.B1}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "B1", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "B1", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "120px",
@@ -606,25 +561,14 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {players.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
+                        {renderMemberOptions()}
                       </select>
                     </td>
                     {/* ผู้เล่น B2 */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.B2}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "B2", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "B2", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "120px",
@@ -635,25 +579,14 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {players.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
+                        {renderMemberOptions()}
                       </select>
                     </td>
                     {/* ลูกที่ใช้/เกม */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.balls}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "balls", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "balls", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "90px",
@@ -665,24 +598,15 @@ const Match = () => {
                       >
                         <option value="">เลือก</option>
                         {balls.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
+                          <option key={n} value={n}>{n}</option>
                         ))}
                       </select>
                     </td>
                     {/* ผลการแข่งขัน */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
                       <select
                         value={match.result}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "result", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "result", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "110px",
@@ -700,30 +624,20 @@ const Match = () => {
                       </select>
                     </td>
                     {/* Score */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                        fontWeight: 600,
-                        fontSize: "12px",
-                        color: "#138c0f",
-                      }}
-                    >
+                    <td style={{
+                      textAlign: "center",
+                      borderRight: "1px solid #e3e3e3",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                      color: "#138c0f",
+                    }}>
                       {match.score}
                     </td>
                     {/* Status */}
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                        position: "relative",
-                      }}
-                    >
+                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3", position: "relative" }}>
                       <select
                         value={match.status}
-                        onChange={(e) =>
-                          handleChangeMatch(globalIdx, "status", e.target.value)
-                        }
+                        onChange={(e) => handleChangeMatch(globalIdx, "status", e.target.value)}
                         disabled={!isOpen}
                         style={{
                           width: "110px",
@@ -736,15 +650,9 @@ const Match = () => {
                           fontWeight: 600,
                         }}
                       >
-                        <option value="" style={{ color: "#f8b800" }}>
-                          Defill
-                        </option>
-                        <option value="playing" style={{ color: "#f8b800" }}>
-                          กำลังแข่งขัน
-                        </option>
-                        <option value="finished" style={{ color: "#f44336" }}>
-                          จบการแข่งขัน
-                        </option>
+                        <option value="">Defill</option>
+                        <option value="playing">กำลังแข่งขัน</option>
+                        <option value="finished" disabled={cannotFinish}>จบการแข่งขัน</option>
                       </select>
                     </td>
                     {/* จุด 3 จุด (Dropdown Action) */}
@@ -762,9 +670,7 @@ const Match = () => {
                             tabIndex={-1}
                             onClick={() =>
                               setShowMenuId(
-                                showMenuId === match.matchId
-                                  ? null
-                                  : match.matchId
+                                showMenuId === match.matchId ? null : match.matchId
                               )
                             }
                             style={{
