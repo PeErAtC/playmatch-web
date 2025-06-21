@@ -12,6 +12,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import * as XLSX from 'xlsx'; // ใช้สำหรับอ่านไฟล์ Excel
 
 const Home = () => {
   const [search, setSearch] = useState("");
@@ -27,9 +28,75 @@ const Home = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
-
+  const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [membersPerPage] = useState(20);
+
+    // ฟังก์ชันสำหรับสร้างไฟล์ Excel ต้นฉบับ
+  const generateExcelTemplate = () => {
+    const templateData = [
+      { name: '', level: '', lineId: '', handed: '', phone: '', age: '', experience: '', status: '' }
+    ];
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "สมาชิก");
+    const fileName = "members_template.xlsx";
+    XLSX.writeFile(wb, fileName);
+  };
+
+  // ฟังก์ชันสำหรับอัปโหลดไฟล์ Excel
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.name.endsWith('.xlsx')) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const data = new Uint8Array(event.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+        try {
+          for (const member of jsonData) {
+            const newUser = {
+              name: member.name,
+              level: member.level,
+              lineId: member.lineId,
+              handed: member.handed,
+              phone: member.phone,
+              age: member.age,
+              experience: member.experience,
+              status: member.status,
+              createBy: loggedInUsername,
+            };
+
+            if (!newUser.name || !newUser.level || !newUser.lineId || !newUser.handed || !newUser.phone || !newUser.age || !newUser.experience || !newUser.status) {
+              Swal.fire("กรุณากรอกข้อมูลให้ครบทุกช่องใน Excel", "", "warning");
+              return;
+            }
+
+            const email = localStorage.getItem("loggedInEmail");
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("email", "==", email));
+            const querySnapshot = await getDocs(q);
+
+            querySnapshot.forEach(async (docSnapshot) => {
+              const userId = docSnapshot.id;
+              const memberId = generateMemberId(members);
+              const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
+              await setDoc(memberRef, { ...newUser, memberId, createdAt: new Date() });
+            });
+          }
+          Swal.fire("สำเร็จ!", "เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ!", "success");
+          fetchMembers(); // รีเฟรชข้อมูลหลังจากการอัปโหลด
+        } catch (error) {
+          Swal.fire("เกิดข้อผิดพลาดในการอัปโหลดไฟล์ Excel", error.message, "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      Swal.fire("กรุณาอัปโหลดไฟล์ Excel เท่านั้น", "", "warning");
+    }
+  };
 
   // Fetch logged-in user details
   const fetchUsername = async () => {
@@ -270,6 +337,77 @@ const Home = () => {
       >
         <h2 style={{ fontSize: "18px", marginBottom: "10px" }}>สมาชิก</h2>
         <hr />
+
+                {/* เพิ่มปุ่ม [สร้างรายชื่อ Excel] */}
+        <div style={{ marginBottom: "15px" }}>
+          <button
+            onClick={() => setShowModal(true)} // เมื่อกดปุ่ม จะเปิด Modal
+            style={{
+              backgroundColor: "#4bf196",
+              color: "black",
+              padding: "8px 20px",
+              borderRadius: "6px",
+              border: "none",
+              fontSize: "14px",
+              cursor: "pointer",
+              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+            }}
+          >
+            สร้างรายชื่อ Excel
+          </button>
+        </div>
+
+        {/* Modal สำหรับการอัปโหลดไฟล์ Excel */}
+        {showModal && (
+          <div style={{
+            position: "fixed", top: "0", left: "0", width: "100%", height: "100%",
+            background: "rgba(0, 0, 0, 0.5)", display: "flex", justifyContent: "center", alignItems: "center"
+          }}>
+            <div style={{
+              backgroundColor: "white", padding: "20px", borderRadius: "8px", maxWidth: "500px", width: "100%"
+            }}>
+              <h3>ดาวน์โหลดไฟล์ Excel</h3>
+              <button
+                onClick={generateExcelTemplate}
+                style={{
+                  backgroundColor: "#4bf196",
+                  color: "black",
+                  padding: "8px 20px",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                }}
+              >
+                ดาวน์โหลดไฟล์ Excel
+              </button>
+              <hr />
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                accept=".xlsx"
+                style={{
+                  padding: "6px", width: "100%", marginBottom: "10px", borderRadius: "5px", border: "1px solid #ccc"
+                }}
+              />
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  backgroundColor: "#ff0000",
+                  color: "white",
+                  padding: "8px 20px",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                }}
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        )}
+
         <form
           onSubmit={handleSubmit}
           className="form-box"
