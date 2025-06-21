@@ -1,7 +1,7 @@
 import Navbar from "./components/navbar";
 import { useRouter } from "next/router";
 
-export default function Home({ darkMode, toggleDarkMode }) {
+export default function Home() {
   const router = useRouter();
 
   const handleGetStarted = () => {
@@ -10,8 +10,8 @@ export default function Home({ darkMode, toggleDarkMode }) {
 
   return (
     <>
-      <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
-      <main className={darkMode ? "main dark" : "main"}>
+      <Navbar />
+      <main className="main">
         <section className="hero">
           <div className="hero-text">
             <h1 className="title">
@@ -86,6 +86,7 @@ export default function Home({ darkMode, toggleDarkMode }) {
           padding: 0;
           margin: 0;
           width: 100%;
+          /* เพิ่ม min-height: 100vh; เพื่อให้ main สามารถขยายเต็มหน้าจอได้ */
           min-height: 100vh;
           box-sizing: border-box;
           overflow-x: hidden;
@@ -94,7 +95,9 @@ export default function Home({ darkMode, toggleDarkMode }) {
       `}</style>
       <style jsx>{`
         .main {
-          min-height: calc(100vh - 90px);
+          /* ปรับ min-height ให้คำนวณจาก Navbar ด้วย หรือตั้งค่า padding-top แทน */
+          /* ในตัวอย่างนี้ ผมจะใช้ padding-top เพื่อหลีกเลี่ยง Navbar ทับ */
+          min-height: calc(100vh - 90px); /* 90px คือความสูง Navbar โดยประมาณ ถ้า Navbar มีความสูงแน่นอน */
           width: 100%;
           display: flex;
           flex-direction: column;
@@ -104,20 +107,22 @@ export default function Home({ darkMode, toggleDarkMode }) {
           color: #f2f4fa;
           padding: 0;
           transition: background 0.3s;
+          /* เพิ่ม padding-top เพื่อกัน Navbar ทับเนื้อหา */
+          padding-top: 90px; /* สมมติ Navbar สูง 90px ปรับตามความสูงจริง */
+          box-sizing: border-box;
         }
-        .main.dark {
-          background: linear-gradient(120deg, #171e2b 60%, #11161f 100%);
-          color: #e7eaf6;
-        }
+
         .hero {
           display: flex;
           flex-direction: row;
           align-items: center;
           justify-content: center;
-          gap: 4vw;
-          width: 100vw;
-          margin: 0;
-          padding: 60px 6vw 40px 6vw;
+          /* ใช้ gap ที่ยืดหยุ่นมากขึ้น หรือใช้ margin-right/left ใน hero-image/hero-text */
+          /* ผมจะเปลี่ยนไปใช้ padding-inline หรือ max-width ใน hero-text/hero-image แทน gap */
+          width: 100%; /* ใช้ 100% แทน 100vw เพื่อควบคุมได้ง่ายขึ้น */
+          max-width: 1200px; /* กำหนด max-width เพื่อไม่ให้เนื้อหายืดมากเกินไปในจอใหญ่ */
+          margin: 0 auto; /* จัดกึ่งกลาง Hero Section */
+          padding: 60px 4vw 40px 4vw; /* ปรับ padding โดยรวม */
           box-sizing: border-box;
         }
         .hero-text {
@@ -126,6 +131,9 @@ export default function Home({ darkMode, toggleDarkMode }) {
           flex-direction: column;
           align-items: flex-start;
           justify-content: center;
+          /* เพิ่ม max-width เพื่อควบคุมขนาด */
+          max-width: 580px; /* ตัวอย่าง: กำหนด max-width */
+          padding-right: 20px; /* เพิ่มระยะห่างระหว่าง text กับ image */
         }
         .title {
           font-size: clamp(2.1rem, 4vw, 3.8rem);
@@ -144,6 +152,7 @@ export default function Home({ darkMode, toggleDarkMode }) {
           margin-bottom: 28px;
           color: #e4e7f1;
           font-weight: 400;
+          /* max-width อาจไม่จำเป็นที่นี่ถ้า parent (hero-text) มี max-width แล้ว */
           max-width: 520px;
           line-height: 1.35;
         }
@@ -211,7 +220,7 @@ export default function Home({ darkMode, toggleDarkMode }) {
         .hero-image {
           flex: 1;
           min-width: 160px;
-          max-width: 600px;
+          max-width: 600px; /* กำหนด max-width เพื่อคุมขนาดภาพ */
           display: flex;
           align-items: center;
           justify-content: center;
@@ -219,7 +228,7 @@ export default function Home({ darkMode, toggleDarkMode }) {
           border-radius: 22px;
           box-shadow: 0 8px 44px rgba(20, 108, 250, 0.08);
           padding: 20px 10px 12px 10px;
-          margin-left: 10px;
+          margin-left: 10px; /* อาจจะลบออกหรือปรับได้ตามต้องการ */
           transition: all 0.2s;
         }
         .hero-image img {
@@ -232,17 +241,26 @@ export default function Home({ darkMode, toggleDarkMode }) {
           transition: all 0.2s;
         }
 
-        /* Responsive: Tablet */
+        /* Responsive: Tablet (เหมือนเดิม) */
         @media (max-width: 900px) {
           .hero {
             flex-direction: column-reverse;
             gap: 18px;
             padding-top: 22px;
             padding-bottom: 16px;
+            padding-left: 4vw; /* ให้มี padding ด้านข้าง */
+            padding-right: 4vw; /* ให้มี padding ด้านข้าง */
           }
           .hero-text {
             align-items: center;
             text-align: center;
+            padding-right: 0; /* ลบ padding-right ที่เคยมีใน desktop mode */
+            max-width: 100%; /* ให้ text ขยายเต็มพื้นที่ของ hero-section */
+          }
+          .subtitle {
+            max-width: 80%; /* จำกัดความกว้างของ subtitle เพื่อไม่ให้กว้างเกินไปบน Tablet */
+            margin-left: auto;
+            margin-right: auto;
           }
           .hero-image {
             margin-left: 0;
@@ -254,14 +272,19 @@ export default function Home({ darkMode, toggleDarkMode }) {
             max-width: 220px;
           }
         }
-        /* Responsive: Mobile - ซ่อนรูป */
+        /* Responsive: Mobile */
         @media (max-width: 600px) {
+          .main {
+            padding-top: 60px; /* ลด padding-top สำหรับมือถือ ถ้า Navbar เล็กลง */
+          }
           .hero {
-            flex-direction: column;
+            flex-direction: column; /* ให้ text ขึ้นก่อนใน Mobile */
             gap: 8px;
-            padding: 6vw 0 2vw 0;
-            width: 100vw;
-            max-width: 100vw;
+            /* ปรับ padding โดยให้มีระยะห่างจากขอบจอ */
+            padding: 6vw 4vw 2vw 4vw; /* เพิ่ม padding ด้านข้าง 4vw */
+            width: 100%; /* ใช้ 100% แทน 100vw */
+            max-width: 100%;
+            margin: 0; /* ลบ margin auto ออก */
           }
           .hero-image {
             display: none !important;
@@ -269,23 +292,24 @@ export default function Home({ darkMode, toggleDarkMode }) {
           .hero-text {
             align-items: center;
             text-align: center;
-            width: 100vw;
+            width: 100%; /* ให้ text ขยายเต็มความกว้าง */
           }
           .title,
           .highlight {
-            font-size: 1.15rem;
+            font-size: 1.8rem; /* ปรับขนาด font สำหรับ Mobile ให้ใหญ่ขึ้นเล็กน้อย */
             line-height: 1.12;
           }
           .highlight {
-            font-size: 1.17rem;
+            font-size: 1.85rem;
           }
           .subtitle {
             font-size: 0.93rem;
             margin-bottom: 12px;
             line-height: 1.23;
-            padding-left: 0;
-            padding-right: 0;
-            max-width: 96vw;
+            /* ทำให้ subtitle มี padding ด้านข้างเพื่อให้ไม่ชิดขอบ */
+            padding-left: 2vw;
+            padding-right: 2vw;
+            max-width: 90vw; /* จำกัดความกว้างของ subtitle */
           }
           .buttons {
             flex-direction: column;
@@ -293,10 +317,12 @@ export default function Home({ darkMode, toggleDarkMode }) {
             width: 100%;
             align-items: stretch;
             margin-bottom: 8px;
+            /* เพิ่ม padding ด้านข้างให้กับ buttons เพื่อไม่ให้ชิดขอบ */
+            padding: 0 4vw; /* padding 4vw ซ้ายขวา */
           }
           .get-started,
           .watch-video {
-            width: 100%;
+            width: auto; /* ให้ปุ่มปรับขนาดตามเนื้อหา แต่ถูกจำกัดด้วย padding ของ parent */
             font-size: 0.97rem;
             min-width: 0;
             padding: 10px 0;
@@ -342,6 +368,7 @@ export default function Home({ darkMode, toggleDarkMode }) {
           margin: 0 auto;
           line-height: 1.5;
           word-break: break-word;
+          padding: 0 4vw; /* เพิ่ม padding ให้กับ footer-copy ใน Mobile */
         }
         .footer-copy a {
           color: #4fa3f7;
