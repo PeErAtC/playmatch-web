@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import Sidebar from "./components/sidebar"; // นำเข้า Sidebar
+// Home.js
+import React, { useState, useEffect, useCallback } from "react";
+import Sidebar from "./components/sidebar"; // อย่าลืมว่าต้องมีไฟล์ Sidebar.js อยู่ในโฟลเดอร์ components
 import Swal from "sweetalert2";
-import { db } from "../lib/firebaseConfig";
+import { db } from "../lib/firebaseConfig"; // อย่าลืมว่าต้องมีไฟล์ firebaseConfig.js อยู่ในโฟลเดอร์ lib
 import {
   collection,
   getDocs,
@@ -12,7 +13,172 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import * as XLSX from 'xlsx'; // ใช้สำหรับอ่านไฟล์ Excel
+import * as XLSX from "xlsx";
+
+// เริ่มต้น Modal Component ที่ถูกรวมเข้ามา
+const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
+  if (!show) {
+    return null;
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <button className="modal-close-button" onClick={onClose}>
+          &times; {/* ไอคอนกากบาท */}
+        </button>
+        <h3>จัดการไฟล์ Excel สมาชิก</h3>
+        <p>คุณสามารถดาวน์โหลดไฟล์ Excel แม่แบบเพื่อเพิ่มข้อมูลสมาชิก หรืออัปโหลดไฟล์ที่มีอยู่</p>
+        <div className="modal-actions">
+          <button className="modal-download-template-button" onClick={onGenerateTemplate}>
+            ดาวน์โหลดไฟล์ Excel แม่แบบ
+          </button>
+          <hr className="modal-separator" />
+          <label htmlFor="excel-upload" className="modal-upload-label">
+            เลือกไฟล์ Excel เพื่ออัปโหลด:
+            <input
+              id="excel-upload"
+              type="file"
+              onChange={onFileUpload}
+              accept=".xlsx, .xls"
+              className="modal-file-input"
+            />
+          </label>
+        </div>
+      </div>
+      <style jsx>{`
+        /* Modal CSS */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.6);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .modal-content {
+          background: #fff;
+          padding: 30px;
+          border-radius: 12px;
+          box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+          width: 90%;
+          max-width: 500px;
+          position: relative;
+          text-align: center;
+        }
+
+        .modal-close-button {
+          position: absolute;
+          top: 15px;
+          right: 15px;
+          background: none;
+          border: none;
+          font-size: 28px;
+          cursor: pointer;
+          color: #888;
+          transition: color 0.2s ease-in-out;
+        }
+
+        .modal-close-button:hover {
+          color: #333;
+        }
+
+        .modal-content h3 {
+          margin-top: 0;
+          margin-bottom: 15px;
+          color: #333;
+          font-size: 22px;
+        }
+
+        .modal-content p {
+          margin-bottom: 25px;
+          color: #555;
+          font-size: 15px;
+        }
+
+        .modal-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+
+        /* ปรับขนาดปุ่มดาวน์โหลด */
+        .modal-download-template-button {
+          background-color: #4bf196;
+          color: black;
+          padding: 10px 20px;
+          border-radius: 8px;
+          border: none;
+          font-size: 15px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+          transition: background-color 0.2s ease-in-out;
+        }
+
+        .modal-download-template-button:hover {
+          background-color: #3fc57b;
+        }
+
+        .modal-separator {
+          border: 0;
+          border-top: 1px solid #eee;
+          margin: 15px 0;
+        }
+
+        .modal-upload-label {
+          display: block;
+          font-size: 15px;
+          color: #555;
+          margin-bottom: 10px;
+          cursor: pointer;
+        }
+
+        .modal-file-input {
+          display: block;
+          margin: 10px auto 0;
+          padding: 10px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          width: calc(100% - 20px);
+          font-size: 14px;
+        }
+
+        @media (max-width: 600px) {
+          .modal-content {
+            padding: 20px;
+            margin: 20px;
+          }
+
+          .modal-close-button {
+            font-size: 24px;
+            top: 10px;
+            right: 10px;
+          }
+
+          .modal-content h3 {
+            font-size: 20px;
+          }
+
+          .modal-content p,
+          .modal-upload-label {
+            font-size: 14px;
+          }
+
+          .modal-download-template-button {
+            padding: 10px 20px;
+            font-size: 14px;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+// สิ้นสุด Modal Component
 
 const Home = () => {
   const [search, setSearch] = useState("");
@@ -31,13 +197,63 @@ const Home = () => {
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [membersPerPage] = useState(20);
+  const [isFormExpanded, setIsFormExpanded] = useState(false); 
 
-    // ฟังก์ชันสำหรับสร้างไฟล์ Excel ต้นฉบับ
+  // ฟังก์ชันสำหรับสร้างไฟล์ Excel ต้นฉบับ พร้อมตัวอย่างข้อมูล
   const generateExcelTemplate = () => {
-    const templateData = [
-      { name: '', level: '', lineId: '', handed: '', phone: '', age: '', experience: '', status: '' }
+    // 1. กำหนด Header ของคอลัมน์
+    const headers = [
+      "name",
+      "level",
+      "lineId",
+      "handed",
+      "phone",
+      "age",
+      "experience",
+      "status",
     ];
-    const ws = XLSX.utils.json_to_sheet(templateData);
+
+    // 2. กำหนดข้อมูลตัวอย่างให้ถูกต้องตาม Header
+    const templateData = [
+      {
+        name: "ตัวอย่าง ชื่อ-นามสกุล",
+        level: "S",
+        lineId: "example_line_id",
+        handed: "Right",
+        phone: "0812345678",
+        age: 25,
+        experience: "2 ปี",
+        status: "มา",
+      },
+      {
+        name: "ตัวอย่าง คนที่สอง",
+        level: "P-",
+        lineId: "second_example",
+        handed: "Left",
+        phone: "0998765432",
+        age: 30,
+        experience: "5 ปี",
+        status: "ไม่มา",
+      },
+    ];
+
+    // 3. สร้าง Worksheet โดยเริ่มต้นจาก Header
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+
+    // 4. เพิ่มข้อมูลตัวอย่างต่อท้ายจาก Header
+    XLSX.utils.sheet_add_json(ws, templateData, {
+      skipHeader: true,
+      origin: -1,
+      header: headers
+    });
+
+    // 5. ปรับความกว้างคอลัมน์ (Optional: เพื่อให้อ่านง่ายขึ้น)
+    const columnWidths = [
+      { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 8 }, { wch: 15 }, { wch: 10 }
+    ];
+    ws['!cols'] = columnWidths;
+
+    // 6. สร้าง Workbook และเขียนไฟล์
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "สมาชิก");
     const fileName = "members_template.xlsx";
@@ -47,58 +263,126 @@ const Home = () => {
   // ฟังก์ชันสำหรับอัปโหลดไฟล์ Excel
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (file && file.name.endsWith('.xlsx')) {
+    if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
       const reader = new FileReader();
       reader.onload = async (event) => {
         const data = new Uint8Array(event.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(data, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(sheet);
 
         try {
-          for (const member of jsonData) {
+          if (jsonData.length === 0) {
+            Swal.fire("ไฟล์ Excel ว่างเปล่า", "ไม่พบข้อมูลในไฟล์ที่คุณอัปโหลด", "warning");
+            return;
+          }
+
+          const email = localStorage.getItem("loggedInEmail");
+          const usersRef = collection(db, "users");
+          const q = query(usersRef, where("email", "==", email));
+          const querySnapshot = await getDocs(q);
+
+          if (querySnapshot.empty) {
+            Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+            return;
+          }
+
+          let userId = null;
+          querySnapshot.forEach((docSnapshot) => {
+            userId = docSnapshot.id;
+          });
+
+          if (!userId) {
+            Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้", "error");
+            return;
+          }
+
+          let validationErrors = [];
+          let successCount = 0;
+
+          const existingMembers = await fetchMembersData();
+
+          for (let i = 0; i < jsonData.length; i++) {
+            const member = jsonData[i];
+            const rowIndex = i + 2;
+
+            if (!member) {
+              validationErrors.push(`แถวที่ ${rowIndex}: ไม่มีข้อมูล`);
+              continue;
+            }
+
+            const nameTrimmed = (member.name || '').toString().trim();
+            const levelTrimmed = (member.level || '').toString().trim();
+            const lineIdTrimmed = (member.lineId || '').toString().trim();
+            const handedTrimmed = (member.handed || '').toString().trim();
+            const phoneTrimmed = (member.phone || '').toString().trim();
+            const ageVal = member.age ? parseInt(member.age, 10) : NaN;
+            const experienceTrimmed = (member.experience || '').toString().trim();
+            const statusTrimmed = (member.status || '').toString().trim();
+
             const newUser = {
-              name: member.name,
-              level: member.level,
-              lineId: member.lineId,
-              handed: member.handed,
-              phone: member.phone,
-              age: member.age,
-              experience: member.experience,
-              status: member.status,
+              name: nameTrimmed,
+              level: levelTrimmed,
+              lineId: lineIdTrimmed,
+              handed: handedTrimmed,
+              phone: phoneTrimmed,
+              age: !isNaN(ageVal) ? ageVal : null,
+              experience: experienceTrimmed,
+              status: statusTrimmed,
               createBy: loggedInUsername,
             };
 
-            if (!newUser.name || !newUser.level || !newUser.lineId || !newUser.handed || !newUser.phone || !newUser.age || !newUser.experience || !newUser.status) {
-              Swal.fire("กรุณากรอกข้อมูลให้ครบทุกช่องใน Excel", "", "warning");
-              return;
+            let rowErrors = [];
+            if (!newUser.name) rowErrors.push("ชื่อ");
+            if (!newUser.level) rowErrors.push("ระดับ");
+            if (!newUser.lineId) rowErrors.push("Line ID");
+            if (!newUser.handed) rowErrors.push("ถนัด");
+            if (!newUser.phone) rowErrors.push("เบอร์โทร");
+            if (newUser.age === null) rowErrors.push("อายุ");
+            if (!newUser.experience) rowErrors.push("ประสบการณ์");
+            if (!newUser.status) rowErrors.push("สถานะ");
+
+            if (rowErrors.length > 0) {
+              validationErrors.push(`แถวที่ ${rowIndex}: ข้อมูลไม่ครบถ้วนในช่อง: ${rowErrors.join(", ")}`);
+              continue;
             }
 
-            const email = localStorage.getItem("loggedInEmail");
-            const usersRef = collection(db, "users");
-            const q = query(usersRef, where("email", "==", email));
-            const querySnapshot = await getDocs(q);
-
-            querySnapshot.forEach(async (docSnapshot) => {
-              const userId = docSnapshot.id;
-              const memberId = generateMemberId(members);
+            try {
+              const memberId = generateMemberId(existingMembers);
               const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
               await setDoc(memberRef, { ...newUser, memberId, createdAt: new Date() });
-            });
+              successCount++;
+            } catch (addError) {
+              validationErrors.push(`แถวที่ ${rowIndex}: ไม่สามารถเพิ่มข้อมูลได้ - ${addError.message}`);
+            }
           }
-          Swal.fire("สำเร็จ!", "เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ!", "success");
-          fetchMembers(); // รีเฟรชข้อมูลหลังจากการอัปโหลด
+
+          if (successCount > 0) {
+            Swal.fire("สำเร็จ!", `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`, "success");
+            setShowModal(false);
+            fetchMembers();
+          }
+
+          if (validationErrors.length > 0) {
+            Swal.fire(
+              "มีข้อผิดพลาดบางอย่าง",
+              "พบข้อผิดพลาดในการนำเข้าข้อมูลบางส่วน:\n" + validationErrors.join("\n"),
+              "warning"
+            );
+          } else if (successCount === 0) {
+            Swal.fire("ไม่พบข้อมูลที่ถูกต้อง", "ไม่มีข้อมูลสมาชิกที่สามารถเพิ่มได้จากไฟล์ Excel", "warning");
+          }
         } catch (error) {
+          console.error("Error uploading Excel file:", error);
           Swal.fire("เกิดข้อผิดพลาดในการอัปโหลดไฟล์ Excel", error.message, "error");
         }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      Swal.fire("กรุณาอัปโหลดไฟล์ Excel เท่านั้น", "", "warning");
+      Swal.fire("กรุณาอัปโหลดไฟล์ Excel เท่านั้น", "ไฟล์ที่รองรับคือ .xlsx และ .xls", "warning");
     }
   };
 
-  // Fetch logged-in user details
   const fetchUsername = async () => {
     const email = localStorage.getItem("loggedInEmail");
     if (email) {
@@ -116,23 +400,12 @@ const Home = () => {
     }
   };
 
-  useEffect(() => {
-    fetchUsername();
-    fetchMembers();
-  }, []);
-
-  const generateMemberId = (members) => {
-    const lastMember = members[members.length - 1];
-    const lastMemberId = lastMember
-      ? parseInt(lastMember.memberId.split("_")[1])
-      : 0;
-    const newId = lastMemberId + 1;
-    return `member_${String(newId).padStart(3, "0")}`;
-  };
-
-  const fetchMembers = async () => {
+  const fetchMembersData = async () => {
     try {
       const email = localStorage.getItem("loggedInEmail");
+      if (!email) {
+        return [];
+      }
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("email", "==", email));
       const querySnapshot = await getDocs(q);
@@ -142,13 +415,41 @@ const Home = () => {
         const userId = docSnapshot.id;
         const membersRef = collection(db, `users/${userId}/Members`);
         const membersSnapshot = await getDocs(membersRef);
-        const membersData = membersSnapshot.docs.map((doc) => doc.data());
+        const membersData = membersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         allMembers = [...allMembers, ...membersData];
       }
-      setMembers(allMembers);
+      allMembers.sort((a, b) => {
+        const idA = parseInt(a.memberId?.split('_')[1], 10);
+        const idB = parseInt(b.memberId?.split('_')[1], 10);
+        return (isNaN(idA) ? 0 : idA) - (isNaN(idB) ? 0 : idB);
+      });
+      return allMembers;
     } catch (error) {
-      Swal.fire("เกิดข้อผิดพลาดในการโหลดข้อมูลสมาชิก", error.message, "error");
+      console.error("Error fetching members data:", error);
+      return [];
     }
+  };
+
+  useEffect(() => {
+    fetchUsername();
+    fetchMembers();
+  }, []);
+
+  const generateMemberId = (currentMembers) => {
+    const maxIdNum = currentMembers.reduce((max, member) => {
+      if (member.memberId && member.memberId.startsWith('member_')) {
+        const num = parseInt(member.memberId.split('_')[1], 10);
+        return isNaN(num) ? max : Math.max(max, num);
+      }
+      return max;
+    }, 0);
+    const newId = maxIdNum + 1;
+    return `member_${String(newId).padStart(3, "0")}`;
+  };
+
+  const fetchMembers = async () => {
+    const data = await fetchMembersData();
+    setMembers(data);
   };
 
   const handleSelectUser = (user) => {
@@ -167,6 +468,7 @@ const Home = () => {
       setExperience(user.experience);
       setStatus(user.status);
       setIsEditing(true);
+      setIsFormExpanded(true); // Expand form when selecting a user
     }
   };
 
@@ -178,7 +480,7 @@ const Home = () => {
       lineId,
       handed,
       phone,
-      age,
+      age: parseInt(age, 10),
       experience,
       status,
       createBy: loggedInUsername,
@@ -204,11 +506,16 @@ const Home = () => {
       const q = query(usersRef, where("email", "==", email));
       const querySnapshot = await getDocs(q);
 
+      if (querySnapshot.empty) {
+        Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+        return;
+      }
+
       querySnapshot.forEach(async (docSnapshot) => {
         const userId = docSnapshot.id;
         let memberId;
 
-        if (isEditing) {
+        if (isEditing && selectedUser) {
           memberId = selectedUser.memberId;
           const memberRef = doc(
             db,
@@ -217,7 +524,8 @@ const Home = () => {
           await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
           Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
         } else {
-          memberId = generateMemberId(members);
+          const currentMembersData = await fetchMembersData();
+          memberId = generateMemberId(currentMembersData);
           const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
           await setDoc(memberRef, {
             ...newUser,
@@ -254,6 +562,11 @@ const Home = () => {
         const q = query(usersRef, where("email", "==", email));
         const querySnapshot = await getDocs(q);
 
+        if (querySnapshot.empty) {
+          Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+          return;
+        }
+
         querySnapshot.forEach(async (docSnapshot) => {
           const userId = docSnapshot.id;
           const memberRef = doc(
@@ -280,6 +593,11 @@ const Home = () => {
       const q = query(usersRef, where("email", "==", email));
       const querySnapshot = await getDocs(q);
 
+      if (querySnapshot.empty) {
+        Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+        return;
+      }
+
       querySnapshot.forEach(async (docSnapshot) => {
         const userId = docSnapshot.id;
         const memberRef = doc(db, `users/${userId}/Members/${user.memberId}`);
@@ -304,11 +622,15 @@ const Home = () => {
     setIsEditing(false);
   };
 
+  // Function to toggle form expansion
+  const toggleFormExpansion = () => {
+    setIsFormExpanded(prev => !prev);
+  };
+
   const filteredMembers = members.filter((user) =>
     user.name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Pagination logic
   const indexOfLastMember = currentPage * membersPerPage;
   const indexOfFirstMember = indexOfLastMember - membersPerPage;
   const currentMembers = filteredMembers.slice(
@@ -318,407 +640,197 @@ const Home = () => {
   const totalPages = Math.ceil(filteredMembers.length / membersPerPage);
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "240px 1fr",
-        height: "100vh",
-      }}
-    >
+    <div className="overall-layout">
       <Sidebar />
-      <main
-        className="main-content"
-        style={{
-          padding: "20px",
-          backgroundColor: "#f7f7f7",
-          borderRadius: "8px",
-          overflowY: "auto",
-        }}
-      >
-        <h2 style={{ fontSize: "18px", marginBottom: "10px" }}>สมาชิก</h2>
+      <main className="main-content">
+        <h2>สมาชิก</h2>
         <hr />
 
-                {/* เพิ่มปุ่ม [สร้างรายชื่อ Excel] */}
-        <div style={{ marginBottom: "15px" }}>
+        <div className="excel-button-container">
           <button
-            onClick={() => setShowModal(true)} // เมื่อกดปุ่ม จะเปิด Modal
-            style={{
-              backgroundColor: "#4bf196",
-              color: "black",
-              padding: "8px 20px",
-              borderRadius: "6px",
-              border: "none",
-              fontSize: "14px",
-              cursor: "pointer",
-              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            }}
+            onClick={() => setShowModal(true)}
+            className="generate-excel-button"
           >
-            สร้างรายชื่อ Excel
+            จัดการไฟล์ Excel
           </button>
         </div>
 
-        {/* Modal สำหรับการอัปโหลดไฟล์ Excel */}
-        {showModal && (
-          <div style={{
-            position: "fixed", top: "0", left: "0", width: "100%", height: "100%",
-            background: "rgba(0, 0, 0, 0.5)", display: "flex", justifyContent: "center", alignItems: "center"
-          }}>
-            <div style={{
-              backgroundColor: "white", padding: "20px", borderRadius: "8px", maxWidth: "500px", width: "100%"
-            }}>
-              <h3>ดาวน์โหลดไฟล์ Excel</h3>
-              <button
-                onClick={generateExcelTemplate}
-                style={{
-                  backgroundColor: "#4bf196",
-                  color: "black",
-                  padding: "8px 20px",
-                  borderRadius: "6px",
-                  border: "none",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                }}
-              >
-                ดาวน์โหลดไฟล์ Excel
-              </button>
-              <hr />
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                accept=".xlsx"
-                style={{
-                  padding: "6px", width: "100%", marginBottom: "10px", borderRadius: "5px", border: "1px solid #ccc"
-                }}
-              />
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  backgroundColor: "#ff0000",
-                  color: "white",
-                  padding: "8px 20px",
-                  borderRadius: "6px",
-                  border: "none",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                }}
-              >
-                ปิด
-              </button>
-            </div>
-          </div>
-        )}
+        <Modal
+          show={showModal}
+          onClose={() => setShowModal(false)}
+          onGenerateTemplate={generateExcelTemplate}
+          onFileUpload={handleFileUpload}
+        />
 
-        <form
-          onSubmit={handleSubmit}
-          className="form-box"
-          noValidate
-          style={{ marginBottom: "20px" }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gridTemplateRows: "repeat(2, 1fr)",
-              gap: "15px",
-              marginBottom: "10px",
-            }}
-          >
-            {/* ฟอร์มทั้งหมด */}
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>ชื่อ</label>
-              <input
-                className="modern-input"
-                type="text"
-                placeholder="ชื่อ"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "95%",
-                  borderRadius: "5px",
-                }}
-              />
+        {/* Container for the Form Section (Header + Collapsible Content) */}
+        <div className="member-form-section">
+            <div className="form-header-with-toggle">
+                <h3 className="form-section-title">กรอกข้อมูลสมาชิก</h3>
+                <button
+                    onClick={toggleFormExpansion}
+                    className="toggle-form-button"
+                    aria-expanded={isFormExpanded}
+                >
+                    {isFormExpanded ? "-" : "+"}
+                </button>
             </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>Line ID</label>
-              <input
-                className="modern-input"
-                type="text"
-                placeholder="Line ID"
-                value={lineId}
-                onChange={(e) => setLineId(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "95%",
-                  borderRadius: "5px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>
-                เบอร์โทร
-              </label>
-              <input
-                className="modern-input"
-                type="text"
-                placeholder="เบอร์โทร"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                maxLength="10"
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "95%",
-                  borderRadius: "5px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>อายุ</label>
-              <input
-                className="modern-input"
-                type="number"
-                placeholder="อายุ"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "95%",
-                  borderRadius: "5px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>ระดับ</label>
-              <select
-                className="modern-input"
-                value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "100%",
-                  borderRadius: "5px",
-                }}
-              >
-                <option value="BG">BG</option>
-                <option value="S-">S-</option>
-                <option value="S">S</option>
-                <option value="N-">N-</option>
-                <option value="N">N</option>
-                <option value="P-">P-</option>
-                <option value="P">P</option>
-                <option value="C">C</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>
-                ประสบการณ์
-              </label>
-              <select
-                className="modern-input"
-                value={experience}
-                onChange={(e) => setExperience(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "100%",
-                  borderRadius: "5px",
-                }}
-              >
-                <option value="">ประสบการณ์</option>
-                {[...Array(10)].map((_, i) => (
-                  <option key={i + 1} value={`${i + 1} ปี`}>
-                    {i + 1} ปี
-                  </option>
-                ))}
-                <option value=">10 ปี">มากกว่า 10 ปี</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>
-                เลือกมือ
-              </label>
-              <select
-                className="modern-input"
-                value={handed}
-                onChange={(e) => setHanded(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "100%",
-                  borderRadius: "5px",
-                }}
-              >
-                <option value="">เลือกมือ</option>
-                <option value="Right">ขวา</option>
-                <option value="Left">ซ้าย</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: "12px", color: "#333" }}>สถานะ</label>
-              <select
-                className="modern-input"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                style={{
-                  outline: "none",
-                  border: "1px solid #ccc",
-                  padding: "8px",
-                  fontSize: "12px",
-                  color: "#333",
-                  width: "100%",
-                  borderRadius: "5px",
-                }}
-              >
-                <option value="มา">มา</option>
-                <option value="ไม่มา">ไม่มา</option>
-              </select>
-            </div>
-          </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "10px",
-              flexWrap: "wrap",
-            }}
-          >
-            <button
-              type="submit"
-              className={`submit-btn ${isEditing ? "edit" : ""}`}
-              style={{
-                backgroundColor: isEditing ? "#ff9800" : "#4bf196",
-                color: "black",
-                padding: "8px 20px",
-                borderRadius: "6px",
-                border: "none",
-                fontSize: "14px",
-                cursor: "pointer",
-                transition: "all 0.3s ease-in-out",
-                boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                width: "auto", // ใช้ความกว้างที่ยืดหยุ่นตามขนาด
-                minWidth: "100px", // กำหนดขนาดขั้นต่ำ
-              }}
-              onMouseOver={(e) =>
-                (e.target.style.backgroundColor = isEditing
-                  ? "#ffa500"
-                  : "#3fc57b")
-              }
-              onMouseOut={(e) =>
-                (e.target.style.backgroundColor = isEditing
-                  ? "#ff9800"
-                  : "#57e497")
-              }
-            >
-              {isEditing ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
-            </button>
+            <div className={`form-content-collapsible ${isFormExpanded ? 'expanded' : 'collapsed'}`}>
+                <form
+                  onSubmit={handleSubmit}
+                  className="form-box"
+                  noValidate
+                >
+                  <div className="form-grid-container">
+                    <div>
+                      <label className="form-label">ชื่อ</label>
+                      <input
+                        className="modern-input"
+                        type="text"
+                        placeholder="ชื่อ"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Line ID</label>
+                      <input
+                        className="modern-input"
+                        type="text"
+                        placeholder="Line ID"
+                        value={lineId}
+                        onChange={(e) => setLineId(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">เบอร์โทร</label>
+                      <input
+                        className="modern-input"
+                        type="text"
+                        placeholder="เบอร์โทร"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        maxLength="10"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">อายุ</label>
+                      <input
+                        className="modern-input"
+                        type="number"
+                        placeholder="อายุ"
+                        value={age}
+                        onChange={(e) => setAge(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">ระดับ</label>
+                      <select
+                        className="modern-input"
+                        value={level}
+                        onChange={(e) => setLevel(e.target.value)}
+                      >
+                        <option value="">เลือกระดับ</option>
+                        <option value="มือหน้าบ้าน">มือหน้าบ้าน</option>
+                        <option value="มือหน้าบ้าน1">มือหน้าบ้าน1</option>
+                        <option value="มือหน้าบ้าน2">มือหน้าบ้าน2</option>
+                        <option value="มือหน้าบ้าน3">มือหน้าบ้าน3</option>
+                        <option value="S-">S-</option>
+                        <option value="S">S</option>
+                        <option value="N-">N-</option>
+                        <option value="N">N</option>
+                        <option value="P-">P-</option>
+                        <option value="P">P</option>
+                        <option value="C">C</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">ประสบการณ์</label>
+                      <select
+                        className="modern-input"
+                        value={experience}
+                        onChange={(e) => setExperience(e.target.value)}
+                      >
+                        <option value="">ประสบการณ์</option>
+                        <option value="น้อยกว่า 1 ปี">น้อยกว่า 1 ปี</option>
+                        {[...Array(10)].map((_, i) => (
+                          <option key={i + 1} value={`${i + 1} ปี`}>
+                            {i + 1} ปี
+                          </option>
+                        ))}
+                        <option value=">10 ปี">มากกว่า 10 ปี</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">เลือกมือที่ถนัด</label>
+                      <select
+                        className="modern-input"
+                        value={handed}
+                        onChange={(e) => setHanded(e.target.value)}
+                      >
+                        <option value="">ถนัดมือ</option>
+                        <option value="Right">ขวา</option>
+                        <option value="Left">ซ้าย</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">สถานะ</label>
+                      <select
+                        className="modern-input"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                      >
+                        <option value="">โปรดเลือกสถานะ</option>
+                        <option value="มา">มา</option>
+                        <option value="ไม่มา">ไม่มา</option>
+                      </select>
+                    </div>
+                  </div>
 
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={!selectedUser}
-              className="delete-btn"
-              style={{
-                backgroundColor: "#6c757d",
-                color: "white",
-                padding: "8px 20px",
-                borderRadius: "6px",
-                border: "none",
-                fontSize: "14px",
-                cursor: "pointer",
-                transition: "all 0.3s ease-in-out",
-                boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                width: "auto", // ใช้ความกว้างที่ยืดหยุ่นตามขนาด
-                minWidth: "100px", // กำหนดขนาดขั้นต่ำ
-              }}
-              onMouseOver={(e) => (e.target.style.backgroundColor = "#757575")}
-              onMouseOut={(e) => (e.target.style.backgroundColor = "#9e9e9e")}
-            >
-              ลบ
-            </button>
-          </div>
-        </form>
+                  <div className="form-buttons-container">
+                    <button
+                      type="submit"
+                      className={`submit-btn ${isEditing ? "edit" : ""}`}
+                    >
+                      {isEditing ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
+                    </button>
 
-        <hr style={{ margin: "20px 0", borderTop: "1px solid #ddd" }} />
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={!selectedUser}
+                      className="delete-btn"
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                </form>
+            </div>
+        </div>
 
-        <div
-          className="search-box"
-          style={{
-            marginBottom: "15px",
-            display: "flex",
-            justifyContent: "flex-end",
-          }}
-        >
+        <hr className="divider-line" />
+
+        <div className="search-box">
           <input
             type="text"
-            className="modern-input"
+            className="modern-input search-input"
             placeholder="ค้นหาผู้ใช้"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "6px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-            }}
           />
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: "10px",
-          }}
-        >
-          <span style={{ fontSize: "14px", color: "#333" }}>
+        <div className="total-members-display">
+          <span>
             จำนวนสมาชิก: {filteredMembers.length}
           </span>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-start",
-            marginBottom: "20px",
-          }}
-        >
+        <div className="pagination-controls">
           <button
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            style={{
-              padding: "6px 12px",
-              border: "1px solid #ddd",
-              borderRadius: "5px",
-              backgroundColor: "#f1f1f1",
-              marginRight: "5px",
-              cursor: "pointer",
-            }}
+            className="pagination-button"
+            disabled={currentPage === 1}
           >
             ย้อนกลับ
           </button>
@@ -726,16 +838,7 @@ const Home = () => {
             <button
               key={index + 1}
               onClick={() => setCurrentPage(index + 1)}
-              style={{
-                padding: "6px 12px",
-                border: "1px solid #ddd",
-                borderRadius: "5px",
-                backgroundColor:
-                  currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
-                marginRight: "5px",
-                cursor: "pointer",
-                color: currentPage === index + 1 ? "white" : "black",
-              }}
+              className={`pagination-button ${currentPage === index + 1 ? "active" : ""}`}
             >
               {index + 1}
             </button>
@@ -744,181 +847,502 @@ const Home = () => {
             onClick={() =>
               setCurrentPage((prev) => Math.min(prev + 1, totalPages))
             }
-            style={{
-              padding: "6px 12px",
-              border: "1px solid #ddd",
-              borderRadius: "5px",
-              backgroundColor: "#f1f1f1",
-              cursor: "pointer",
-            }}
+            className="pagination-button"
+            disabled={currentPage === totalPages || totalPages === 0}
           >
             ถัดไป
           </button>
         </div>
 
-        <table
-          className="user-table"
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            backgroundColor: "#fff",
-            borderRadius: "8px",
-            boxShadow: "0 2px 5px rgba(0, 0, 0, 0.1)",
-          }}
-        >
-          <thead>
-            <tr
-              style={{
-                backgroundColor: "#323943",
-                textAlign: "center",
-                fontSize: "12px",
-                color: "white",
-              }}
-            >
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                เลือก
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                ชื่อ
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                ระดับ
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                Line ID
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                มือ
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                เบอร์โทร
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                อายุ
-              </th>
-              <th style={{ borderRight: "1px solid #ddd", padding: "10px" }}>
-                ประสบการณ์
-              </th>
-              <th style={{ padding: "10px" }}>สถานะ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentMembers.map((user) => (
-              <tr
-                key={user.memberId}
-                style={{
-                  backgroundColor:
-                    selectedUser?.memberId === user.memberId ? "#e8f7e8" : "",
-                  cursor: "pointer",
-                  transition: "background-color 0.3s",
-                  background:
-                    members.indexOf(user) % 2 === 0 ? "#f9f9f9" : "#fff",
-                }}
-              >
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedUser?.memberId === user.memberId}
-                    onChange={() => handleSelectUser(user)}
-                  />
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.name}
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.level}
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.lineId}
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.handed}
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.phone}
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.age}
-                </td>
-                <td
-                  style={{
-                    textAlign: "center",
-                    borderRight: "1px solid #ddd",
-                    padding: "8px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {user.experience}
-                </td>
-                <td style={{ textAlign: "center", padding: "8px" }}>
-                  <button
-                    onClick={() => toggleStatus(user)}
-                    style={{
-                      backgroundColor: user.status === "มา" ? "green" : "red",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      padding: "4px 10px",
-                      cursor: "pointer",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {user.status || "ไม่ระบุ"}
-                  </button>
-                </td>
+        <div className="table-responsive-container">
+          <table className="user-table">
+            <thead>
+              <tr>
+                <th>เลือก</th>
+                <th>ชื่อ</th>
+                <th>ระดับ</th>
+                <th>Line ID</th>
+                <th>มือ</th>
+                <th>เบอร์โทร</th>
+                <th>อายุ</th>
+                <th>ประสบการณ์</th>
+                <th>สถานะ</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {currentMembers.length === 0 && !search && (
+                <tr>
+                  <td colSpan="9" className="no-data-message">ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่</td>
+                </tr>
+              )}
+              {currentMembers.length === 0 && search && (
+                <tr>
+                  <td colSpan="9" className="no-data-message">ไม่พบข้อมูลสมาชิกที่ค้นหา</td>
+                </tr>
+              )}
+              {currentMembers.map((user) => (
+                <tr
+                  key={user.memberId}
+                  className={selectedUser?.memberId === user.memberId ? "selected-row" : ""}
+                >
+                  <td data-label="เลือก">
+                    <input
+                      type="checkbox"
+                      checked={selectedUser?.memberId === user.memberId}
+                      onChange={() => handleSelectUser(user)}
+                    />
+                  </td>
+                  <td data-label="ชื่อ">{user.name}</td>
+                  <td data-label="ระดับ">{user.level}</td>
+                  <td data-label="Line ID">{user.lineId}</td>
+                  <td data-label="มือ">{user.handed}</td>
+                  <td data-label="เบอร์โทร">{user.phone}</td>
+                  <td data-label="อายุ">{user.age}</td>
+                  <td data-label="ประสบการณ์">{user.experience}</td>
+                  <td data-label="สถานะ">
+                    <button
+                      onClick={() => toggleStatus(user)}
+                      className={`status-button ${user.status === "มา" ? "status-มา" : "status-ไม่มา"}`}
+                    >
+                      {user.status || "ไม่ระบุ"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </main>
+
+      <style jsx>{`
+        /* Reset box-sizing for all elements */
+        * {
+          box-sizing: border-box;
+        }
+
+        /* Base Layout */
+        .overall-layout {
+          display: grid;
+          grid-template-columns: 240px 1fr;
+          height: 100vh;
+        }
+
+        /* Main Content Area */
+        .main-content {
+          padding: 28px;
+          background-color: #f7f7f7;
+          border-radius: 12px;
+          overflow-y: auto;
+        }
+
+        .main-content h2 {
+          font-size: 18px;
+          margin-bottom: 10px;
+        }
+
+        .main-content hr {
+          border: 0;
+          border-top: 1px solid #666;
+          margin-bottom: 18px;
+        }
+
+        /* Excel Button Container */
+        .excel-button-container {
+            margin-bottom: 20px;
+        }
+        .generate-excel-button {
+            background-color: #57e497;
+            color: black;
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease-in-out;
+        }
+        .generate-excel-button:hover {
+            background-color: #3fc57b;
+        }
+
+        /* Container for the Form Section (Header + Collapsible Content) */
+        .member-form-section {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            border: 1px solid #e9e9e9;
+        }
+
+        /* Header for the collapsible form */
+        .form-header-with-toggle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: #e9e9e9;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .form-header-with-toggle:hover {
+            background-color: #dcdcdc;
+        }
+
+        .form-section-title {
+            margin: 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .toggle-form-button {
+            background: none;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #555;
+            padding: 5px 8px;
+            line-height: 1;
+            transition: color 0.2s ease-in-out;
+        }
+
+        .toggle-form-button:hover {
+            color: #000;
+        }
+
+        /* Collapsible content for the form */
+        .form-content-collapsible {
+            overflow: hidden;
+            transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding 0.5s ease-out;
+            max-height: 500px; /* Adjust if your form is taller! */
+            opacity: 1;
+            padding: 20px 15px;
+        }
+
+        .form-content-collapsible.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+
+        /* Original Form Styles (from image_f08aa0.png) */
+        .form-label {
+          font-size: 12px; /* Adjusted font size */
+          color: #333;
+          display: block;
+          margin-bottom: 4px;
+        }
+
+        .modern-input {
+          outline: none;
+          border: 1px solid #ccc;
+          padding: 8px;
+          font-size: 12px; /* Adjusted font size */
+          color: #333;
+          width: 100%;
+          border-radius: 5px;
+          transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .modern-input:focus {
+          border-color: #333;
+          box-shadow: 0 0 0 3px rgba(226, 226, 226, 0.2);
+        }
+
+        .form-grid-container {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 15px;
+          margin-bottom: 20px;
+        }
+
+        .form-buttons-container {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .submit-btn,
+        .delete-btn {
+          padding: 8px 20px;
+          border-radius: 6px;
+          border: none;
+          font-size: 12px; /* Adjusted font size */
+          cursor: pointer;
+          transition: all 0.3s ease-in-out;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          width: auto;
+          min-width: 100px;
+        }
+
+        .submit-btn {
+          background-color: #57e497;
+          color: black;
+        }
+        .submit-btn.edit {
+          background-color: #ff9800;
+        }
+        .submit-btn:hover {
+          background-color: #3fc57b;
+        }
+        .submit-btn.edit:hover {
+          background-color: #ffa500;
+        }
+
+        .delete-btn {
+          background-color: #9e9e9e;
+          color: white;
+        }
+        .delete-btn:hover {
+          background-color: #757575;
+        }
+        .delete-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .divider-line {
+          margin: 20px 0;
+          border-top: 1px solid #ddd;
+        }
+
+        /* Search box style (from image_f09ca6.png) */
+        .search-box {
+            margin-bottom: 20px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 12px; /* Adjusted font size */
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: #333;
+            box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
+        }
+
+        /* Total Members Display (from image_f09ca6.png) */
+        .total-members-display {
+            text-align: right;
+            margin-bottom: 15px;
+            font-size: 12px; /* Adjusted font size */
+            color: #555;
+        }
+
+        /* Pagination Controls (from image_f09ca6.png and image_f09567.png) */
+        .pagination-controls {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .pagination-button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            font-size: 12px; /* Adjusted font size */
+            transition: background-color 0.2s, border-color 0.2s;
+            color: #333;
+        }
+
+        .pagination-button:hover {
+            background-color: #e0e0e0;
+        }
+
+        .pagination-button.active {
+            background-color: #6c757d;
+            color: black;
+            border-color: #6c757d;
+        }
+
+        .pagination-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #f7f7f7;
+        }
+
+        /* Table Styles */
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0; /* Added outer border */
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .user-table th,
+        .user-table td {
+            padding: 10px 12px; /* Slightly reduced padding */
+            border-bottom: 1px solid #f0f0f0;
+            border-right: 1px solid #f0f0f0; /* Added right border for vertical lines */
+            text-align: center; /* ALIGN TEXT TO CENTER */
+            font-size: 12px; /* Adjusted font size */
+            color: #333;
+        }
+
+        /* Remove right border for the last column in header and body */
+        .user-table th:last-child,
+        .user-table td:last-child {
+            border-right: none;
+        }
+
+        .user-table th {
+            background-color: #323943; /* Specific header background color */
+            color: white; /* Header text color */
+            font-weight: 600;
+            text-transform: none;
+        }
+
+        /* Remove bottom border for the last row */
+        .user-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Row Highlighting and Stripes */
+        .user-table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        .user-table tbody tr:nth-child(even) {
+            background-color: #fdfdfd;
+        }
+
+        /* Selected row background */
+        .user-table tbody tr.selected-row {
+            background-color: #e0ffe0;
+        }
+
+        /* Hover effect */
+        .user-table tbody tr:hover:not(.selected-row) {
+            background-color: #f5f5f5;
+        }
+
+        /* Checkbox Column */
+        .user-table td[data-label="เลือก"] {
+            text-align: center;
+        }
+
+        /* Status Button */
+        .status-button {
+            padding: 5px 8px; /* Adjusted padding */
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 11px; /* Slightly smaller for button text */
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+            min-width: 60px; /* Adjusted min-width */
+            text-align: center;
+            color: white;
+        }
+
+        .status-มา {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .status-มา:hover {
+            background-color: #45a049;
+        }
+
+        .status-ไม่มา {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .status-ไม่มา:hover {
+            background-color: #da190b;
+        }
+
+        .no-data-message {
+            text-align: center;
+            font-style: italic;
+            color: #888;
+            padding: 20px;
+            font-size: 12px; /* Adjusted font size */
+        }
+
+        /* Responsive Table */
+        @media (max-width: 768px) {
+            .form-grid-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .user-table, .user-table thead, .user-table tbody, .user-table th, .user-table td, .user-table tr {
+                display: block;
+            }
+
+            .user-table thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+
+            .user-table tr {
+                margin-bottom: 10px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+
+            .user-table td {
+                border: none;
+                position: relative;
+                padding-left: 50%;
+                text-align: right;
+            }
+
+            .user-table td:before {
+                position: absolute;
+                left: 15px;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+                content: attr(data-label);
+                font-weight: bold;
+                text-align: left;
+                color: #555;
+                font-size: 12px; /* Adjusted font size */
+            }
+
+            .form-buttons-container {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .overall-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .main-content {
+                padding: 15px;
+            }
+
+            .form-grid-container {
+                grid-template-columns: 1fr;
+            }
+
+            .submit-btn, .delete-btn {
+                width: 100%;
+                min-width: unset;
+            }
+        }
+      `}</style>
     </div>
   );
 };
