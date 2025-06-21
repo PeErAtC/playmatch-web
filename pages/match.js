@@ -177,8 +177,22 @@ const Match = () => {
   };
 
   // กรองสมาชิกที่เลือกแล้ว (เอาเงื่อนไขไม่ให้เลือกซ้ำออก)
-  const getAvailableMembers = (currentMatch) => {
-    return members;  // ไม่กรองสมาชิกที่ถูกเลือกแล้ว
+  const getAvailableMembers = (currentMatch, currentField) => {
+    const selectedPlayers = new Set([
+      currentMatch.A1,
+      currentMatch.A2,
+      currentMatch.B1,
+      currentMatch.B2,
+    ].filter(Boolean)); // Filter out empty strings
+
+    return members.filter(mem => {
+      // Always include the currently selected player for the current field
+      if (mem.name === currentMatch[currentField]) {
+        return true;
+      }
+      // Otherwise, only include members not already selected in other fields
+      return !selectedPlayers.has(mem.name);
+    });
   };
 
   // แก้ไขข้อมูลในแถว
@@ -204,8 +218,8 @@ const Match = () => {
   };
 
   // เพิ่มเงื่อนไขในการเลือกสมาชิก
-  const renderMemberOptions = (currentMatch) =>
-    getAvailableMembers(currentMatch).map((mem) => (
+  const renderMemberOptions = (currentMatch, fieldName) =>
+    getAvailableMembers(currentMatch, fieldName).map((mem) => (
       <option key={mem.memberId} value={mem.name}>
         {mem.name} ({mem.level})
       </option>
@@ -285,6 +299,37 @@ const Match = () => {
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
+  };
+
+  // ฟังก์ชันลบ Match
+  const handleDeleteMatch = (idxToDelete) => {
+    Swal.fire({
+      title: "คุณแน่ใจหรือไม่?",
+      text: "คุณต้องการลบ Match นี้ใช่หรือไม่?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "ลบ",
+      cancelButtonText: "ยกเลิก"
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setMatches((prevMatches) => {
+          const updatedMatches = prevMatches.filter((_, idx) => idx !== idxToDelete);
+          // Re-pad IDs after deletion to maintain sequential IDs
+          const rePaddedMatches = updatedMatches.map((match, index) => ({
+            ...match,
+            matchId: padId(index + 1, 4)
+          }));
+          if (isBrowser) {
+            localStorage.setItem("matches", JSON.stringify(rePaddedMatches));
+          }
+          return rePaddedMatches;
+        });
+        Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
+        setShowMenuId(null); // Close the dropdown menu
+      }
+    });
   };
 
   // Pagination
@@ -371,7 +416,7 @@ const Match = () => {
                 placeholder="กรุณากรอกหัวเรื่อง"
                 disabled={isOpen}
                 style={{
-                  fontSize: "14px",
+                  fontSize: "13px",
                   border: "1px solid #ccc",
                   borderRadius: "6px",
                   padding: "7px 14px",
@@ -499,7 +544,7 @@ const Match = () => {
                       padding: "34px 0",
                       color: "#999",
                       textAlign: "center",
-                      fontSize: "17px",
+                      fontSize: "12px",
                     }}
                   >
                     {isOpen
@@ -561,7 +606,7 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions(match)}
+                        {renderMemberOptions(match, "A1")}
                       </select>
                     </td>
 
@@ -580,7 +625,7 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions(match)}
+                        {renderMemberOptions(match, "A2")}
                       </select>
                     </td>
 
@@ -599,7 +644,7 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions(match)}
+                        {renderMemberOptions(match, "B1")}
                       </select>
                     </td>
 
@@ -618,7 +663,7 @@ const Match = () => {
                         }}
                       >
                         <option value="">เลือกผู้เล่น</option>
-                        {renderMemberOptions(match)}
+                        {renderMemberOptions(match, "B2")}
                       </select>
                     </td>
 
@@ -852,7 +897,7 @@ const Match = () => {
                 border: "1px solid #ddd",
                 borderRadius: "5px",
                 backgroundColor:
-                currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
+                  currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
                 marginRight: "5px",
                 cursor: "pointer",
                 color: currentPage === index + 1 ? "white" : "black",
