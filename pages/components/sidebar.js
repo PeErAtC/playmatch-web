@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   User2,
+  Gift, // Import the Gift icon for BirthDay
 } from "lucide-react";
 
 const menuList = [
@@ -29,6 +30,11 @@ const menuList = [
     label: "Ranking",
     path: "/ranking",
     icon: <Trophy size={20} strokeWidth={1.7} />,
+  },
+  {
+    label: "BirthDay", // New menu item
+    path: "/Birthday", // New path for BirthDay
+    icon: <Gift size={20} strokeWidth={1.7} />, // New icon for BirthDay
   },
 ];
 
