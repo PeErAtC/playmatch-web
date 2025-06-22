@@ -27,9 +27,9 @@ const RESULT_OPTIONS = [
 ];
 
 const STATUS_COLORS = {
-  "": "#fff8d8",
-  playing: "#fff8d8",
-  finished: "#f44336",
+  "Prepare to compete": "#ff9800", // สีเหลืองอ่อนสำหรับ "เตรียมลงแข่งขัน"
+  playing: "#57e497",             // สีเขียวอ่อนสำหรับ "กำลังแข่งขัน"
+  finished: "#f44336",            // สีแดงสำหรับ "จบการแข่งขัน"
 };
 
 const ITEMS_PER_PAGE = 30;
