@@ -10,6 +10,8 @@ import {
   where,
   getDocs,
   writeBatch,
+  serverTimestamp, // <--- เพิ่ม import serverTimestamp
+  setDoc, // <--- เพิ่ม import setDoc สำหรับการสร้างหรืออัปเดตเอกสารโดยใช้ ID ที่กำหนดเอง
 } from "firebase/firestore";
 import Swal from "sweetalert2";
 
@@ -44,6 +46,7 @@ const MatchDetails = () => {
   const [isDataCalculated, setIsDataCalculated] = useState(false);
   const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
   const [membersData, setMembersData] = useState({});
+  const [isSavingRanking, setIsSavingRanking] = useState(false); // <--- New state for saving ranking
 
   // ดึง email ของผู้ใช้ที่เข้าสู่ระบบจาก localStorage เมื่อ component โหลดครั้งแรก
   useEffect(() => {
@@ -264,18 +267,27 @@ const MatchDetails = () => {
     Swal.fire("คำนวณสำเร็จ", "คำนวณข้อมูลค่าใช้จ่ายแล้ว", "success");
   };
 
-  // ฟังก์ชันสำหรับอัปเดตสถิติของ Member ใน Collection "Members"
-  const updateMemberStats = async () => {
-    if (!isDataCalculated || Object.keys(memberCalculations).length === 0) {
+  // NEW: ฟังก์ชันสำหรับบันทึกข้อมูลในตารางลงใน Ranking collection
+  const handleSaveToRanking = async () => {
+    if (Object.keys(memberCalculations).length === 0) {
       Swal.fire(
-        "แจ้งเตือน",
-        "กรุณาคำนวณค่าใช้จ่ายก่อนอัปเดตข้อมูลสมาชิก",
-        "info"
+        "ข้อมูลไม่เพียงพอ",
+        "กรุณาคำนวณค่าใช้จ่ายก่อนบันทึกข้อมูล Ranking",
+        "warning"
       );
       return;
     }
 
-    setIsUpdatingMembers(true);
+    if (!matchData || !matchData.matchDate) {
+      Swal.fire(
+        "ข้อมูลไม่สมบูรณ์",
+        "ไม่พบข้อมูลวันที่ของ Match เพื่อใช้ในการบันทึก Ranking",
+        "error"
+      );
+      return;
+    }
+
+    setIsSavingRanking(true);
     try {
       const usersRef = collection(db, "users");
       const userQuery = query(usersRef, where("email", "==", loggedInEmail));
@@ -285,52 +297,80 @@ const MatchDetails = () => {
         userId = doc.id;
       });
 
-      if (!userId) throw new Error("ไม่พบข้อมูลผู้ใช้");
-
-      const membersCollectionRef = collection(db, `users/${userId}/Members`);
-      const batch = writeBatch(db);
-
-      for (const memberName in memberCalculations) {
-        const calculatedData = memberCalculations[memberName];
-        const existingMember = membersData[memberName];
-
-        if (existingMember) {
-          const memberDocRef = doc(membersCollectionRef, existingMember.id);
-          
-          const newWins = (existingMember.wins || 0) + calculatedData.calculatedWins;
-          const newScore = (existingMember.score || 0) + calculatedData.calculatedScore;
-
-          batch.update(memberDocRef, {
-            wins: newWins,
-            score: newScore,
-            updatedAt: new Date(),
-          });
-        } else {
-            console.warn(`Member ${memberName} not found in Members collection. Cannot update stats.`);
-        }
+      if (!userId) {
+        throw new Error("ไม่พบข้อมูลผู้ใช้. กรุณาเข้าสู่ระบบอีกครั้ง.");
       }
 
-      await Swal.fire({
-        title: "กำลังอัปเดตข้อมูลสมาชิก",
-        text: "กรุณารอสักครู่...",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
-      await batch.commit();
-      Swal.fire("อัปเดตสำเร็จ", "ข้อมูลสมาชิกได้รับการอัปเดตแล้ว", "success");
+      // Generate Month-Year ID
+      const matchDateObj = new Date(matchData.matchDate);
+      if (isNaN(matchDateObj.getTime())) {
+        throw new Error("วันที่ของ Match ไม่ถูกต้อง.");
+      }
+      const monthYearId = `${(matchDateObj.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${matchDateObj.getFullYear()}`;
 
-      await fetchMatchAndMemberDetails();
+      const rankingDocRef = doc(db, `users/${userId}/Ranking`, monthYearId);
+      const batch = writeBatch(db);
+
+      // Fetch existing ranking data for the month if it exists
+      const rankingSnap = await getDoc(rankingDocRef);
+      const existingRankingData = rankingSnap.exists()
+        ? rankingSnap.data()
+        : {};
+
+      Object.values(memberCalculations).forEach((member) => {
+        const playerName = member.name;
+        const currentWins = existingRankingData[playerName]?.wins || 0;
+        const currentScore = existingRankingData[playerName]?.score || 0;
+        const currentGames = existingRankingData[playerName]?.totalGames || 0;
+        const currentBalls = existingRankingData[playerName]?.totalBalls || 0;
+
+        // Update values by adding the calculated values from the current match
+        const newWins = currentWins + member.calculatedWins;
+        const newScore = currentScore + member.calculatedScore;
+        const newGames = currentGames + member.totalGames;
+        const newBalls = currentBalls + member.totalBalls;
+
+        batch.set(
+          rankingDocRef,
+          {
+            [playerName]: {
+              wins: newWins,
+              score: newScore,
+              totalGames: newGames,
+              totalBalls: newBalls,
+              lastUpdated: serverTimestamp(),
+            },
+            // Maintain other top-level fields if they exist
+            ...(rankingSnap.exists() ? existingRankingData : {}),
+            lastUpdatedMonth: serverTimestamp(), // Update a top-level timestamp for the document
+          },
+          { merge: true } // Use merge to update specific fields without overwriting the entire document
+        );
+      });
+
+      // Add createdAt timestamp only if it's a new document
+      if (!rankingSnap.exists()) {
+        batch.set(rankingDocRef, { createdAt: serverTimestamp() }, { merge: true });
+      }
+
+      await batch.commit();
+
+      Swal.fire(
+        "บันทึกสำเร็จ",
+        `ข้อมูล Ranking สำหรับ ${monthYearId} ถูกบันทึกเรียบร้อยแล้ว!`,
+        "success"
+      );
     } catch (err) {
-      console.error("Error updating member stats:", err);
+      console.error("Error saving ranking data:", err);
       Swal.fire(
         "ข้อผิดพลาด",
-        "ไม่สามารถอัปเดตข้อมูลสมาชิกได้: " + err.message,
+        "ไม่สามารถบันทึกข้อมูล Ranking ได้: " + err.message,
         "error"
       );
     } finally {
-      setIsUpdatingMembers(false);
+      setIsSavingRanking(false);
     }
   };
 
@@ -491,11 +531,12 @@ const MatchDetails = () => {
             คำนวณค่าใช้จ่าย
           </button>
         </div>
+        {/* NEW: Button to save to Ranking */}
         {isDataCalculated && (
-          <div style={{ textAlign: "right" }}>
+          <div style={{ textAlign: "right", marginTop: "15px" }}>
             <button
-              onClick={updateMemberStats}
-              disabled={isUpdatingMembers}
+              onClick={handleSaveToRanking}
+              disabled={isSavingRanking}
               style={{
                 backgroundColor: "#28a745",
                 color: "#fff",
@@ -504,12 +545,16 @@ const MatchDetails = () => {
                 border: "none",
                 cursor: "pointer",
                 fontSize: "15px",
-                opacity: isUpdatingMembers ? 0.7 : 1,
+                opacity: isSavingRanking ? 0.7 : 1,
               }}
             >
-              {isUpdatingMembers
-                ? "กำลังอัปเดต..."
-                : "อัปเดตคะแนนและจำนวนชนะสมาชิก"}
+              {isSavingRanking ? (
+                <>
+                  <span className="spinner"></span> กำลังบันทึก...
+                </>
+              ) : (
+                "บันทึกข้อมูล Ranking"
+              )}
             </button>
           </div>
         )}
@@ -952,6 +997,26 @@ const MatchDetails = () => {
           กลับ
         </button>
       </div>
+
+      {/* เพิ่ม CSS keyframe สำหรับ animation spin (ถ้ายังไม่มี) */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .spinner {
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-radius: 50%;
+          border-top: 2px solid #fff;
+          width: 16px;
+          height: 16px;
+          -webkit-animation: spin 1s linear infinite;
+          animation: spin 1s linear infinite;
+          display: inline-block;
+          vertical-align: middle;
+          margin-right: 5px;
+        }
+      `}</style>
     </div>
   );
 };
