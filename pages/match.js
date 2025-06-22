@@ -10,6 +10,7 @@ import {
   query,
   where,
   serverTimestamp,
+  updateDoc, // เพิ่ม updateDoc สำหรับอัปเดตเอกสารที่มีอยู่
 } from "firebase/firestore";
 
 // รายการสนาม
@@ -86,15 +87,19 @@ const Match = () => {
         memSnap.forEach((doc) => {
           const data = doc.data();
           if (data.status === "มา") {
+            // เพิ่มฟิลด์ score และ wins เข้ามาใน state เริ่มต้น
             memberList.push({
               memberId: doc.id,
               name: data.name,
               level: data.level,
+              score: data.score || 0, // ค่าเริ่มต้น 0 หากไม่มี
+              wins: data.wins || 0, // ค่าเริ่มต้น 0 หากไม่มี
             });
           }
         });
         setMembers(memberList);
       } catch (err) {
+        console.error("Error fetching members:", err);
         setMembers([]);
       }
     };
@@ -119,10 +124,17 @@ const Match = () => {
     setCurrentPage(1);
     clearInterval(timerRef.current);
     setTimer(null);
+    if (isBrowser) {
+      localStorage.removeItem("isOpen");
+      localStorage.removeItem("matches");
+      localStorage.removeItem("activityTime"); // เพิ่มการลบ activityTime ด้วย
+    }
   };
 
   // เริ่มจับเวลา
   useEffect(() => {
+    if (!isBrowser) return; // ไม่ทำงานถ้าไม่ใช่ฝั่ง browser
+
     const savedIsOpen = localStorage.getItem("isOpen");
     const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
     const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
@@ -135,7 +147,13 @@ const Match = () => {
 
     if (isOpen) {
       timerRef.current = setInterval(() => {
-        setActivityTime((prev) => prev + 1);
+        setActivityTime((prev) => {
+          const newTime = prev + 1;
+          if (isBrowser) {
+            localStorage.setItem("activityTime", newTime.toString());
+          }
+          return newTime;
+        });
       }, 1000);
       setTimer(timerRef.current);
     } else {
@@ -144,7 +162,8 @@ const Match = () => {
     }
 
     return () => clearInterval(timerRef.current);
-  }, [isOpen]);
+  }, [isOpen, isBrowser]);
+
 
   // เพิ่มแถวใหม่ (Match)
   const handleAddMatch = () => {
@@ -178,22 +197,23 @@ const Match = () => {
 
   // กรองสมาชิกที่เลือกแล้ว (เอาเงื่อนไขไม่ให้เลือกซ้ำออก)
   const getAvailableMembers = (currentMatch, currentField) => {
-    const selectedPlayers = new Set([
-      currentMatch.A1,
-      currentMatch.A2,
-      currentMatch.B1,
-      currentMatch.B2,
-    ].filter(Boolean)); // Filter out empty strings
+    // สร้าง Set ของผู้เล่นที่ถูกเลือกใน currentMatch ยกเว้นผู้เล่นใน currentField
+    const selectedPlayersInMatch = new Set(
+      Object.entries(currentMatch)
+        .filter(([key, value]) => ["A1", "A2", "B1", "B2"].includes(key) && key !== currentField && value)
+        .map(([, value]) => value)
+    );
 
     return members.filter(mem => {
-      // Always include the currently selected player for the current field
+      // อนุญาตให้ผู้เล่นที่ถูกเลือกใน field ปัจจุบันยังคงอยู่ใน options ของ field นั้น
       if (mem.name === currentMatch[currentField]) {
         return true;
       }
-      // Otherwise, only include members not already selected in other fields
-      return !selectedPlayers.has(mem.name);
+      // ไม่รวมผู้เล่นที่ถูกเลือกไปแล้วใน field อื่นๆ ใน match เดียวกัน
+      return !selectedPlayersInMatch.has(mem.name);
     });
   };
+
 
   // แก้ไขข้อมูลในแถว
   const handleChangeMatch = (idx, field, value) => {
@@ -240,6 +260,7 @@ const Match = () => {
     if (isBrowser) {
       localStorage.setItem("isOpen", "true");
       localStorage.setItem("matches", JSON.stringify([])); // เก็บข้อมูล match ใน localStorage
+      localStorage.setItem("activityTime", "0"); // เริ่มต้น activityTime ใหม่
     }
   };
 
@@ -265,10 +286,10 @@ const Match = () => {
 
     if (matches.length === 0) {
       Swal.fire("ไม่มี match ที่จะบันทึก", "", "info");
-      setIsOpen(false);
-      setActivityTime(0);
+      resetSession(); // เรียก resetSession เพื่อล้างข้อมูลและปิดก๊วน
       return;
     }
+
     // บันทึกลง Matches (Firebase)
     try {
       const usersRef = collection(db, "users");
@@ -280,6 +301,62 @@ const Match = () => {
       });
       if (!userId) throw new Error("User not found");
 
+      // --- ส่วนการอัปเดตคะแนนและจำนวนครั้งที่ชนะของสมาชิก ---
+      const membersToUpdate = {}; // { memberName: { scoreToAdd, winsToAdd } }
+
+      matches.forEach(match => {
+        const { A1, A2, B1, B2, result } = match;
+
+        let score = 0;
+        let wins = 0;
+
+        if (result === "A") {
+          score = 2;
+          wins = 1;
+          [A1, A2].filter(Boolean).forEach(playerName => {
+            membersToUpdate[playerName] = membersToUpdate[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+            membersToUpdate[playerName].scoreToAdd += score;
+            membersToUpdate[playerName].winsToAdd += wins;
+          });
+        } else if (result === "B") {
+          score = 2;
+          wins = 1;
+          [B1, B2].filter(Boolean).forEach(playerName => {
+            membersToUpdate[playerName] = membersToUpdate[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+            membersToUpdate[playerName].scoreToAdd += score;
+            membersToUpdate[playerName].winsToAdd += wins;
+          });
+        } else if (result === "DRAW") {
+          score = 1;
+          // ไม่มี wins สำหรับเสมอ
+          [A1, A2, B1, B2].filter(Boolean).forEach(playerName => {
+            membersToUpdate[playerName] = membersToUpdate[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+            membersToUpdate[playerName].scoreToAdd += score;
+          });
+        }
+      });
+
+      // อัปเดตข้อมูลสมาชิกใน Firebase
+      const membersRef = collection(db, `users/${userId}/Members`);
+      for (const [memberName, data] of Object.entries(membersToUpdate)) {
+        const memberQuery = query(membersRef, where("name", "==", memberName));
+        const memberSnap = await getDocs(memberQuery);
+
+        if (!memberSnap.empty) {
+          const memberDoc = memberSnap.docs[0];
+          const currentData = memberDoc.data();
+          const currentScore = currentData.score || 0;
+          const currentWins = currentData.wins || 0;
+
+          await updateDoc(doc(db, `users/${userId}/Members`, memberDoc.id), {
+            score: currentScore + data.scoreToAdd,
+            wins: currentWins + data.winsToAdd,
+          });
+        }
+      }
+      // --- สิ้นสุดส่วนการอัปเดตคะแนนและจำนวนครั้งที่ชนะของสมาชิก ---
+
+
       const matchesRef = collection(db, `users/${userId}/Matches`);
       await addDoc(matchesRef, {
         topic,
@@ -288,15 +365,11 @@ const Match = () => {
         matches,
         savedAt: serverTimestamp(),
       });
-      Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติแล้ว", "success");
+      Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
       resetSession();
 
-      // ลบสถานะจาก localStorage เมื่อปิดก๊วน
-      if (isBrowser) {
-        localStorage.removeItem("isOpen");
-        localStorage.removeItem("matches");
-      }
     } catch (error) {
+      console.error("Error ending group and saving matches:", error);
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
   };
@@ -439,7 +512,7 @@ const Match = () => {
               onClick={isOpen ? handleEndGroup : handleStartGroup}
               style={{
                 backgroundColor: isOpen ? "#f44336" : "#4bf196",
-                color: "#black",
+                color: "black", // เปลี่ยนเป็น black เพื่อให้เห็นชัดเจนบนพื้นหลังสีเขียว/แดง
                 padding: "10px 32px",
                 fontSize: "14px",
                 borderRadius: "7px",
@@ -557,7 +630,7 @@ const Match = () => {
                 const globalIdx = indexOfFirst + idx;
 
                 // เงื่อนไข disabled "จบการแข่งขัน"
-                const cannotFinish = !match.balls || !match.result;
+                const cannotFinish = !match.balls || !match.result || !match.A1 || !match.A2 || !match.B1 || !match.B2; // เพิ่มเงื่อนไขว่าต้องมีผู้เล่นครบด้วย
 
                 return (
                   <tr
@@ -726,7 +799,7 @@ const Match = () => {
                       <select
                         value={match.status}
                         onChange={(e) => handleChangeMatch(globalIdx, "status", e.target.value)}
-                        disabled={!isOpen}
+                        disabled={!isOpen || cannotFinish} // ปิดใช้งานถ้ายังกรอกข้อมูลไม่ครบ
                         style={{
                           width: "110px",
                           padding: "7px",
@@ -743,7 +816,7 @@ const Match = () => {
                         <option value="finished" disabled={cannotFinish}>จบการแข่งขัน</option>
                       </select>
                     </td>
-                    
+
                     {/* จุด 3 จุด (Dropdown Action) */}
                     <td style={{ textAlign: "center", minWidth: "48px" }}>
                       {isOpen && (
@@ -929,5 +1002,4 @@ const Match = () => {
     </div>
   );
 };
-
 export default Match;
