@@ -1,8 +1,8 @@
 // Home.js
 import React, { useState, useEffect, useCallback } from "react";
-import Sidebar from "./components/sidebar"; // อย่าลืมว่าต้องมีไฟล์ Sidebar.js อยู่ในโฟลเดอร์ components
+import Sidebar from "./components/sidebar";
 import Swal from "sweetalert2";
-import { db } from "../lib/firebaseConfig"; // อย่าลืมว่าต้องมีไฟล์ firebaseConfig.js อยู่ในโฟลเดอร์ lib
+import { db } from "../lib/firebaseConfig";
 import {
   collection,
   getDocs,
@@ -187,17 +187,46 @@ const Home = () => {
   const [lineId, setLineId] = useState("");
   const [handed, setHanded] = useState("");
   const [phone, setPhone] = useState("");
-  const [age, setAge] = useState("");
+  const [birthDate, setBirthDate] = useState(""); // เปลี่ยนจาก birthYear เป็น birthDate
   const [experience, setExperience] = useState("");
   const [status, setStatus] = useState("");
   const [members, setMembers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
+  const [currentUserId, setCurrentUserId] = useState(null); // เพิ่ม State สำหรับเก็บ userId
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [membersPerPage] = useState(20);
-  const [isFormExpanded, setIsFormExpanded] = useState(false); 
+  const [isFormExpanded, setIsFormExpanded] = useState(false);
+
+  // Helper function to calculate age from birth date (YYYY-MM-DD format)
+  const calculateAge = (isoBirthDate) => {
+    if (!isoBirthDate) return null;
+    const today = new Date();
+    const birthDateObj = new Date(isoBirthDate);
+
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  // Helper function to convert Excel date number to ISO string (YYYY-MM-DD)
+  // Excel stores dates as numbers (days since 1900-01-01)
+  const excelDateToISODate = (excelDateNumber) => {
+    if (typeof excelDateNumber !== 'number') return null;
+    // Excel's epoch starts from 1900-01-01 (day 1). JavaScript's is 1970-01-01.
+    // Need to adjust for 1900-02-29 bug in Excel (Excel thinks 1900 was a leap year)
+    const date = new Date((excelDateNumber - (25569 + 1)) * 86400 * 1000); // 25569 is days between 1900-01-01 and 1970-01-01, plus 1 day for Excel's 1-based indexing and the 1900 leap year bug
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
 
   // ฟังก์ชันสำหรับสร้างไฟล์ Excel ต้นฉบับ พร้อมตัวอย่างข้อมูล
   const generateExcelTemplate = () => {
@@ -208,7 +237,7 @@ const Home = () => {
       "lineId",
       "handed",
       "phone",
-      "age",
+      "birthDate", // เปลี่ยนเป็น birthDate
       "experience",
       "status",
     ];
@@ -221,7 +250,7 @@ const Home = () => {
         lineId: "example_line_id",
         handed: "Right",
         phone: "0812345678",
-        age: 25,
+        birthDate: "1990-05-15", // ตัวอย่างวันเกิด (ค.ศ. YYYY-MM-DD)
         experience: "2 ปี",
         status: "มา",
       },
@@ -231,7 +260,7 @@ const Home = () => {
         lineId: "second_example",
         handed: "Left",
         phone: "0998765432",
-        age: 30,
+        birthDate: "1985-11-20", // ตัวอย่างวันเกิด (ค.ศ. YYYY-MM-DD)
         experience: "5 ปี",
         status: "ไม่มา",
       },
@@ -244,14 +273,21 @@ const Home = () => {
     XLSX.utils.sheet_add_json(ws, templateData, {
       skipHeader: true,
       origin: -1,
-      header: headers
+      header: headers,
     });
 
     // 5. ปรับความกว้างคอลัมน์ (Optional: เพื่อให้อ่านง่ายขึ้น)
     const columnWidths = [
-      { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 8 }, { wch: 15 }, { wch: 10 }
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 18 }, // เพิ่มความกว้างสำหรับ birthDate (YYYY-MM-DD)
+      { wch: 15 },
+      { wch: 10 },
     ];
-    ws['!cols'] = columnWidths;
+    ws["!cols"] = columnWidths;
 
     // 6. สร้าง Workbook และเขียนไฟล์
     const wb = XLSX.utils.book_new();
@@ -269,7 +305,7 @@ const Home = () => {
         const data = new Uint8Array(event.target.result);
         const wb = XLSX.read(data, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet);
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: null }); // Use raw: false for formatted dates
 
         try {
           if (jsonData.length === 0) {
@@ -277,23 +313,8 @@ const Home = () => {
             return;
           }
 
-          const email = localStorage.getItem("loggedInEmail");
-          const usersRef = collection(db, "users");
-          const q = query(usersRef, where("email", "==", email));
-          const querySnapshot = await getDocs(q);
-
-          if (querySnapshot.empty) {
-            Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
-            return;
-          }
-
-          let userId = null;
-          querySnapshot.forEach((docSnapshot) => {
-            userId = docSnapshot.id;
-          });
-
-          if (!userId) {
-            Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้", "error");
+          if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+            Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
             return;
           }
 
@@ -316,7 +337,23 @@ const Home = () => {
             const lineIdTrimmed = (member.lineId || '').toString().trim();
             const handedTrimmed = (member.handed || '').toString().trim();
             const phoneTrimmed = (member.phone || '').toString().trim();
-            const ageVal = member.age ? parseInt(member.age, 10) : NaN;
+            let birthDateValue = null;
+
+            // Handle birthDate from Excel
+            if (member.birthDate) {
+                // If it's a number, it's likely an Excel date serial number
+                if (typeof member.birthDate === 'number') {
+                    birthDateValue = excelDateToISODate(member.birthDate);
+                } else if (typeof member.birthDate === 'string') {
+                    // If it's a string, try to parse it as YYYY-MM-DD
+                    const parsedDate = new Date(member.birthDate);
+                    if (!isNaN(parsedDate.getTime())) {
+                        birthDateValue = member.birthDate; // Assume YYYY-MM-DD or parsable
+                    }
+                }
+            }
+
+
             const experienceTrimmed = (member.experience || '').toString().trim();
             const statusTrimmed = (member.status || '').toString().trim();
 
@@ -326,7 +363,7 @@ const Home = () => {
               lineId: lineIdTrimmed,
               handed: handedTrimmed,
               phone: phoneTrimmed,
-              age: !isNaN(ageVal) ? ageVal : null,
+              birthDate: birthDateValue, // เก็บ birthDate
               experience: experienceTrimmed,
               status: statusTrimmed,
               createBy: loggedInUsername,
@@ -338,7 +375,7 @@ const Home = () => {
             if (!newUser.lineId) rowErrors.push("Line ID");
             if (!newUser.handed) rowErrors.push("ถนัด");
             if (!newUser.phone) rowErrors.push("เบอร์โทร");
-            if (newUser.age === null) rowErrors.push("อายุ");
+            if (!newUser.birthDate) rowErrors.push("วันเดือนปีเกิด"); // ตรวจสอบ birthDate
             if (!newUser.experience) rowErrors.push("ประสบการณ์");
             if (!newUser.status) rowErrors.push("สถานะ");
 
@@ -349,7 +386,7 @@ const Home = () => {
 
             try {
               const memberId = generateMemberId(existingMembers);
-              const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
+              const memberRef = doc(db, `users/${currentUserId}/Members/${memberId}`); // ใช้ currentUserId
               await setDoc(memberRef, { ...newUser, memberId, createdAt: new Date() });
               successCount++;
             } catch (addError) {
@@ -383,57 +420,66 @@ const Home = () => {
     }
   };
 
-  const fetchUsername = async () => {
+  // ดึง Username และ UserId เมื่อ Component โหลด
+  const fetchUserData = async () => {
     const email = localStorage.getItem("loggedInEmail");
     if (email) {
       try {
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", email));
         const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          setLoggedInUsername(data.username);
-        });
+        if (!querySnapshot.empty) {
+          const docSnapshot = querySnapshot.docs[0];
+          setLoggedInUsername(docSnapshot.data().username);
+          setCurrentUserId(docSnapshot.id); // เก็บ userId ไว้ใน State
+        } else {
+          console.warn("User data not found for email:", email);
+        }
       } catch (error) {
-        console.error("Error fetching username: ", error);
+        console.error("Error fetching user data: ", error);
       }
     }
   };
 
   const fetchMembersData = async () => {
     try {
-      const email = localStorage.getItem("loggedInEmail");
-      if (!email) {
+      if (!currentUserId) { // ตรวจสอบ userId ก่อนดึงข้อมูลสมาชิก
         return [];
       }
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", email));
-      const querySnapshot = await getDocs(q);
+      const membersRef = collection(db, `users/${currentUserId}/Members`);
+      const membersSnapshot = await getDocs(membersRef);
+      const membersData = membersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-      let allMembers = [];
-      for (const docSnapshot of querySnapshot.docs) {
-        const userId = docSnapshot.id;
-        const membersRef = collection(db, `users/${userId}/Members`);
-        const membersSnapshot = await getDocs(membersRef);
-        const membersData = membersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        allMembers = [...allMembers, ...membersData];
-      }
-      allMembers.sort((a, b) => {
-        const idA = parseInt(a.memberId?.split('_')[1], 10);
-        const idB = parseInt(b.memberId?.split('_')[1], 10);
-        return (isNaN(idA) ? 0 : idA) - (isNaN(idB) ? 0 : idB);
+      // เรียงลำดับตาม memberId_XXX
+      membersData.sort((a, b) => {
+        const idA = a.memberId && a.memberId.startsWith('member_') ? parseInt(a.memberId.split('_')[1], 10) : Infinity;
+        const idB = b.memberId && b.memberId.startsWith('member_') ? parseInt(b.memberId.split('_')[1], 10) : Infinity;
+        return idA - idB;
       });
-      return allMembers;
+
+      return membersData;
     } catch (error) {
       console.error("Error fetching members data:", error);
       return [];
     }
   };
 
+  // ใช้ useCallback เพื่อให้ fetchMembers ไม่เปลี่ยนในทุก re-render
+  const fetchMembers = useCallback(async () => {
+    const data = await fetchMembersData();
+    setMembers(data);
+  }, [currentUserId]); // currentUserId เป็น dependency
+
   useEffect(() => {
-    fetchUsername();
-    fetchMembers();
-  }, []);
+    fetchUserData(); // ดึง username และ userId เมื่อ component โหลดครั้งแรก
+  }, []); // เรียกเพียงครั้งเดียวเมื่อ component mount
+
+  // เรียก fetchMembers เมื่อ currentUserId พร้อมใช้งาน
+  useEffect(() => {
+    if (currentUserId) {
+      fetchMembers();
+    }
+  }, [currentUserId, fetchMembers]);
 
   const generateMemberId = (currentMembers) => {
     const maxIdNum = currentMembers.reduce((max, member) => {
@@ -445,11 +491,6 @@ const Home = () => {
     }, 0);
     const newId = maxIdNum + 1;
     return `member_${String(newId).padStart(3, "0")}`;
-  };
-
-  const fetchMembers = async () => {
-    const data = await fetchMembersData();
-    setMembers(data);
   };
 
   const handleSelectUser = (user) => {
@@ -464,7 +505,7 @@ const Home = () => {
       setLineId(user.lineId);
       setHanded(user.handed);
       setPhone(user.phone);
-      setAge(user.age);
+      setBirthDate(user.birthDate || ""); // กำหนดค่า birthDate จาก user
       setExperience(user.experience);
       setStatus(user.status);
       setIsEditing(true);
@@ -474,17 +515,6 @@ const Home = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const newUser = {
-      name,
-      level,
-      lineId,
-      handed,
-      phone,
-      age: parseInt(age, 10),
-      experience,
-      status,
-      createBy: loggedInUsername,
-    };
 
     if (
       !name ||
@@ -492,7 +522,7 @@ const Home = () => {
       !lineId ||
       !handed ||
       !phone ||
-      !age ||
+      !birthDate || // ตรวจสอบ birthDate
       !experience ||
       !status
     ) {
@@ -500,44 +530,59 @@ const Home = () => {
       return;
     }
 
-    try {
-      const email = localStorage.getItem("loggedInEmail");
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", email));
-      const querySnapshot = await getDocs(q);
+    // Validate birthDate format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(birthDate)) {
+        Swal.fire("รูปแบบวันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)", "warning");
+        return;
+    }
+    const parsedDate = new Date(birthDate);
+    if (isNaN(parsedDate.getTime())) {
+        Swal.fire("วันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง", "warning");
+        return;
+    }
 
-      if (querySnapshot.empty) {
-        Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+    const newUser = {
+      name,
+      level,
+      lineId,
+      handed,
+      phone,
+      birthDate, // เก็บ birthDate เป็น String YYYY-MM-DD
+      experience,
+      status,
+      createBy: loggedInUsername,
+    };
+
+    try {
+      if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+        Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
 
-      querySnapshot.forEach(async (docSnapshot) => {
-        const userId = docSnapshot.id;
-        let memberId;
+      let memberId;
+      if (isEditing && selectedUser) {
+        memberId = selectedUser.memberId;
+        const memberRef = doc(
+          db,
+          `users/${currentUserId}/Members/${selectedUser.memberId}`
+        );
+        await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
+        Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
+      } else {
+        const currentMembersData = await fetchMembersData();
+        memberId = generateMemberId(currentMembersData);
+        const memberRef = doc(db, `users/${currentUserId}/Members/${memberId}`);
+        await setDoc(memberRef, {
+          ...newUser,
+          memberId,
+          createdAt: new Date(),
+        });
+        Swal.fire("สำเร็จ!", "เพิ่มสมาชิกสำเร็จ!", "success");
+      }
 
-        if (isEditing && selectedUser) {
-          memberId = selectedUser.memberId;
-          const memberRef = doc(
-            db,
-            `users/${userId}/Members/${selectedUser.memberId}`
-          );
-          await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
-          Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
-        } else {
-          const currentMembersData = await fetchMembersData();
-          memberId = generateMemberId(currentMembersData);
-          const memberRef = doc(db, `users/${userId}/Members/${memberId}`);
-          await setDoc(memberRef, {
-            ...newUser,
-            memberId,
-            createdAt: new Date(),
-          });
-          Swal.fire("สำเร็จ!", "เพิ่มสมาชิกสำเร็จ!", "success");
-        }
-
-        clearForm();
-        fetchMembers();
-      });
+      clearForm();
+      fetchMembers();
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
@@ -557,25 +602,17 @@ const Home = () => {
       if (!result.isConfirmed) return;
 
       try {
-        const email = localStorage.getItem("loggedInEmail");
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("email", "==", email));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+        if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+          Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
           return;
         }
 
-        querySnapshot.forEach(async (docSnapshot) => {
-          const userId = docSnapshot.id;
-          const memberRef = doc(
-            db,
-            `users/${userId}/Members/${selectedUser.memberId}`
-          );
-          await deleteDoc(memberRef);
-          Swal.fire("ลบสำเร็จ!", "", "success");
-        });
+        const memberRef = doc(
+          db,
+          `users/${currentUserId}/Members/${selectedUser.memberId}`
+        );
+        await deleteDoc(memberRef);
+        Swal.fire("ลบสำเร็จ!", "", "success");
 
         clearForm();
         fetchMembers();
@@ -588,22 +625,14 @@ const Home = () => {
   const toggleStatus = async (user) => {
     const newStatus = user.status === "มา" || !user.status ? "ไม่มา" : "มา";
     try {
-      const email = localStorage.getItem("loggedInEmail");
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", email));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+      if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+        Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
 
-      querySnapshot.forEach(async (docSnapshot) => {
-        const userId = docSnapshot.id;
-        const memberRef = doc(db, `users/${userId}/Members/${user.memberId}`);
-        await updateDoc(memberRef, { status: newStatus });
-        fetchMembers();
-      });
+      const memberRef = doc(db, `users/${currentUserId}/Members/${user.memberId}`);
+      await updateDoc(memberRef, { status: newStatus });
+      fetchMembers();
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาดในการอัปเดตสถานะ", error.message, "error");
     }
@@ -615,7 +644,7 @@ const Home = () => {
     setLineId("");
     setHanded("");
     setPhone("");
-    setAge("");
+    setBirthDate(""); // เคลียร์ birthDate
     setExperience("");
     setStatus("ไม่มา");
     setSelectedUser(null);
@@ -714,13 +743,12 @@ const Home = () => {
                       />
                     </div>
                     <div>
-                      <label className="form-label">อายุ</label>
+                      <label className="form-label">วันเดือนปีเกิด</label> {/* เปลี่ยน Label */}
                       <input
                         className="modern-input"
-                        type="number"
-                        placeholder="อายุ"
-                        value={age}
-                        onChange={(e) => setAge(e.target.value)}
+                        type="date" // **ใช้ type="date"**
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
                       />
                     </div>
                     <div>
@@ -864,7 +892,7 @@ const Home = () => {
                 <th>Line ID</th>
                 <th>มือ</th>
                 <th>เบอร์โทร</th>
-                <th>อายุ</th>
+                <th>อายุ</th> {/* ยังคงแสดงเป็นอายุ */}
                 <th>ประสบการณ์</th>
                 <th>สถานะ</th>
               </tr>
@@ -897,7 +925,7 @@ const Home = () => {
                   <td data-label="Line ID">{user.lineId}</td>
                   <td data-label="มือ">{user.handed}</td>
                   <td data-label="เบอร์โทร">{user.phone}</td>
-                  <td data-label="อายุ">{user.age}</td>
+                  <td data-label="อายุ">{calculateAge(user.birthDate)}</td> {/* คำนวณอายุจาก birthDate เพื่อแสดง */}
                   <td data-label="ประสบการณ์">{user.experience}</td>
                   <td data-label="สถานะ">
                     <button
