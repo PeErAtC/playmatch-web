@@ -8,6 +8,7 @@ import {
   ChevronUp,
   User2,
   Gift, // Import the Gift icon for BirthDay
+  X, // Import the X icon for closing
 } from "lucide-react";
 
 const menuList = [
@@ -38,8 +39,8 @@ const menuList = [
   },
 ];
 
-// Sidebar Component - Now accepts birthDayCount prop
-export default function Sidebar({ birthDayCount = 0 }) { // Default to 0 if not provided
+// Sidebar Component - Now accepts birthDayCount, isSidebarOpen, and toggleSidebar prop
+export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSidebar }) { // Added toggleSidebar
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [groupName, setGroupName] = useState("");
@@ -66,7 +67,12 @@ export default function Sidebar({ birthDayCount = 0 }) { // Default to 0 if not 
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}> {/* Add 'open'/'closed' classes */}
+      {/* Close button for mobile sidebar - conditionally render this on mobile too */}
+      <button className="sidebar-close-button" onClick={toggleSidebar}>
+          <X size={24} />
+      </button>
+
       {/* Logo & GroupName */}
       <div className="sidebar-logo">
         <div className="logo-icon">B</div>
@@ -134,10 +140,35 @@ export default function Sidebar({ birthDayCount = 0 }) { // Default to 0 if not 
           color: #fff;
           display: flex;
           flex-direction: column;
-          position: relative;
+          position: relative; /* สำคัญ: เพื่อให้ position: fixed บนมือถือไม่หลุด context */
           box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
           z-index: 100;
+          transition: transform 0.3s ease-in-out; /* เพิ่ม transition */
+
+          /* Default desktop state - always open and visible */
+          transform: translateX(0%);
         }
+
+        /* Mobile sidebar hidden/open states */
+        @media (max-width: 768px) {
+          .sidebar {
+            position: fixed; /* ทำให้มันลอยอยู่เหนือ content */
+            top: 0;
+            left: 0;
+            height: 100vh; /* ให้เต็มความสูงของ viewport */
+            z-index: 200; /* สูงกว่า toggle button และ content */
+            /* จะควบคุมการแสดงผลด้วย class 'open'/'closed' แทน */
+          }
+          .sidebar.closed {
+            transform: translateX(-100%); /* ซ่อนไปทางซ้าย */
+            /* display: none;  อย่าใช้ display: none ร่วมกับ transition */
+          }
+          .sidebar.open {
+            transform: translateX(0%); /* แสดงออกมา */
+          }
+        }
+
+
         .sidebar-logo {
           display: flex;
           align-items: center;
@@ -298,35 +329,31 @@ export default function Sidebar({ birthDayCount = 0 }) { // Default to 0 if not 
           background: #146cfa;
           color: #fff;
         }
-        @media (max-width: 768px) {
-          .sidebar {
-            width: 180px;
-          }
-          .sidebar-logo {
-            padding-left: 12px;
-          }
-          .sidebar-divider {
-            margin-left: 12px;
-            margin-right: 12px;
-          }
-          .sidebar-menu-item {
-            padding-left: 8px;
-            padding-right: 8px;
-            margin-left: 7px;
-            margin-right: 7px;
-          }
-          .sidebar-user {
-            padding-left: 10px;
-            padding-right: 7px;
-          }
+
+        /* Sidebar close button for mobile */
+        .sidebar-close-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            z-index: 110; /* Higher than sidebar content */
+            display: none; /* ซ่อนไว้บน desktop */
         }
-        @media (max-width: 480px) {
+        .sidebar-close-button:hover {
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar-close-button {
+                display: block; /* แสดงปุ่ม close บน mobile */
+            }
           .sidebar {
-            width: 100vw;
-            min-width: unset;
-            max-width: unset;
-            padding: 0;
+            width: 240px; /* กำหนดความกว้างของ sidebar เมื่อเปิดบนมือถือ */
           }
+          /* ไม่มี padding/margin ใน mobile media query แล้วครับ ใช้ค่า default ที่กำหนดไว้บนสุด */
         }
       `}</style>
     </aside>
