@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import Sidebar from "./components/sidebar";
+// import Sidebar from "./components/sidebar"; // ลบการ import Sidebar ออก
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -421,12 +421,12 @@ const Match = () => {
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "240px 1fr",
+        display: "block", // เปลี่ยนจาก grid เป็น block
+        // gridTemplateColumns: "240px 1fr", // ลบ CSS Grid สำหรับ Sidebar
         height: "100vh",
       }}
     >
-      <Sidebar />
+      {/* <Sidebar /> */} {/* ลบ Component Sidebar ออก */}
       <main
         className="main-content"
         style={{
