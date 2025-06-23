@@ -4,10 +4,17 @@ import Sidebar from './components/sidebar'; // ตรวจสอบพาธใ
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig'; // ตรวจสอบพาธให้ถูกต้อง
+import { Menu } from 'lucide-react'; // Import the Menu icon (hamburger)
 
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
   const [userIdForSidebar, setUserIdForSidebar] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // เริ่มต้นให้ sidebar ปิดอยู่บนมือถือ
+
+  // Function to toggle sidebar visibility
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
 
   // Function to fetch user ID (can be reused)
   useEffect(() => {
@@ -61,15 +68,37 @@ function MyApp({ Component, pageProps }) {
     }
   }, [userIdForSidebar]); // Re-fetch when userIdForSidebar changes
 
+  // ตั้งค่า isSidebarOpen เป็น true หากอยู่บน Desktop (หน้าจอกว้างกว่า 768px)
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setIsSidebarOpen(true); // เปิด sidebar บน desktop
+      } else {
+        setIsSidebarOpen(false); // ปิด sidebar บน mobile
+      }
+    };
+
+    // ตั้งค่า initial state
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+
   return (
-    // เพิ่ม div wrapper และใช้ CSS Grid/Flexbox เพื่อจัด Layout
     <div className="app-layout">
-      <Sidebar birthDayCount={birthDayCount} />
-      <main className="app-main-content"> {/* ห่อ Component ด้วย <main> */}
+      {/* ส่ง isSidebarOpen และ toggleSidebar ไปให้ Sidebar */}
+      <Sidebar birthDayCount={birthDayCount} isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+
+      <main className="app-main-content">
+        {/* Hamburger button for mobile */}
+        <button className="sidebar-toggle-button" onClick={toggleSidebar}>
+          <Menu size={24} />
+        </button>
         <Component {...pageProps} />
       </main>
 
-      {/* เพิ่ม CSS-in-JS สำหรับ Layout หลัก */}
       <style jsx global>{`
         html, body, #__next {
           height: 100%;
@@ -89,8 +118,44 @@ function MyApp({ Component, pageProps }) {
           flex-grow: 1; /* ทำให้เนื้อหาหลักกินพื้นที่ที่เหลือทั้งหมด */
           overflow-y: auto; /* เปิดใช้งาน scrollbar เฉพาะส่วนเนื้อหาหลัก */
           background-color: #e8f0f7; /* สีพื้นหลังของเนื้อหาหลัก */
-          /* หากคุณมี padding ใน main-content ของ Birthday.js อยู่แล้ว
-             อาจจะต้องปรับที่นี่ หรือใน Birthday.js ให้เหมาะสม */
+          position: relative; /* สำหรับตำแหน่งของ toggle button */
+        }
+
+        /* Sidebar toggle button (mobile only) */
+        .sidebar-toggle-button {
+          position: fixed; /* ใช้ fixed เพื่อให้อยู่ด้านบนเสมอ */
+          top: 15px;
+          left: 15px;
+          background: #007bff;
+          color: white;
+          border: none;
+          padding: 10px;
+          border-radius: 5px;
+          cursor: pointer;
+          z-index: 10; /* ให้ปุ่มอยู่เหนือเนื้อหา */
+          display: none; /* ซ่อนไว้บน desktop */
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .sidebar-toggle-button:hover {
+            background: #0056b3;
+        }
+
+        /* Media query for mobile screens */
+        @media (max-width: 768px) {
+          .app-layout {
+            /* ไม่ต้องเปลี่ยน display เป็น block ครับ ให้คง flex ไว้ */
+            /* แต่ main-content จะต้องกินพื้นที่เต็ม */
+          }
+
+          .sidebar-toggle-button {
+            display: block; /* แสดงปุ่ม toggle บนมือถือ */
+          }
+
+          .app-main-content {
+            margin-left: 0; /* ตรวจสอบให้แน่ใจว่าไม่มี margin ซ้ายค้างอยู่ */
+            width: 100%; /* เนื้อหาหลักกินพื้นที่เต็ม */
+          }
         }
 
         /* --- Global styles to reset default browser margins/paddings --- */
