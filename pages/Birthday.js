@@ -11,15 +11,46 @@ const Birthday = () => {
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentMonthName, setCurrentMonthName] = useState("");
-  // FIX: แก้ไขการประกาศ currentYear ไม่ให้ใช้ destructuring กับค่าที่ไม่ใช่ iterable
-  const currentYear = new Date().getFullYear(); 
+  const currentYear = new Date().getFullYear();
   const [isLoading, setIsLoading] = useState(true);
+
+  // Helper function to generate a random hex color
+  // This version avoids very light colors that might clash with white text
+  const getRandomColor = () => {
+    // Generate a random dark color to ensure contrast with white text
+    const hue = Math.floor(Math.random() * 360); // 0-359
+    const saturation = Math.floor(Math.random() * (70 - 40) + 40); // 40-70% saturation
+    const lightness = Math.floor(Math.random() * (60 - 30) + 30); // 30-60% lightness (avoids very light/dark)
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  };
+
+  // Helper function to generate a random hex color for the cake icon (lighter/more vibrant)
+  const getAvatarRandomColor = () => {
+    const hue = Math.floor(Math.random() * 360); // 0-359
+    const saturation = Math.floor(Math.random() * (100 - 70) + 70); // 70-100% saturation
+    const lightness = Math.floor(Math.random() * (85 - 60) + 60); // 60-85% lightness (lighter but vibrant)
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  };
 
   // Helper function to calculate age from birth date (YYYY-MM-DD format)
   const calculateAge = (isoBirthDate) => {
-    if (!isoBirthDate) return "N/A";
+    if (!isoBirthDate || typeof isoBirthDate !== 'string') {
+      console.warn("Invalid birthDate format for age calculation:", isoBirthDate);
+      return "N/A";
+    }
     const today = new Date();
-    const birthDateObj = new Date(isoBirthDate);
+    // Use substring to parse date parts safely in case of invalid date string format
+    const birthYear = parseInt(isoBirthDate.substring(0, 4), 10);
+    const birthMonth = parseInt(isoBirthDate.substring(5, 7), 10) - 1; // Month is 0-indexed in JS
+    const birthDay = parseInt(isoBirthDate.substring(8, 10), 10);
+
+    const birthDateObj = new Date(birthYear, birthMonth, birthDay);
+
+    // Basic validation for parsed date
+    if (isNaN(birthDateObj.getTime())) {
+        console.warn("Failed to parse birthDate for age calculation:", isoBirthDate);
+        return "N/A";
+    }
 
     let age = today.getFullYear() - birthDateObj.getFullYear();
     const m = today.getMonth() - birthDateObj.getMonth();
@@ -35,6 +66,7 @@ const Birthday = () => {
       "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
       "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
     ];
+    // This function expects a 0-indexed month (0 for Jan, 11 for Dec)
     return months[monthIndex];
   };
 
@@ -47,25 +79,35 @@ const Birthday = () => {
         const q = query(usersRef, where("email", "==", email));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-          const docSnapshot = querySnapshot.docs[0];
-          setLoggedInUsername(docSnapshot.data().username);
-          setCurrentUserId(docSnapshot.id);
+          const docSnapshot = querySnapshot.docs ? querySnapshot.docs.at(0) : null;
+          if (docSnapshot) {
+            setLoggedInUsername(docSnapshot.data().username);
+            setCurrentUserId(docSnapshot.id);
+            console.log("User Data Fetched: Username =", docSnapshot.data().username, "ID =", docSnapshot.id); // For debugging
+          } else {
+            console.warn("User document is null or undefined.");
+            Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+          }
         } else {
           console.warn("User data not found for email:", email);
           Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ในระบบ", "error");
+          // Optionally, redirect to login or show more prominent message
         }
       } catch (error) {
         console.error("Error fetching user data: ", error);
         Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถดึงข้อมูลผู้ใช้ได้", "error");
       }
     } else {
+      console.warn("No logged-in email found in localStorage."); // For debugging
       Swal.fire("กรุณาเข้าสู่ระบบ", "ไม่พบข้อมูลผู้ใช้", "warning");
+      // Optionally, redirect to login
     }
   };
 
   // Fetch birthday members for the current month
   const fetchBirthdayMembers = useCallback(async () => {
     if (!currentUserId) {
+      console.log("Current User ID is null, skipping fetching birthday members."); // For debugging
       setBirthdayMembers([]);
       setIsLoading(false);
       return;
@@ -74,34 +116,47 @@ const Birthday = () => {
     setIsLoading(true);
     try {
       const membersRef = collection(db, `users/${currentUserId}/Members`);
+      console.log(`Attempting to fetch members from: users/${currentUserId}/Members`); // For debugging
       const allMembersSnapshot = await getDocs(membersRef);
       const allMembersData = allMembersSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
+      console.log("All members fetched (raw data):", allMembersData); // For debugging
+
       const today = new Date();
-      const currentMonth = today.getMonth(); // 0-11
+      const currentMonth = today.getMonth(); // 0-11 (e.g., June is 5)
       setCurrentMonthName(getMonthName(currentMonth));
 
       const filtered = allMembersData.filter(member => {
-        if (member.birthDate) {
-          // Assuming birthDate is in 'YYYY-MM-DD' string format
-          const [year, month, day] = member.birthDate.split('-').map(Number);
-          // Month from Firestore (1-12) vs JavaScript month (0-11)
-          return month - 1 === currentMonth;
+        // Ensure birthDate exists and is a string
+        if (member.birthDate && typeof member.birthDate === 'string') {
+          // Robust date parsing using Date object
+          const birthDateObj = new Date(member.birthDate);
+          if (isNaN(birthDateObj.getTime())) {
+              console.warn(`Failed to parse birthDate for member ${member.name}: ${member.birthDate}. Skipping.`);
+              return false; // Filter out invalid dates
+          }
+          const monthFromFirestore = birthDateObj.getMonth(); // Date object's getMonth() is 0-indexed
+          const isBirthdayMonth = monthFromFirestore === currentMonth;
+          console.log(`Member: ${member.name}, BirthDate: ${member.birthDate}, Parsed Month: ${monthFromFirestore}, Current JS Month: ${currentMonth}, Is Match: ${isBirthdayMonth}`); // Detailed debugging
+          return isBirthdayMonth;
+        } else {
+          console.warn(`Member ${member.name} has no birthDate or invalid type:`, member.birthDate);
         }
-        return false;
+        return false; // Filter out members with invalid or missing birthDate
       });
 
       // Sort by day of birth
       filtered.sort((a, b) => {
-        const dayA = a.birthDate ? parseInt(a.birthDate.split('-')[2], 10) : 0;
-        const dayB = b.birthDate ? parseInt(b.birthDate.split('-')[2], 10) : 0;
+        const dayA = a.birthDate ? parseInt(a.birthDate.split('-')?.[2], 10) : 0;
+        const dayB = b.birthDate ? parseInt(b.birthDate.split('-')?.[2], 10) : 0;
         return dayA - dayB;
       });
 
       setBirthdayMembers(filtered);
+      console.log("Filtered Birthday Members for current month:", filtered); // Final filtered data for debugging
     } catch (error) {
       console.error("Error fetching birthday members:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถดึงข้อมูลวันเกิดสมาชิกได้", "error");
@@ -112,13 +167,13 @@ const Birthday = () => {
 
   useEffect(() => {
     fetchUserData();
-  }, []);
+  }, []); // Run once on component mount to get user ID
 
   useEffect(() => {
     if (currentUserId) {
       fetchBirthdayMembers();
     }
-  }, [currentUserId, fetchBirthdayMembers]);
+  }, [currentUserId, fetchBirthdayMembers]); // Re-run when currentUserId changes
 
   return (
     <div className="overall-layout">
@@ -127,8 +182,10 @@ const Birthday = () => {
         <h2 className="page-title">วันเกิดสมาชิกประจำเดือน : {currentMonthName}</h2>
         <hr className="title-separator" />
 
+        {/* --- NEW BIRTHDAY SUMMARY CARD JSX --- */}
         <div className="birthday-summary-card">
-          <div className="summary-icon">🎉</div>
+          {/* summary-icon จะถูกซ่อนด้วย CSS และใช้ pseudo-elements แทน */}
+          <div className="summary-icon">🎉</div> {/* ยังคงมีไว้แต่ CSS จะซ่อน */}
           <div className="summary-details">
             <h3>สุขสันต์วันเกิดสมาชิกในเดือน<br />
               <span className="current-month-highlight">{currentMonthName}</span> {currentYear}
@@ -139,6 +196,7 @@ const Birthday = () => {
             </p>
           </div>
         </div>
+        {/* --- END NEW BIRTHDAY SUMMARY CARD JSX --- */}
 
         {isLoading ? (
           <div className="status-message loading-status">
@@ -154,13 +212,19 @@ const Birthday = () => {
             ) : (
               <div className="birthday-grid">
                 {birthdayMembers.map((member) => (
-                  <div key={member.id} className="birthday-member-card-glam">
+                  <div
+                    key={member.id}
+                    className="birthday-member-card-glam"
+                    style={{ background: getRandomColor() }} // Apply random background color
+                  >
                     <div className="card-glam-header">
-                      <div className="card-glam-avatar">
+                      <div
+                        className="card-glam-avatar"
+                        style={{ background: getAvatarRandomColor() }} // Apply random avatar background color
+                      >
                         <span className="glam-emoji">🎂</span>
                       </div>
                       <h3 className="member-name-glam">{member.name}</h3>
-                      {member.memberId && <span className="member-id-glam">ID: {member.memberId}</span>}
                     </div>
 
                     <div className="card-glam-details">
@@ -178,22 +242,6 @@ const Birthday = () => {
                         <span className="detail-label-glam">อายุ:</span>
                         <span className="detail-value-glam age-highlight-glam">{calculateAge(member.birthDate)} ปี</span>
                       </div>
-                      <div className="detail-row-glam">
-                        <span className="detail-label-glam">Line ID:</span>
-                        <span className="detail-value-glam">{member.lineId || "-"}</span>
-                      </div>
-                      <div className="detail-row-glam">
-                        <span className="detail-label-glam">เบอร์โทร:</span>
-                        <span className="detail-value-glam">{member.phone || "-"}</span>
-                      </div>
-                      <div className="detail-row-glam">
-                        <span className="detail-label-glam">ระดับ:</span>
-                        <span className="detail-value-glam">{member.level || "-"}</span>
-                      </div>
-                      <div className="detail-row-glam">
-                        <span className="detail-label-glam">ประสบการณ์:</span>
-                        <span className="detail-value-glam">{member.experience || "-"}</span>
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -203,7 +251,7 @@ const Birthday = () => {
         )}
       </main>
 
-      {/* --- CSS Styles for Birthday.js (Version 3 - Glamorous & Balanced) --- */}
+      {/* --- Updated CSS Styles for Birthday.js --- */}
       <style jsx>{`
         /* --- Base & Layout --- */
         .overall-layout {
@@ -221,8 +269,8 @@ const Birthday = () => {
         }
 
         .page-title {
-          color: #1a2a47; /* Deep blue-gray */
-          font-size: 18px;
+          color:rgb(0, 0, 0); /* Deep blue-gray */
+          font-size: 18px; /* ปรับขนาดตัวอักษรใหญ่ขึ้น */
           margin-bottom: 20px;
           font-weight: 700;
           display: flex;
@@ -236,117 +284,167 @@ const Birthday = () => {
           margin-bottom: 40px;
         }
 
-        /* --- Birthday Summary Card (Keep current style as it's good) --- */
+        /* --- Birthday Summary Card (EVEN SMALLER DESIGN) --- */
         .birthday-summary-card {
-          background: linear-gradient(135deg, #ffd700, #ff8c00); /* Gold to Orange gradient */
+          background: linear-gradient(135deg, #ff7e5f, #feb47b, #ffda7f); /* ส้ม-พีช-เหลืองทอง */
           color: #fff;
-          padding: 30px;
-          border-radius: 12px;
-          margin-bottom: 40px;
+          padding: 18px 15px; /* ลด padding ลงอีก */
+          border-radius: 12px; /* ลดความโค้งมนอีก */
+          margin-bottom: 25px; /* ลด margin-bottom */
           text-align: center;
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2) inset; /* ลดเงาให้บางลง */
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 25px;
+          gap: 8px; /* ลดระยะห่างระหว่างองค์ประกอบ */
+          position: relative;
+          overflow: hidden;
+        }
+
+        /* ลดขนาดองค์ประกอบกราฟิก/พื้นหลังลงอีก */
+        .birthday-summary-card::before {
+          content: '🎉';
+          position: absolute;
+          top: 5px; /* ปรับตำแหน่ง */
+          left: 10px; /* ปรับตำแหน่ง */
+          font-size: 45px; /* ลดขนาด icon ลงอีก */
+          opacity: 0.1; /* ทำให้โปร่งแสงขึ้นอีก */
+          transform: rotate(-20deg);
+          pointer-events: none;
+        }
+
+        .birthday-summary-card::after {
+          content: '🎂';
+          position: absolute;
+          bottom: 5px; /* ปรับตำแหน่ง */
+          right: 10px; /* ปรับตำแหน่ง */
+          font-size: 35px; /* ลดขนาด icon ลงอีก */
+          opacity: 0.1; /* ทำให้โปร่งแสงขึ้นอีก */
+          transform: rotate(15deg);
+          pointer-events: none;
         }
 
         .summary-icon {
-          font-size: 60px;
-          line-height: 1;
-          text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+          display: none; /* ยังคงซ่อนไอคอนเดิม */
         }
 
         .summary-details h3 {
-          margin: 0 0 10px 0;
-          font-size: 18px;
-          font-weight: 600;
-          line-height: 1.3;
+          margin: 0 0 3px 0; /* ลด margin-bottom */
+          font-size: 16px; /* ลดขนาดฟอนต์ */
+          font-weight: 700;
+          line-height: 1.2;
+          text-shadow: 0.5px 0.5px 2px rgba(0, 0, 0, 0.2); /* ลดเงาข้อความ */
         }
 
         .current-month-highlight {
-          font-weight: 800;
-          font-size: 1.2em;
-          color: #ffffff;
-          text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+          font-weight: 900;
+          font-size: 1.1em; /* ลดขนาดใหญ่ขึ้นอีก */
+          color: #ffeb3b;
+          text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3); /* ลดเงาข้อความ */
+          display: block;
+          margin-top: 2px; /* ลดระยะห่าง */
         }
 
         .total-birthdays {
-          font-size: 18px;
-          margin-top: 5px;
+          font-size: 13px; /* ลดขนาดฟอนต์ */
+          margin-top: 8px; /* ลด margin-top */
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.9);
+          display: flex;
+          align-items: baseline;
+          gap: 5px; /* ลดระยะห่าง */
         }
 
         .total-birthdays strong {
-          font-size: 24px;
-          font-weight: 700;
+          font-size: 22px; /* ลดขนาดตัวเลขให้เล็กลงมาก */
+          font-weight: 900;
           color: #da190b;
+          text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.4); /* ลดเงาข้อความ */
+          line-height: 1;
+          animation: pulse 1.5s infinite;
         }
 
-        /* --- NEW BIRTHDAY MEMBER CARD DESIGN (Version Glamorous) --- */
+        /* Keyframes สำหรับ animation ของตัวเลขจำนวนสมาชิก (ยังคงเดิม) */
+        @keyframes pulse {
+          0% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.06); /* ลดการขยายตัวให้น้อยลงอีก */
+            opacity: 0.9;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        /* --- NEW BIRTHDAY MEMBER CARD DESIGN (Version Glamorous & Compact) --- */
         .birthday-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* ปรับให้ใหญ่ขึ้นเล็กน้อยเพื่อแสดงความสวยงาม */
-          gap: 30px; /* เพิ่มระยะห่าง */
-          padding-top: 15px;
+          /* Default: 3 columns, adjust minmax for smaller cards */
+          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+          gap: 20px; /* Adjust gap between cards */
+          padding-top: 0px;
         }
 
         .birthday-member-card-glam {
-          background-color: #ffffff;
-          border-radius: 25px; /* ขอบโค้งมนพิเศษ */
-          box-shadow: 0 12px 35px rgba(0, 0, 0, 0.1), /* เงาหลัก */
-                      0 0 0 2px rgba(255, 255, 255, 0.5) inset; /* ขอบแสงด้านใน */
+          /* BACKGROUND REMOVED TO ALLOW INLINE STYLE */
+          border-radius: 20px; /* Reduced border-radius */
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1), /* Slightly reduced shadow */
+                        0 0 0 1px rgba(255, 255, 255, 0.5) inset;
           overflow: hidden;
-          transition: transform 0.4s ease-in-out, box-shadow 0.4s ease-in-out;
+          transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
           position: relative;
           display: flex;
           flex-direction: column;
           align-items: center;
-          text-align: center;
-          padding-bottom: 25px; /* เพิ่ม padding ด้านล่าง */
+          text-align: center; /* Center align text content */
+          padding-bottom: 20px; /* Reduced bottom padding */
         }
 
         .birthday-member-card-glam:hover {
-          transform: translateY(-10px) scale(1.02); /* เลื่อนขึ้นและขยายเล็กน้อย */
-          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25), /* เงาที่ลึกขึ้น */
-                      0 0 0 3px rgba(255, 255, 255, 0.7) inset; /* ขอบแสงที่ชัดขึ้น */
+          transform: translateY(-8px) scale(1.01); /* Reduced lift and scale on hover */
+          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2),
+                        0 0 0 2px rgba(255, 255, 255, 0.7) inset;
         }
 
         .card-glam-header {
           width: 100%;
-          /* Gradient สีทอง-ชมพู หรูหรา */
-          background: linear-gradient(145deg, #FFDDC1, #FFC0CB); /* Peach to Pink */
-          padding: 50px 20px 70px 20px; /* เว้นที่ด้านล่างสำหรับ avatar */
-          border-bottom-left-radius: 40% 30px; /* โค้งมนพิเศษ */
-          border-bottom-right-radius: 40% 30px;
+          background: linear-gradient(145deg, rgba(255, 221, 193, 0.5), rgba(255, 192, 203, 0.5)); /* Slightly transparent overlay for background color to show */
+          padding: 40px 15px 60px 15px; /* Reduced padding */
+          border-bottom-left-radius: 35% 25px; /* Adjusted curves */
+          border-bottom-right-radius: 35% 25px;
           position: relative;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          margin-bottom: 30px; /* ระยะห่างจากส่วนข้อมูล */
+          margin-bottom: 25px; /* Reduced margin */
         }
 
         .card-glam-avatar {
-          width: 110px; /* ขนาดใหญ่ขึ้น */
-          height: 110px;
-          /* Gradient สีฟ้า-ม่วง สดใส */
-          background: linear-gradient(45deg, #87CEEB, #9370DB); /* SkyBlue to MediumPurple */
+          width: 90px; /* Reduced avatar size */
+          height: 90px;
+          /* BACKGROUND REMOVED TO ALLOW INLINE STYLE */
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 60px; /* Emoji ใหญ่ขึ้น */
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25), /* เงาที่ชัดเจน */
-                      0 0 0 5px rgba(255, 255, 255, 0.8); /* ขอบขาวหนา */
+          font-size: 50px; /* Reduced Emoji size */
+          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2), /* Reduced shadow */
+                        0 0 0 4px rgba(255, 255, 255, 0.8);
           position: absolute;
-          bottom: -55px; /* ขยับลงมาครึ่งหนึ่งของ avatar */
+          bottom: -45px; /* Adjusted position */
           left: 50%;
           transform: translateX(-50%);
           z-index: 10;
         }
 
         .glam-emoji {
-            animation: bounceIn 1.5s ease-out; /* แอนิเมชั่นเด้งเข้ามา */
+            animation: bounceIn 1.5s ease-out;
             animation-iteration-count: 1;
         }
 
@@ -358,38 +456,27 @@ const Birthday = () => {
         }
 
         .member-name-glam {
-          color: #fff;
-          font-size: 26px; /* ชื่อใหญ่และเด่น */
-          font-weight: 800; /* เข้มมาก */
-          margin-top: -20px; /* ขยับขึ้นให้ดูชิด avatar */
+          color: #fff; /* Keep text color white for better contrast with random backgrounds */
+          font-size: 22px; /* Reduced name font size */
+          font-weight: 800;
+          margin-top: -15px; /* Adjusted margin */
           position: relative;
           z-index: 11;
-          text-shadow: 2px 2px 5px rgba(0,0,0,0.3); /* เงาชื่อ */
-        }
-
-        .member-id-glam {
-          color: #e0f0f7; /* สีอ่อนลง */
-          font-size: 15px;
-          margin-top: 8px;
-          position: relative;
-          z-index: 11;
-          background-color: rgba(0, 0, 0, 0.1); /* พื้นหลังโปร่งใสเล็กน้อย */
-          padding: 4px 12px;
-          border-radius: 20px; /* ขอบมน */
+          text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
         }
 
         .card-glam-details {
           width: 100%;
-          padding: 10px 25px; /* เพิ่ม padding ด้านข้าง */
-          padding-top: 80px; /* เว้นที่ให้ avatar ที่อยู่ด้านล่าง header */
+          padding: 10px 20px; /* Reduced side padding */
+          padding-top: 35px; /* Reduced top padding here */
         }
 
         .detail-row-glam {
           display: flex;
-          justify-content: space-between;
-          align-items: center; /* จัดให้ตรงกลางแนวตั้ง */
-          padding: 10px 0;
-          border-bottom: 1px solid #f0f0f0; /* เส้นแบ่งบางๆ */
+          flex-direction: column; /* Changed to column for centering */
+          align-items: center; /* Center horizontally */
+          padding: 8px 0; /* Reduced padding */
+          border-bottom: 1px dashed #f5f5f5; /* Dashed border for softer look */
         }
         .detail-row-glam:last-child {
           border-bottom: none;
@@ -397,29 +484,30 @@ const Birthday = () => {
 
         .detail-label-glam {
           font-weight: 600;
-          color: #4a6a8a; /* สีน้ำเงินเข้ม */
-          font-size: 14px;
-          flex-shrink: 0;
-          margin-right: 15px; /* ระยะห่างเพิ่มขึ้น */
+          color:rgb(13, 37, 61);
+          font-size: 13px; /* Reduced label font size */
+          margin-bottom: 3px; /* Added spacing between label and value */
+          margin-right: 0; /* Removed previous margin-right */
         }
 
         .detail-value-glam {
           color: #333;
-          font-size: 16px;
-          text-align: right;
+          font-size: 14px; /* Reduced value font size */
+          text-align: center; /* Center align value */
           flex-grow: 1;
+          word-break: break-word; /* Prevent overflow for long text */
         }
 
         .age-highlight-glam {
           font-weight: 700;
-          color: #e74c3c; /* สีแดงสดใส */
-          font-size: 1.2em;
-          letter-spacing: 0.5px; /* เพิ่มระยะห่างตัวอักษรเล็กน้อย */
+          color:rgb(247, 39, 16);
+          font-size: 1.1em; /* Slightly reduced size */
+          letter-spacing: 0.2px;
         }
 
         .date-highlight-glam {
           font-weight: 600;
-          color: #2ecc71; /* สีเขียว */
+          color:rgb(18, 31, 24);
         }
 
         /* --- Status Messages (Keep current style) --- */
@@ -461,36 +549,45 @@ const Birthday = () => {
         }
 
         /* --- Responsive Adjustments --- */
-        @media (max-width: 1400px) {
+        @media (min-width: 1600px) { /* 4 columns for very large screens */
             .birthday-grid {
-                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-                gap: 25px;
+                grid-template-columns: repeat(4, 1fr);
             }
         }
 
-        @media (max-width: 1200px) {
+        @media (max-width: 1400px) { /* Adjust for typical large desktop screens (often fits 3-4 columns) */
             .birthday-grid {
-                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-                gap: 20px;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 18px;
+            }
+            .page-title {
+                font-size: 26px;
+            }
+        }
+
+        @media (max-width: 1200px) { /* Adjust for laptops and larger tablets (often fits 3 columns) */
+            .birthday-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); /* Keep trying for 3-4, but allows fewer */
+                gap: 15px;
             }
             .member-name-glam {
-                font-size: 24px;
+                font-size: 20px;
             }
             .card-glam-avatar {
-                width: 100px;
-                height: 100px;
-                font-size: 55px;
-                bottom: -50px;
+                width: 80px;
+                height: 80px;
+                font-size: 45px;
+                bottom: -40px;
             }
             .card-glam-header {
-                padding-bottom: 60px;
+                padding-bottom: 50px;
             }
             .card-glam-details {
-                padding-top: 70px;
+                padding-top: 50px;
             }
         }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 1024px) { /* Tablets (portrait) */
           .main-content {
             padding: 20px;
           }
@@ -498,17 +595,17 @@ const Birthday = () => {
             font-size: 24px;
           }
           .birthday-grid {
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 3 คอลัมน์สำหรับแท็บเล็ต */
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* Can still fit 3, or 2 large */
+            gap: 15px;
           }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 768px) { /* Mobile & Small Tablets */
           .overall-layout {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr; /* Sidebar collapses or becomes responsive */
           }
           .main-content {
-            padding: 15px;
+            padding: 0px;
           }
           .page-title {
             font-size: 22px;
@@ -518,57 +615,82 @@ const Birthday = () => {
           .title-separator {
             margin-bottom: 30px;
           }
+          /* Responsive adjustments for new summary card */
           .birthday-summary-card {
-            flex-direction: column;
-            gap: 15px;
-            padding: 20px;
+            padding: 15px 12px; /* ลด padding อีก */
+            border-radius: 10px; /* ลดความโค้งมนอีก */
+          }
+          .birthday-summary-card::before {
+            font-size: 35px; /* ลดขนาด icon */
+            top: 5px;
+            left: 8px;
+          }
+          .birthday-summary-card::after {
+            font-size: 28px; /* ลดขนาด icon */
+            bottom: 5px;
+            right: 8px;
           }
           .summary-details h3 {
-            font-size: 16px;
+            font-size: 14px; /* ลดขนาดฟอนต์ */
           }
           .current-month-highlight {
-            font-size: 1.1em;
+            font-size: 1em; /* ลดขนาด */
           }
           .total-birthdays {
-            font-size: 16px;
+            font-size: 12px; /* ลดขนาดฟอนต์ */
+            gap: 4px;
           }
           .total-birthdays strong {
-            font-size: 20px;
+            font-size: 18px; /* ลดขนาดตัวเลข */
           }
+          /* End responsive adjustments for new summary card */
+
           .birthday-grid {
-            grid-template-columns: 1fr; /* 1 คอลัมน์บนมือถือ */
-            gap: 25px;
+            grid-template-columns: 1fr; /* Single column on mobile */
+            gap: 20px;
           }
           .birthday-member-card-glam {
             padding-bottom: 15px;
           }
           .card-glam-header {
-            padding: 40px 15px 60px 15px;
+            padding: 30px 15px 50px 15px;
           }
           .card-glam-avatar {
-            width: 90px;
-            height: 90px;
-            font-size: 50px;
-            bottom: -45px;
+            width: 80px;
+            height: 80px;
+            font-size: 45px;
+            bottom: -40px;
           }
           .member-name-glam {
-            font-size: 22px;
-          }
-          .member-id-glam {
-            font-size: 14px;
+            font-size: 20px;
           }
           .card-glam-details {
-            padding-top: 60px;
-            padding: 0 15px;
+            padding-top: 40px; /* Adjusted for mobile view */
           }
-          .detail-row-glam {
-            padding: 8px 0;
+        }
+
+        @media (max-width: 480px) {
+          .birthday-summary-card {
+            padding: 10px 8px; /* ลด padding ลงไปอีก */
+            margin-bottom: 20px;
           }
-          .detail-label-glam {
-            font-size: 13px;
+          .birthday-summary-card::before {
+            font-size: 30px; /* ลดขนาด icon */
           }
-          .detail-value-glam {
-            font-size: 15px;
+          .birthday-summary-card::after {
+            font-size: 24px; /* ลดขนาด icon */
+          }
+          .summary-details h3 {
+            font-size: 12px; /* ลดขนาดฟอนต์ */
+          }
+          .current-month-highlight {
+            font-size: 0.9em; /* ลดขนาด */
+          }
+          .total-birthdays {
+            font-size: 10px; /* ลดขนาดฟอนต์ */
+          }
+          .total-birthdays strong {
+            font-size: 16px; /* ลดขนาดตัวเลข */
           }
         }
       `}</style>
