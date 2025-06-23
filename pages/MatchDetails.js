@@ -1,7 +1,7 @@
 // pages/MatchDetails.js
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
-import { db } from "../lib/firebaseConfig"; // ตรวจสอบเส้นทางให้ถูกต้อง
+import { db } from "../lib/firebaseConfig";
 import {
   doc,
   getDoc,
@@ -10,10 +10,12 @@ import {
   where,
   getDocs,
   writeBatch,
-  serverTimestamp, // <--- เพิ่ม import serverTimestamp
-  setDoc, // <--- เพิ่ม import setDoc สำหรับการสร้างหรืออัปเดตเอกสารโดยใช้ ID ที่กำหนดเอง
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import Swal from "sweetalert2";
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 // ฟังก์ชัน Helper สำหรับ Format วันที่
 const formatDate = (dateString) => {
@@ -40,31 +42,56 @@ const MatchDetails = () => {
   const [error, setError] = useState(null);
   const [courtFee, setCourtFee] = useState("");
   const [ballPrice, setBallPrice] = useState("");
-  const [organizeFee, setOrganizeFee] = useState(""); // <--- เพิ่ม state สำหรับค่าจัดก๊วน
+  const [organizeFee, setOrganizeFee] = useState("");
   const [memberCalculations, setMemberCalculations] = useState({});
   const [loggedInEmail, setLoggedInEmail] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
   const [isDataCalculated, setIsDataCalculated] = useState(false);
-  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
-  const [membersData, setMembersData] = useState({});
-  const [isSavingRanking, setIsSavingRanking] = useState(false); // <--- New state for saving ranking
+  const [isSavingRanking, setIsSavingRanking] = useState(false);
+  const [memberPaidStatus, setMemberPaidStatus] = useState({});
 
-  // ดึง email ของผู้ใช้ที่เข้าสู่ระบบจาก localStorage เมื่อ component โหลดครั้งแรก
+  // Fetch loggedInEmail and Admin email on component mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
+      const fetchAdminEmail = async () => {
+        try {
+          const configDocRef = doc(db, "configurations", "appConfig");
+          const configSnap = await getDoc(configDocRef);
+          if (configSnap.exists() && configSnap.data().adminEmail) {
+            setAdminEmail(configSnap.data().adminEmail);
+          } else {
+            console.warn("Admin email not found in configurations/appConfig. Defaulting to a fixed admin email.");
+            // >>>>>>>>>>>>> แก้ไขตรงนี้เป็นอีเมล Admin จริงๆ ของคุณ <<<<<<<<<<<<<
+            setAdminEmail("admin@example.com"); // Fallback if not found in config
+          }
+        } catch (err) {
+          console.error("Error fetching admin email:", err);
+          // >>>>>>>>>>>>> แก้ไขตรงนี้เป็นอีเมล Admin จริงๆ ของคุณ <<<<<<<<<<<<<
+          setAdminEmail("admin@example.com"); // Fallback in case of error
+        }
+      };
+      fetchAdminEmail();
     }
   }, []);
 
+  const isAdmin = loggedInEmail && adminEmail && loggedInEmail === adminEmail;
+
   // ฟังก์ชันสำหรับคำนวณค่าใช้จ่ายและสถิติผู้เล่น
   const calculateMemberStats = useCallback(
-    (currentMatchData, currentCourtFee, currentBallPrice, currentOrganizeFee, currentMembersData) => { // <--- เพิ่ม currentOrganizeFee
+    (currentMatchData, currentCourtFee, currentBallPrice, currentOrganizeFee) => {
+      console.log("Starting calculateMemberStats...");
+      console.log("Current Match Data:", currentMatchData);
+
       if (
         !currentMatchData ||
         !currentCourtFee ||
         !currentBallPrice ||
-        !currentOrganizeFee || // <--- ตรวจสอบ organizeFee ด้วย
+        !currentOrganizeFee ||
+        !currentMatchData.matches ||
         currentMatchData.matches.length === 0
       ) {
+        console.log("Insufficient data for calculation. Resetting calculations.");
         setMemberCalculations({});
         setIsDataCalculated(false);
         return;
@@ -72,16 +99,17 @@ const MatchDetails = () => {
 
       const parsedCourtFee = parseFloat(currentCourtFee);
       const parsedBallPrice = parseFloat(currentBallPrice);
-      const parsedOrganizeFee = parseFloat(currentOrganizeFee); // <--- แปลง organizeFee เป็น float
+      const parsedOrganizeFee = parseFloat(currentOrganizeFee);
 
       if (
         isNaN(parsedCourtFee) ||
         isNaN(parsedBallPrice) ||
-        isNaN(parsedOrganizeFee) || // <--- ตรวจสอบ organizeFee ด้วย
+        isNaN(parsedOrganizeFee) ||
         parsedCourtFee < 0 ||
         parsedBallPrice < 0 ||
-        parsedOrganizeFee < 0 // <--- ตรวจสอบ organizeFee ด้วย
+        parsedOrganizeFee < 0
       ) {
+        console.log("Invalid fee inputs. Resetting calculations.");
         setMemberCalculations({});
         setIsDataCalculated(false);
         return;
@@ -95,30 +123,38 @@ const MatchDetails = () => {
         if (game.B2) playersInMatch.add(game.B2);
       });
 
+      console.log("Players in this match:", Array.from(playersInMatch));
+
       const tempMemberCalculations = {};
       const memberWinsInMatch = {};
       const memberGamesPlayed = {};
       const memberBallsUsed = {};
+      const memberScoresInMatch = {};
+      const initialPaidStatus = { ...currentMatchData.paidStatus }; // Load existing paid status
 
       playersInMatch.forEach((player) => {
         tempMemberCalculations[player] = {
+          name: player,
           totalGames: 0,
           totalBalls: 0,
-          wins: currentMembersData[player]?.wins || 0,
-          score: currentMembersData[player]?.score || 0,
+          wins: 0,
+          score: 0,
           ballCost: 0,
           courtCostPerPerson: 0,
-          organizeFeePerPerson: parsedOrganizeFee, // <--- เพิ่มค่าจัดก๊วนต่อคน
+          organizeFeePerPerson: parsedOrganizeFee,
           total: 0,
           calculatedWins: 0,
           calculatedScore: 0,
+          isPaid: initialPaidStatus[player] || false,
         };
         memberWinsInMatch[player] = 0;
         memberGamesPlayed[player] = 0;
         memberBallsUsed[player] = 0;
+        memberScoresInMatch[player] = 0;
       });
 
-      currentMatchData.matches.forEach((game) => {
+      currentMatchData.matches.forEach((game, gameIndex) => {
+        console.log(`Processing game ${gameIndex + 1}:`, game);
         const teamA = [game.A1, game.A2].filter(Boolean);
         const teamB = [game.B1, game.B2].filter(Boolean);
 
@@ -132,11 +168,23 @@ const MatchDetails = () => {
 
         if (game.result === "A") {
           teamA.forEach(
-            (player) => (memberWinsInMatch[player] = (memberWinsInMatch[player] || 0) + 1)
+            (player) => {
+              memberWinsInMatch[player] = (memberWinsInMatch[player] || 0) + 1;
+              memberScoresInMatch[player] = (memberScoresInMatch[player] || 0) + 2;
+            }
           );
         } else if (game.result === "B") {
           teamB.forEach(
-            (player) => (memberWinsInMatch[player] = (memberWinsInMatch[player] || 0) + 1)
+            (player) => {
+              memberWinsInMatch[player] = (memberWinsInMatch[player] || 0) + 1;
+              memberScoresInMatch[player] = (memberScoresInMatch[player] || 0) + 2;
+            }
+          );
+        } else if (game.result === "DRAW") {
+          allPlayersInGame.forEach(
+            (player) => {
+              memberScoresInMatch[player] = (memberScoresInMatch[player] || 0) + 1;
+            }
           );
         }
       });
@@ -144,35 +192,46 @@ const MatchDetails = () => {
       const totalPlayersForCourtFee = playersInMatch.size;
       const courtCostPerPerson =
         totalPlayersForCourtFee > 0
-          ? parsedCourtFee / totalPlayersForCourtFee
+          ? Math.ceil(parsedCourtFee / totalPlayersForCourtFee)
           : 0;
 
       playersInMatch.forEach((player) => {
         const ballsUsed = memberBallsUsed[player] || 0;
         const calculatedWins = memberWinsInMatch[player] || 0;
         const totalGames = memberGamesPlayed[player] || 0;
+        const calculatedScore = memberScoresInMatch[player] || 0;
 
         const ballCost = ballsUsed * parsedBallPrice;
-        const calculatedScore = calculatedWins;
-        // <--- เพิ่ม organizeFeePerPerson เข้าไปในยอดรวม
-        const totalMemberCost = ballCost + courtCostPerPerson + parsedOrganizeFee;
 
+        // NEW: Calculate total based on sum of rounded up components
+        const roundedBallCost = Math.ceil(ballCost); // Round up ball cost for consistency with total
+        const roundedOrganizeFee = Math.ceil(parsedOrganizeFee); // Round up organize fee
+        
+        let totalMemberCost = roundedBallCost + courtCostPerPerson + roundedOrganizeFee;
+        
         tempMemberCalculations[player] = {
           name: player,
           totalGames: totalGames,
           totalBalls: ballsUsed,
-          wins: currentMembersData[player]?.wins || 0,
-          score: currentMembersData[player]?.score || 0,
-          ballCost: ballCost,
+          wins: calculatedWins,
+          score: calculatedScore,
+          ballCost: roundedBallCost, // Use rounded ball cost
           courtCostPerPerson: courtCostPerPerson,
-          organizeFeePerPerson: parsedOrganizeFee, // <--- เพิ่มค่าจัดก๊วนต่อคนใน object ผลลัพธ์
-          total: totalMemberCost,
+          organizeFeePerPerson: roundedOrganizeFee, // Use rounded organize fee
+          total: totalMemberCost, // Use the new calculated total
           calculatedWins: calculatedWins,
           calculatedScore: calculatedScore,
+          isPaid: initialPaidStatus[player] || false,
         };
       });
+      
+      const newPaidStatus = {};
+      Object.values(tempMemberCalculations).forEach(member => {
+        newPaidStatus[member.name] = member.isPaid;
+      });
+      setMemberPaidStatus(newPaidStatus);
 
-      console.log("Calculated Member Data:", tempMemberCalculations);
+      console.log("Final Calculated Member Data for display:", tempMemberCalculations);
       setMemberCalculations(tempMemberCalculations);
       setIsDataCalculated(true);
     },
@@ -181,7 +240,10 @@ const MatchDetails = () => {
 
   // ฟังก์ชันสำหรับดึงรายละเอียด Match และ Members จาก Firebase
   const fetchMatchAndMemberDetails = useCallback(async () => {
-    if (!matchId || !loggedInEmail) return;
+    if (!matchId || !loggedInEmail) {
+      console.log("No matchId or loggedInEmail. Skipping fetch.");
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -198,7 +260,6 @@ const MatchDetails = () => {
         throw new Error("ไม่พบข้อมูลผู้ใช้. กรุณาเข้าสู่ระบบอีกครั้ง.");
       }
 
-      // 1. ดึงข้อมูล Match
       const matchDocRef = doc(db, `users/${userId}/Matches`, matchId);
       const matchSnap = await getDoc(matchDocRef);
 
@@ -208,34 +269,23 @@ const MatchDetails = () => {
         return;
       }
       const data = matchSnap.data();
+      console.log("Fetched Match Data:", data);
       setMatchData(data);
       setCourtFee(data.courtFee ? String(data.courtFee) : "");
       setBallPrice(data.ballPrice ? String(data.ballPrice) : "");
-      setOrganizeFee(data.organizeFee ? String(data.organizeFee) : ""); // <--- ดึงค่าจัดก๊วนจาก matchData
+      setOrganizeFee(data.organizeFee ? String(data.organizeFee) : "");
 
-      // 2. ดึงข้อมูล Members
-      const membersCollectionRef = collection(db, `users/${userId}/Members`);
-      const membersSnapshot = await getDocs(membersCollectionRef);
-      const fetchedMembersData = {};
-      membersSnapshot.forEach((doc) => {
-        const memberData = doc.data();
-        fetchedMembersData[memberData.name] = {
-          id: doc.id,
-          ...memberData,
-        };
-      });
-      setMembersData(fetchedMembersData);
+      setMemberPaidStatus(data.paidStatus || {});
 
-      // 3. คำนวณสถิติผู้เล่น (ส่งข้อมูล Members ที่ดึงมาไปด้วย)
       if (data.matches && data.matches.length > 0) {
         calculateMemberStats(
           data,
           data.courtFee || "",
           data.ballPrice || "",
-          data.organizeFee || "", // <--- ส่งค่าจัดก๊วนไปยัง calculateMemberStats
-          fetchedMembersData
+          data.organizeFee || ""
         );
       } else {
+        console.log("No matches found in match data. Resetting calculations.");
         setMemberCalculations({});
         setIsDataCalculated(false);
       }
@@ -262,12 +312,65 @@ const MatchDetails = () => {
       Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูล Match เพื่อคำนวณ", "error");
       return;
     }
-    // ใช้ membersData ที่มีอยู่แล้ว
-    calculateMemberStats(matchData, courtFee, ballPrice, organizeFee, membersData); // <--- ส่ง organizeFee
+    calculateMemberStats(matchData, courtFee, ballPrice, organizeFee);
     Swal.fire("คำนวณสำเร็จ", "คำนวณข้อมูลค่าใช้จ่ายแล้ว", "success");
   };
 
-  // NEW: ฟังก์ชันสำหรับบันทึกข้อมูลในตารางลงใน Ranking collection
+  // Handler for paid status change
+  const handlePaidStatusChange = useCallback(async (memberName, isPaid) => {
+    if (!isAdmin) return;
+
+    setMemberPaidStatus(prevStatus => {
+      const newStatus = { ...prevStatus, [memberName]: isPaid };
+      setMemberCalculations(prevCalcs => {
+        const updatedCalcs = { ...prevCalcs };
+        if (updatedCalcs[memberName]) {
+          updatedCalcs[memberName].isPaid = isPaid;
+        }
+        return updatedCalcs;
+      });
+      return newStatus;
+    });
+
+    try {
+      const usersRef = collection(db, "users");
+      const userQuery = query(usersRef, where("email", "==", loggedInEmail));
+      const userSnap = await getDocs(userQuery);
+      let userId = null;
+      userSnap.forEach((doc) => {
+        userId = doc.id;
+      });
+
+      if (!userId) {
+        throw new Error("ไม่พบข้อมูลผู้ใช้. กรุณาเข้าสู่ระบบอีกครั้ง.");
+      }
+
+      const matchDocRef = doc(db, `users/${userId}/Matches`, matchId);
+      await updateDoc(matchDocRef, {
+        [`paidStatus.${memberName}`]: isPaid,
+        lastUpdatedPaidStatus: serverTimestamp(),
+      });
+      Swal.fire("บันทึกสถานะ", `สถานะการจ่ายเงินของ ${memberName} อัปเดตแล้ว!`, "success");
+    } catch (err) {
+      console.error("Error updating paid status:", err);
+      Swal.fire(
+        "ข้อผิดพลาด",
+        "ไม่สามารถบันทึกสถานะการจ่ายเงินได้: " + err.message,
+        "error"
+      );
+      setMemberPaidStatus(prevStatus => ({ ...prevStatus, [memberName]: !isPaid }));
+      setMemberCalculations(prevCalcs => {
+        const updatedCalcs = { ...prevCalcs };
+        if (updatedCalcs[memberName]) {
+          updatedCalcs[memberName].isPaid = !isPaid;
+        }
+        return updatedCalcs;
+      });
+    }
+  }, [isAdmin, loggedInEmail, matchId]);
+
+
+  // ฟังก์ชันสำหรับบันทึกข้อมูลในตารางลงใน Ranking collection
   const handleSaveToRanking = async () => {
     if (Object.keys(memberCalculations).length === 0) {
       Swal.fire(
@@ -301,7 +404,6 @@ const MatchDetails = () => {
         throw new Error("ไม่พบข้อมูลผู้ใช้. กรุณาเข้าสู่ระบบอีกครั้ง.");
       }
 
-      // Generate Month-Year ID
       const matchDateObj = new Date(matchData.matchDate);
       if (isNaN(matchDateObj.getTime())) {
         throw new Error("วันที่ของ Match ไม่ถูกต้อง.");
@@ -313,24 +415,32 @@ const MatchDetails = () => {
       const rankingDocRef = doc(db, `users/${userId}/Ranking`, monthYearId);
       const batch = writeBatch(db);
 
-      // Fetch existing ranking data for the month if it exists
       const rankingSnap = await getDoc(rankingDocRef);
       const existingRankingData = rankingSnap.exists()
         ? rankingSnap.data()
         : {};
 
+      console.log("Existing Ranking Data before update:", existingRankingData);
+
       Object.values(memberCalculations).forEach((member) => {
         const playerName = member.name;
-        const currentWins = existingRankingData[playerName]?.wins || 0;
-        const currentScore = existingRankingData[playerName]?.score || 0;
-        const currentGames = existingRankingData[playerName]?.totalGames || 0;
-        const currentBalls = existingRankingData[playerName]?.totalBalls || 0;
+        const currentMatchWins = member.calculatedWins;
+        const currentMatchScore = member.calculatedScore;
+        const currentMatchGames = member.totalGames;
+        const currentMatchBalls = member.totalBalls;
 
-        // Update values by adding the calculated values from the current match
-        const newWins = currentWins + member.calculatedWins;
-        const newScore = currentScore + member.calculatedScore;
-        const newGames = currentGames + member.totalGames;
-        const newBalls = currentBalls + member.totalBalls;
+        const existingWins = existingRankingData[playerName]?.wins || 0;
+        const existingScore = existingRankingData[playerName]?.score || 0;
+        const existingGames = existingRankingData[playerName]?.totalGames || 0;
+        const existingBalls = existingRankingData[playerName]?.totalBalls || 0;
+
+        const newWins = existingWins + currentMatchWins;
+        const newScore = existingScore + currentMatchScore;
+        const newGames = existingGames + currentMatchGames;
+        const newBalls = existingBalls + currentMatchBalls;
+
+        console.log(`Updating ${playerName}: Old Wins: ${existingWins}, New Wins: ${newWins} (Current Match Wins: ${currentMatchWins})`);
+        console.log(`Updating ${playerName}: Old Score: ${existingScore}, New Score: ${newScore} (Current Match Score: ${currentMatchScore})`);
 
         batch.set(
           rankingDocRef,
@@ -342,15 +452,13 @@ const MatchDetails = () => {
               totalBalls: newBalls,
               lastUpdated: serverTimestamp(),
             },
-            // Maintain other top-level fields if they exist
             ...(rankingSnap.exists() ? existingRankingData : {}),
-            lastUpdatedMonth: serverTimestamp(), // Update a top-level timestamp for the document
+            lastUpdatedMonth: serverTimestamp(),
           },
-          { merge: true } // Use merge to update specific fields without overwriting the entire document
+          { merge: true }
         );
       });
 
-      // Add createdAt timestamp only if it's a new document
       if (!rankingSnap.exists()) {
         batch.set(rankingDocRef, { createdAt: serverTimestamp() }, { merge: true });
       }
@@ -373,6 +481,118 @@ const MatchDetails = () => {
       setIsSavingRanking(false);
     }
   };
+
+  // --- NEW: ฟังก์ชันสำหรับ Export ข้อมูลเป็น Excel ---
+  const handleExportToExcel = () => {
+    if (Object.keys(memberCalculations).length === 0) {
+      Swal.fire(
+        "ข้อมูลไม่เพียงพอ",
+        "กรุณาคำนวณค่าใช้จ่ายก่อนดาวน์โหลดข้อมูล",
+        "warning"
+      );
+      return;
+    }
+
+    const ws_data = [
+      ["No.", "ชื่อ", "จำนวนเกม", "จำนวนลูก", "ราคารวมลูกที่ใช้", "ค่าสนาม (เฉลี่ย)", "ค่าจัดก๊วน", "จำนวนชนะ", "คะแนน", "Total (บาท)", "จ่ายแล้ว"] // Header row with new "Paid" column
+    ];
+
+    const sortedMembers = Object.values(memberCalculations).sort(
+      (a, b) => b.score - a.score
+    );
+
+    sortedMembers.forEach((member, index) => {
+      ws_data.push([
+        index + 1,
+        member.name,
+        member.totalGames,
+        member.totalBalls,
+        member.ballCost, // No toFixed here, already rounded up in calculation
+        member.courtCostPerPerson,
+        member.organizeFeePerPerson, // No toFixed here, already rounded up in calculation
+        member.wins,
+        member.score,
+        member.total, // Use the calculated total
+        member.isPaid ? "ใช่" : "ไม่",
+      ]);
+    });
+
+    // Add Total All row
+    if (sortedMembers.length > 0) {
+      const totalAllSum = Object.values(memberCalculations).reduce((sum, m) => sum + m.total, 0);
+      ws_data.push(["", "", "", "", "", "", "", "", "", "Total All:", Math.ceil(Object.values(memberCalculations).reduce((sum, m) => sum + m.total, 0))]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+    // --- Apply Styling for Excel ---
+    // Universal style for center alignment
+    const centerAlignStyle = { alignment: { horizontal: "center", vertical: "center" } };
+
+    // Header row styling
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "000000" } }, // Black text for headers
+      fill: { fgColor: { rgb: "E0E0E0" } }, // Light gray background for headers (E0E0E0 is a light grey)
+      alignment: { horizontal: "center", vertical: "center" },
+      border: {
+        top: { style: "thin", color: { auto: 1 } },
+        bottom: { style: "thin", color: { auto: 1 } },
+        left: { style: "thin", color: { auto: 1 } },
+        right: { style: "thin", color: { auto: 1 } },
+      },
+    };
+
+    // Apply header style to the first row
+    for (let C = 0; C < ws_data[0].length; ++C) {
+        const cell = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[cell]) ws[cell] = {};
+        ws[cell].s = headerStyle;
+    }
+
+    // Apply center alignment to all data cells and red color to 'Total (บาท)' column
+    for (let R = 1; R < ws_data.length; ++R) { // Start from second row
+        for (let C = 0; C < ws_data[R].length; ++C) {
+            const cell = XLSX.utils.encode_cell({ r: R, c: C });
+            if (!ws[cell]) ws[cell] = {};
+            
+            // Apply center alignment to all data cells
+            ws[cell].s = { ...(ws[cell].s || {}), ...centerAlignStyle }; // Merge with existing styles
+
+            // Apply red color to "Total (บาท)" column (index 9)
+            if (C === 9 && R < ws_data.length -1) { // Apply to individual totals
+                ws[cell].s = { ...ws[cell].s, font: { color: { rgb: "FF0000" } } };
+            }
+            // Apply red color and bold to "Total All" value (last row, column 10, data part)
+            if (C === 10 && R === ws_data.length -1) {
+              ws[cell].s = { ...ws[cell].s, font: { bold: true, color: { rgb: "FF0000" } } };
+            }
+            // Ensure "Total All:" text itself is bold and centered
+            if (C === 9 && R === ws_data.length -1) {
+                ws[cell].s = { ...ws[cell].s, font: { bold: true }, ...centerAlignStyle };
+            }
+        }
+    }
+    
+    // Auto-width columns based on content
+    const colWidths = ws_data[0].map((_, i) => ({
+      wch: Math.max(...ws_data.map(row => (row[i] ? String(row[i]).length : 0))) + 2
+    }));
+    ws['!cols'] = colWidths;
+
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Match Details");
+
+    const fileName = `MatchDetails_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, '-') : 'data'}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    Swal.fire(
+      "ดาวน์โหลดสำเร็จ",
+      "ไฟล์ Excel ถูกดาวน์โหลดแล้ว!",
+      "success"
+    );
+  };
+  // --- End NEW: ฟังก์ชันสำหรับ Export ข้อมูลเป็น Excel ---
 
   if (loading) {
     return (
@@ -397,6 +617,10 @@ const MatchDetails = () => {
       </div>
     );
   }
+
+  const sortedMembers = Object.values(memberCalculations).sort(
+    (a, b) => b.score - a.score
+  );
 
   return (
     <div
@@ -435,7 +659,7 @@ const MatchDetails = () => {
             gap: "20px",
             marginBottom: "20px",
             alignItems: "center",
-            flexWrap: "wrap", // เพิ่ม flexWrap เพื่อให้ responsive
+            flexWrap: "wrap",
           }}
         >
           <div>
@@ -488,7 +712,6 @@ const MatchDetails = () => {
               }}
             />
           </div>
-          {/* <--- เพิ่มช่องสำหรับค่าจัดก๊วน */}
           <div>
             <label
               style={{
@@ -514,7 +737,6 @@ const MatchDetails = () => {
               }}
             />
           </div>
-          {/* เพิ่มช่องสำหรับค่าจัดก๊วน ---/> */}
           <button
             onClick={handleCalculateClick}
             style={{
@@ -531,33 +753,48 @@ const MatchDetails = () => {
             คำนวณค่าใช้จ่าย
           </button>
         </div>
-        {/* NEW: Button to save to Ranking */}
-        {isDataCalculated && (
-          <div style={{ textAlign: "right", marginTop: "15px" }}>
-            <button
-              onClick={handleSaveToRanking}
-              disabled={isSavingRanking}
-              style={{
-                backgroundColor: "#28a745",
-                color: "#fff",
-                padding: "10px 20px",
-                borderRadius: "5px",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "15px",
-                opacity: isSavingRanking ? 0.7 : 1,
-              }}
-            >
-              {isSavingRanking ? (
-                <>
-                  <span className="spinner"></span> กำลังบันทึก...
-                </>
-              ) : (
-                "บันทึกข้อมูล Ranking"
-              )}
-            </button>
-          </div>
-        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "15px" }}>
+            {isDataCalculated && (
+              <button
+                onClick={handleExportToExcel}
+                style={{
+                  backgroundColor: "#007bff",
+                  color: "#fff",
+                  padding: "10px 20px",
+                  borderRadius: "5px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "15px",
+                }}
+              >
+                ดาวน์โหลด Excel
+              </button>
+            )}
+            {isDataCalculated && (
+              <button
+                onClick={handleSaveToRanking}
+                disabled={isSavingRanking}
+                style={{
+                  backgroundColor: "#28a745",
+                  color: "#fff",
+                  padding: "10px 20px",
+                  borderRadius: "5px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "15px",
+                  opacity: isSavingRanking ? 0.7 : 1,
+                }}
+              >
+                {isSavingRanking ? (
+                  <>
+                    <span className="spinner"></span> กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกข้อมูล Ranking"
+                )}
+              </button>
+            )}
+        </div>
       </div>
 
       {/* ตารางรายละเอียดผู้เล่นพร้อมค่าใช้จ่าย */}
@@ -579,7 +816,7 @@ const MatchDetails = () => {
                 style={{
                   padding: "12px 10px",
                   borderRight: "1px solid #444",
-                  textAlign: "left",
+                  textAlign: "center", // Center-align No.
                 }}
               >
                 No.
@@ -637,7 +874,7 @@ const MatchDetails = () => {
                 }}
               >
                 ค่าจัดก๊วน
-              </th> {/* <--- เพิ่มหัวข้อ ค่าจัดก๊วน */}
+              </th>
               <th
                 style={{
                   padding: "12px 10px",
@@ -654,18 +891,29 @@ const MatchDetails = () => {
                   textAlign: "center",
                 }}
               >
-                คะแนน (จากชนะ)
+                คะแนน
               </th>
-              <th style={{ padding: "12px 10px", textAlign: "center" }}>
+              <th
+                style={{
+                  padding: "12px 10px",
+                  borderRight: "1px solid #444",
+                  textAlign: "center",
+                }}
+              >
                 Total (บาท)
               </th>
+              {isAdmin && (
+                <th style={{ padding: "12px 10px", textAlign: "center" }}>
+                  จ่ายแล้ว
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {Object.keys(memberCalculations).length === 0 ? (
               <tr>
                 <td
-                  colSpan="10" // <--- เพิ่ม colspan เพราะมีคอลัมน์เพิ่ม
+                  colSpan={isAdmin ? "11" : "10"}
                   style={{ textAlign: "center", padding: "20px", color: "#777" }}
                 >
                   {isDataCalculated
@@ -674,114 +922,126 @@ const MatchDetails = () => {
                 </td>
               </tr>
             ) : (
-              Object.values(memberCalculations)
-                .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-                .map((member, index) => (
-                  <tr
-                    key={member.name || index}
-                    style={{ borderBottom: "1px solid #eee" }}
+              sortedMembers.map((member, index) => (
+                <tr
+                  key={member.name || index}
+                  style={{ borderBottom: "1px solid #eee" }}
+                >
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
                   >
+                    {index + 1}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "left",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {member.name}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.totalGames}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.totalBalls}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.ballCost}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.courtCostPerPerson}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.organizeFeePerPerson}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.wins}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                    }}
+                  >
+                    {member.score}
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px",
+                      borderRight: "1px solid #eee",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      color: "#e63946",
+                    }}
+                  >
+                    {member.total}
+                  </td>
+                  {isAdmin && (
                     <td
                       style={{
                         padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "left",
-                      }}
-                    >
-                      {index + 1}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "left",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {member.name}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
                         textAlign: "center",
                       }}
                     >
-                      {member.totalGames}
+                      <input
+                        type="checkbox"
+                        checked={memberPaidStatus[member.name] || false}
+                        onChange={(e) => handlePaidStatusChange(member.name, e.target.checked)}
+                        style={{ cursor: "pointer", transform: "scale(1.2)" }}
+                      />
                     </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "center",
-                      }}
-                    >
-                      {member.totalBalls}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "center",
-                      }}
-                    >
-                      {member.ballCost.toFixed(2)}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "center",
-                      }}
-                    >
-                      {member.courtCostPerPerson.toFixed(2)}
-                    </td>
-                    {/* <--- เพิ่มคอลัมน์ ค่าจัดก๊วน */}
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "center",
-                      }}
-                    >
-                      {member.organizeFeePerPerson.toFixed(2)}
-                    </td>
-                    {/* เพิ่มคอลัมน์ ค่าจัดก๊วน ---/> */}
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "center",
-                      }}
-                    >
-                      {member.wins}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        borderRight: "1px solid #eee",
-                        textAlign: "center",
-                      }}
-                    >
-                      {member.score}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px",
-                        textAlign: "center",
-                        fontWeight: "bold",
-                        color: "#e63946",
-                      }}
-                    >
-                      {member.total.toFixed(2)}
-                    </td>
-                  </tr>
-                ))
+                  )}
+                </tr>
+              ))
             )}
             {Object.keys(memberCalculations).length > 0 && (
               <tr style={{ backgroundColor: "#f0f0f0", fontWeight: "bold" }}>
                 <td
-                  colSpan="9" // <--- เพิ่ม colspan เพราะมีคอลัมน์เพิ่ม
+                  colSpan={isAdmin ? "10" : "9"}
                   style={{
                     padding: "10px",
                     textAlign: "right",
@@ -793,10 +1053,10 @@ const MatchDetails = () => {
                 <td
                   style={{ padding: "10px", textAlign: "center", color: "#e63946" }}
                 >
-                  {Object.values(memberCalculations)
-                    .reduce((sum, m) => sum + m.total, 0)
-                    .toFixed(2)}
+                  {Math.ceil(Object.values(memberCalculations)
+                    .reduce((sum, m) => sum + m.total, 0))}
                 </td>
+                {isAdmin && <td style={{ padding: "10px", textAlign: "center" }}></td>}
               </tr>
             )}
           </tbody>
@@ -998,23 +1258,21 @@ const MatchDetails = () => {
         </button>
       </div>
 
-      {/* เพิ่ม CSS keyframe สำหรับ animation spin (ถ้ายังไม่มี) */}
       <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        @keyframes spinner {
+          to {
+            transform: rotate(360deg);
+          }
         }
         .spinner {
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          border-radius: 50%;
-          border-top: 2px solid #fff;
-          width: 16px;
-          height: 16px;
-          -webkit-animation: spin 1s linear infinite;
-          animation: spin 1s linear infinite;
           display: inline-block;
+          width: 1em;
+          height: 1em;
           vertical-align: middle;
-          margin-right: 5px;
+          border: 0.15em solid currentColor;
+          border-right-color: transparent;
+          border-radius: 50%;
+          animation: spinner 0.75s linear infinite;
         }
       `}</style>
     </div>
