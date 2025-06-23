@@ -335,6 +335,20 @@ const Match = () => {
           });
         }
       });
+      // สร้างแผนที่ชื่อ => level
+      const memberLevelMap = {};
+      members.forEach((mem) => {
+        memberLevelMap[mem.name] = mem.level;
+      });
+
+      // สร้าง matches ใหม่ พร้อมฝัง level
+      const enrichedMatches = matches.map((match) => ({
+        ...match,
+        A1Level: memberLevelMap[match.A1] || "",
+        A2Level: memberLevelMap[match.A2] || "",
+        B1Level: memberLevelMap[match.B1] || "",
+        B2Level: memberLevelMap[match.B2] || "",
+      }));
 
       // อัปเดตข้อมูลสมาชิกใน Firebase
       const membersRef = collection(db, `users/${userId}/Members`);
@@ -362,7 +376,7 @@ const Match = () => {
         topic,
         matchDate,
         totalTime: activityTime,
-        matches,
+        matches: enrichedMatches, // ใช้ matches ที่มี level
         savedAt: serverTimestamp(),
       });
       Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
