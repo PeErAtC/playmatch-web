@@ -1,6 +1,6 @@
 // Home.js
 import React, { useState, useEffect, useCallback } from "react";
-import Sidebar from "./components/sidebar";
+// import Sidebar from "./components/sidebar"; // Remove this line
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -250,7 +250,7 @@ const Home = () => {
         lineId: "example_line_id",
         handed: "Right",
         phone: "0812345678",
-        birthDate: "1990-05-15", // ตัวอย่างวันเกิด (ค.ศ. YYYY-MM-DD)
+        birthDate: "1990-05-15", // ตัวอย่างวันเกิด (ค.ศ.XXXX-MM-DD)
         experience: "2 ปี",
         status: "มา",
       },
@@ -260,7 +260,7 @@ const Home = () => {
         lineId: "second_example",
         handed: "Left",
         phone: "0998765432",
-        birthDate: "1985-11-20", // ตัวอย่างวันเกิด (ค.ศ. YYYY-MM-DD)
+        birthDate: "1985-11-20", // ตัวอย่างวันเกิด (ค.ศ.XXXX-MM-DD)
         experience: "5 ปี",
         status: "ไม่มา",
       },
@@ -670,7 +670,6 @@ const Home = () => {
 
   return (
     <div className="overall-layout">
-      <Sidebar />
       <main className="main-content">
         <h2>สมาชิก</h2>
         <hr />
@@ -950,17 +949,20 @@ const Home = () => {
 
         /* Base Layout */
         .overall-layout {
-          display: grid;
-          grid-template-columns: 240px 1fr;
-          height: 100vh;
+          display: flex; /* Keep this if you want flexbox behavior for direct children */
+          width: 100%; /* Ensure it spans the full width */
+          min-height: 100vh; /* Ensure it takes full viewport height */
+          /* If you had styles like grid-template-columns for the sidebar, remove them here */
         }
 
         /* Main Content Area */
         .main-content {
-          padding: 28px;
-          background-color: #f7f7f7;
-          border-radius: 12px;
-          overflow-y: auto;
+          flex-grow: 1; /* This is the key: makes it fill remaining space */
+          padding: 20px; /* Adjust as needed */
+          /* If you had a fixed width or left-margin here, remove/adjust it */
+          margin-left: 0; /* Ensure no leftover margin from where sidebar used to be */
+          width: auto; /* Reset any fixed width */
+          max-width: 100%; /* Ensure it doesn't exceed 100% of parent */
         }
 
         .main-content h2 {
