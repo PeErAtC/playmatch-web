@@ -38,7 +38,8 @@ const menuList = [
   },
 ];
 
-export default function Sidebar() {
+// Sidebar Component - Now accepts birthDayCount prop
+export default function Sidebar({ birthDayCount = 0 }) { // Default to 0 if not provided
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [groupName, setGroupName] = useState("");
@@ -85,6 +86,9 @@ export default function Sidebar() {
           >
             <span className="menu-icon">{item.icon}</span>
             <span className="menu-label">{item.label}</span>
+            {item.label === "BirthDay" && birthDayCount > 0 && ( // Conditionally render badge for BirthDay
+              <span className="birthday-badge">{birthDayCount}</span>
+            )}
           </a>
         ))}
       </nav>
@@ -168,13 +172,14 @@ export default function Sidebar() {
           flex-direction: column;
           gap: 6px;
           padding: 6px 0;
+          flex-grow: 1; /* Allow menu to take available space */
         }
         .sidebar-menu-item {
           display: flex;
           align-items: center;
           gap: 14px;
-          padding: 8px 16px; /* ลด padding ซ้ายขวา */
-          margin: 2px 16px; /* เพิ่ม margin ซ้ายขวา กรอบ active จะสั้นลง */
+          padding: 8px 16px;
+          margin: 2px 16px;
           font-size: 1rem;
           color: #d1d7e0;
           text-decoration: none;
@@ -182,7 +187,7 @@ export default function Sidebar() {
           cursor: pointer;
           transition: background 0.18s, color 0.18s;
           font-weight: 500;
-          position: relative;
+          position: relative; /* Essential for positioning the badge */
         }
         .sidebar-menu-item .menu-icon {
           display: flex;
@@ -203,9 +208,30 @@ export default function Sidebar() {
         }
         .sidebar-menu-item .menu-label {
           letter-spacing: 0.01em;
+          flex-grow: 1; /* Allow label to take available space */
         }
+
+        /* --- NEW: Birthday Badge Styles --- */
+        .birthday-badge {
+          background-color: #dc3545; /* Red color for notification */
+          color: white;
+          font-size: 0.75rem; /* Smaller font size */
+          font-weight: 600;
+          padding: 3px 7px; /* Padding for oval/circle shape */
+          border-radius: 12px; /* Makes it pill-shaped for 1-2 digits */
+          min-width: 20px; /* Minimum width to ensure it's visible */
+          text-align: center;
+          position: absolute; /* Position relative to .sidebar-menu-item */
+          right: 15px; /* Adjust as needed to align within the margin */
+          top: 50%;
+          transform: translateY(-50%);
+          line-height: 1; /* Ensure text is vertically centered */
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        /* --- END Birthday Badge Styles --- */
+
         .sidebar-user {
-          margin-top: auto;
+          margin-top: auto; /* Pushes user block to the bottom */
           padding: 22px 16px 24px 22px;
           position: relative;
         }
