@@ -135,6 +135,7 @@ const MatchDetails = () => {
       playersInMatch.forEach((player) => {
         tempMemberCalculations[player] = {
           name: player,
+          level: "", 
           totalGames: 0,
           totalBalls: 0,
           wins: 0,
@@ -152,7 +153,23 @@ const MatchDetails = () => {
         memberBallsUsed[player] = 0;
         memberScoresInMatch[player] = 0;
       });
+      currentMatchData.matches.forEach((game) => {
+        const setLevel = (player, levelKey) => {
+          if (
+            player &&
+            tempMemberCalculations[player] &&
+            game[levelKey] &&
+            !tempMemberCalculations[player].level
+          ) {
+            tempMemberCalculations[player].level = game[levelKey];
+          }
+        };
 
+        setLevel(game.A1, "A1Level");
+        setLevel(game.A2, "A2Level");
+        setLevel(game.B1, "B1Level");
+        setLevel(game.B2, "B2Level");
+      });
       currentMatchData.matches.forEach((game, gameIndex) => {
         console.log(`Processing game ${gameIndex + 1}:`, game);
         const teamA = [game.A1, game.A2].filter(Boolean);
@@ -211,6 +228,7 @@ const MatchDetails = () => {
         
         tempMemberCalculations[player] = {
           name: player,
+          level: tempMemberCalculations[player].level || "",
           totalGames: totalGames,
           totalBalls: ballsUsed,
           wins: calculatedWins,
@@ -413,57 +431,37 @@ const MatchDetails = () => {
         .padStart(2, "0")}-${matchDateObj.getFullYear()}`;
 
       const rankingDocRef = doc(db, `users/${userId}/Ranking`, monthYearId);
-      const batch = writeBatch(db);
-
       const rankingSnap = await getDoc(rankingDocRef);
-      const existingRankingData = rankingSnap.exists()
-        ? rankingSnap.data()
-        : {};
+      const existingRankingData = rankingSnap.exists() ? rankingSnap.data() : {};
 
-      console.log("Existing Ranking Data before update:", existingRankingData);
+      const updatedRankingData = { ...existingRankingData };
 
       Object.values(memberCalculations).forEach((member) => {
         const playerName = member.name;
-        const currentMatchWins = member.calculatedWins;
-        const currentMatchScore = member.calculatedScore;
-        const currentMatchGames = member.totalGames;
-        const currentMatchBalls = member.totalBalls;
 
-        const existingWins = existingRankingData[playerName]?.wins || 0;
-        const existingScore = existingRankingData[playerName]?.score || 0;
-        const existingGames = existingRankingData[playerName]?.totalGames || 0;
-        const existingBalls = existingRankingData[playerName]?.totalBalls || 0;
+        // ดึงค่าที่มีอยู่ก่อนหน้า (หรือเริ่มใหม่ถ้ายังไม่มี)
+        const prevData = existingRankingData[playerName] || {
+          wins: 0,
+          score: 0,
+          totalGames: 0,
+          totalBalls: 0,
+          level: "",
+        };
 
-        const newWins = existingWins + currentMatchWins;
-        const newScore = existingScore + currentMatchScore;
-        const newGames = existingGames + currentMatchGames;
-        const newBalls = existingBalls + currentMatchBalls;
-
-        console.log(`Updating ${playerName}: Old Wins: ${existingWins}, New Wins: ${newWins} (Current Match Wins: ${currentMatchWins})`);
-        console.log(`Updating ${playerName}: Old Score: ${existingScore}, New Score: ${newScore} (Current Match Score: ${currentMatchScore})`);
-
-        batch.set(
-          rankingDocRef,
-          {
-            [playerName]: {
-              wins: newWins,
-              score: newScore,
-              totalGames: newGames,
-              totalBalls: newBalls,
-              lastUpdated: serverTimestamp(),
-            },
-            ...(rankingSnap.exists() ? existingRankingData : {}),
-            lastUpdatedMonth: serverTimestamp(),
-          },
-          { merge: true }
-        );
+        // บวกค่าที่เพิ่งคำนวณได้
+        updatedRankingData[playerName] = {
+          wins: prevData.wins + member.calculatedWins,
+          score: prevData.score + member.calculatedScore,
+          totalGames: prevData.totalGames + member.totalGames,
+          totalBalls: prevData.totalBalls + member.totalBalls,
+          level: member.level || prevData.level || "", 
+          lastUpdated: serverTimestamp(),
+        };
       });
 
-      if (!rankingSnap.exists()) {
-        batch.set(rankingDocRef, { createdAt: serverTimestamp() }, { merge: true });
-      }
+      updatedRankingData.lastUpdatedMonth = serverTimestamp();
 
-      await batch.commit();
+      await updateDoc(rankingDocRef, updatedRankingData);
 
       Swal.fire(
         "บันทึกสำเร็จ",
@@ -481,6 +479,7 @@ const MatchDetails = () => {
       setIsSavingRanking(false);
     }
   };
+
 
   // --- NEW: ฟังก์ชันสำหรับ Export ข้อมูลเป็น Excel ---
   const handleExportToExcel = () => {
@@ -945,6 +944,7 @@ const MatchDetails = () => {
                     }}
                   >
                     {member.name}
+                    {member.level ? ` (${member.level})` : ""}
                   </td>
                   <td
                     style={{
