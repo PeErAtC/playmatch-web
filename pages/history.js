@@ -1,6 +1,9 @@
+// src/pages/History.js (หรือ pages/History.js ขึ้นอยู่กับโครงสร้างโปรเจกต์ของคุณ)
 import React, { useState, useEffect, useCallback } from "react";
-import Sidebar from "./components/sidebar";
-import { db } from "../lib/firebaseConfig";
+// import Sidebar from "./components/sidebar"; // <--- บรรทัดนี้ถูกลบออกไปแล้ว
+// คุณไม่จำเป็นต้อง import Sidebar ในไฟล์หน้าเพจโดยตรงอีกต่อไป
+
+import { db } from "../lib/firebaseConfig"; // ตรวจสอบพาธให้ถูกต้อง
 import {
   collection,
   getDocs,
@@ -133,119 +136,115 @@ const History = () => {
   };
 
   return (
-    <div className="history-page-container">
-      <Sidebar />
-      <main className="main-content">
-        <h2 className="main-title">ประวัติการจัดก๊วน</h2>
-        <hr className="title-separator" />
+    // ลบ .history-page-container ที่กำหนด grid-template-columns ออก
+    // เนื่องจาก _app.js ได้จัดการ layout หลักแล้ว
+    <div className="main-content"> {/* เปลี่ยนเป็น div ที่มีแค่ main-content class */}
+      <h2 className="main-title">ประวัติการจัดก๊วน</h2>
+      <hr className="title-separator" />
 
-        {/* Row 1 - Search & Total Matches */}
-        <div className="search-and-total-row">
-          {/* Left: Search Topic */}
-          <div className="search-input-container">
-            <input
-              type="text"
-              placeholder="ค้นหาหัวเรื่อง"
-              value={searchTopic}
-              onChange={(e) => setSearchTopic(e.target.value)}
-              className="topic-search-input"
-            />
-          </div>
-          {/* Right: Display total matches */}
-          <div className="total-matches-display">
-            <span>จัดไปทั้งหมด : {totalMatches}</span>
-          </div>
+      {/* Row 1 - Search & Total Matches */}
+      <div className="search-and-total-row">
+        {/* Left: Search Topic */}
+        <div className="search-input-container">
+          <input
+            type="text"
+            placeholder="ค้นหาหัวเรื่อง"
+            value={searchTopic}
+            onChange={(e) => setSearchTopic(e.target.value)}
+            className="topic-search-input"
+          />
         </div>
-
-        {/* Row 2 - Pagination */}
-        <div className="pagination-container">
-          <button
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="pagination-button"
-          >
-            ย้อนกลับ
-          </button>
-          {Array.from({ length: totalPages }, (_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => setCurrentPage(index + 1)}
-              className={`pagination-button ${currentPage === index + 1 ? "active" : ""}`}
-            >
-              {index + 1}
-            </button>
-          ))}
-          <button
-            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages || totalPages === 0}
-            className="pagination-button"
-          >
-            ถัดไป
-          </button>
+        {/* Right: Display total matches */}
+        <div className="total-matches-display">
+          <span>จัดไปทั้งหมด : {totalMatches}</span>
         </div>
+      </div>
 
-        {/* Row 3 - Matches Table */}
-        <div className="table-responsive-container">
-          <table className="matches-table">
-            <thead>
+      {/* Row 2 - Pagination */}
+      <div className="pagination-container">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="pagination-button"
+        >
+          ย้อนกลับ
+        </button>
+        {Array.from({ length: totalPages }, (_, index) => (
+          <button
+            key={index + 1}
+            onClick={() => setCurrentPage(index + 1)}
+            className={`pagination-button ${currentPage === index + 1 ? "active" : ""}`}
+          >
+            {index + 1}
+          </button>
+        ))}
+        <button
+          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages || totalPages === 0}
+          className="pagination-button"
+        >
+          ถัดไป
+        </button>
+      </div>
+
+      {/* Row 3 - Matches Table */}
+      <div className="table-responsive-container">
+        <table className="matches-table">
+          <thead>
+            <tr>
+              <th>วันเดือนปีที่จัด</th>
+              <th>หัวเรื่อง</th>
+              <th>เวลารวมกิจกรรม</th>
+              <th>รายละเอียด</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
               <tr>
-                <th>วันเดือนปีที่จัด</th>
-                <th>หัวเรื่อง</th>
-                <th>เวลารวมกิจกรรม</th>
-                <th>รายละเอียด</th>
+                <td colSpan={4} className="loading-message">
+                  กำลังโหลดข้อมูล...
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={4} className="loading-message">
-                    กำลังโหลดข้อมูล...
-                  </td>
-                </tr>
-              )}
-              {!isLoading && currentMatchesPaginated.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="no-data-message">
-                    {searchTopic ? "ไม่พบหัวเรื่องที่ค้นหา" : "ไม่พบประวัติการจัดก๊วน"}
-                  </td>
-                </tr>
-              )}
-              {!isLoading && currentMatchesPaginated.length > 0 && currentMatchesPaginated.map((match, idx) => (
-                <tr key={match.id || idx} className={idx % 2 === 0 ? "even-row" : "odd-row"}>
-                  <td>{formatDate(match.matchDate)}</td>
-                  <td>{match.topic}</td>
-                  <td>
-                    {match.totalTime ? `${Math.floor(match.totalTime / 60).toString().padStart(2, '0')}:${(match.totalTime % 60).toString().padStart(2, '0')} นาที` : 'N/A'}
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => showMatchDetailsInNewTab(match.id)}
-                      className="detail-button"
-                    >
-                      ดูรายละเอียด
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </main>
+            )}
+            {!isLoading && currentMatchesPaginated.length === 0 && (
+              <tr>
+                <td colSpan={4} className="no-data-message">
+                  {searchTopic ? "ไม่พบหัวเรื่องที่ค้นหา" : "ไม่พบประวัติการจัดก๊วน"}
+                </td>
+              </tr>
+            )}
+            {!isLoading && currentMatchesPaginated.length > 0 && currentMatchesPaginated.map((match, idx) => (
+              <tr key={match.id || idx} className={idx % 2 === 0 ? "even-row" : "odd-row"}>
+                <td>{formatDate(match.matchDate)}</td>
+                <td>{match.topic}</td>
+                <td>
+                  {match.totalTime ? `${Math.floor(match.totalTime / 60).toString().padStart(2, '0')}:${(match.totalTime % 60).toString().padStart(2, '0')} นาที` : 'N/A'}
+                </td>
+                <td>
+                  <button
+                    onClick={() => showMatchDetailsInNewTab(match.id)}
+                    className="detail-button"
+                  >
+                    ดูรายละเอียด
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* CSS-in-JS using <style jsx> */}
       <style jsx>{`
-        /* Main Layout */
-        .history-page-container {
-          display: grid;
-          grid-template-columns: 240px 1fr; /* Default for larger screens */
-          height: 100vh;
-        }
+        /* Main Layout - REMOVED .history-page-container */
+        /* .history-page-container has been removed here because _app.js now manages the overall layout */
 
         .main-content {
           padding: 28px;
           background-color: #f7f7f7;
           border-radius: 12px;
           overflow-y: auto;
+          /* These styles are now defining the content area *within* the _app.js layout */
         }
 
         .main-title {
@@ -262,7 +261,7 @@ const History = () => {
         /* Row 1 - Search and Total Matches */
         .search-and-total-row {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr 1fr; /* Default for larger screens */
           align-items: center;
           gap: 18px;
           margin-top: 20px;
@@ -393,9 +392,11 @@ const History = () => {
 
         /* Media Queries for Responsive Design */
         @media (max-width: 768px) {
-          .history-page-container {
-            grid-template-columns: 1fr; /* Stack sidebar and main content */
-          }
+          /* Remove grid-template-columns specific to history-page-container here */
+          /* as _app.js now handles the main layout with flexbox/grid */
+          /* .history-page-container {
+            grid-template-columns: 1fr;
+          } */
 
           .main-content {
             padding: 15px; /* Reduce padding on smaller screens */
