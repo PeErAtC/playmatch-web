@@ -337,6 +337,15 @@ const Home = () => {
           let successCount = 0;
 
           const existingMembers = await fetchMembersData();
+          let maxIdNum = existingMembers.reduce((max, member) => {
+            if (member.memberId && member.memberId.startsWith("member_")) {
+              const num = parseInt(member.memberId.split("_")[1], 10);
+              return isNaN(num) ? max : Math.max(max, num);
+            }
+            return max;
+          }, 0);
+
+          const batch = writeBatch(db); // Initialize batch
 
           for (let i = 0; i < jsonData.length; i++) {
             const member = jsonData[i];
@@ -404,33 +413,33 @@ const Home = () => {
               continue;
             }
 
-            try {
-              const memberId = generateMemberId(existingMembers);
-              const memberRef = doc(
-                db,
-                `users/${currentUserId}/Members/${memberId}`
-              ); // Use currentUserId
-              await setDoc(memberRef, {
-                ...newUser,
-                memberId,
-                createdAt: new Date(),
-              });
-              successCount++;
-            } catch (addError) {
-              validationErrors.push(
-                `แถวที่ ${rowIndex}: ไม่สามารถเพิ่มข้อมูลได้ - ${addError.message}`
-              );
-            }
+            // Generate a unique memberId for each new entry within this batch
+            maxIdNum++; // Increment for each new member
+            const memberId = `member_${String(maxIdNum).padStart(3, "0")}`;
+
+            const memberRef = doc(
+              db,
+              `users/${currentUserId}/Members/${memberId}`
+            );
+            // Add the operation to the batch
+            batch.set(memberRef, {
+              ...newUser,
+              memberId,
+              createdAt: new Date(),
+            });
+            successCount++;
           }
 
+          // Commit the batch operation outside the loop
           if (successCount > 0) {
+            await batch.commit(); // Commit all pending writes
             Swal.fire(
               "สำเร็จ!",
               `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`,
               "success"
             );
             setShowModal(false);
-            fetchMembers();
+            fetchMembers(); // Re-fetch members to update the UI
           }
 
           if (validationErrors.length > 0) {
@@ -537,16 +546,9 @@ const Home = () => {
     }
   }, [currentUserId, fetchMembers]);
 
-  const generateMemberId = (currentMembers) => {
-    const maxIdNum = currentMembers.reduce((max, member) => {
-      if (member.memberId && member.memberId.startsWith("member_")) {
-        const num = parseInt(member.memberId.split("_")[1], 10);
-        return isNaN(num) ? max : Math.max(max, num);
-      }
-      return max;
-    }, 0);
-    const newId = maxIdNum + 1;
-    return `member_${String(newId).padStart(3, "0")}`;
+  const generateMemberId = (currentMaxIdNum) => {
+    // This function is now used with a simple counter
+    return `member_${String(currentMaxIdNum).padStart(3, "0")}`;
   };
 
   const handleSelectUser = (user) => {
@@ -636,7 +638,16 @@ const Home = () => {
         Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
       } else {
         const currentMembersData = await fetchMembersData();
-        memberId = generateMemberId(currentMembersData);
+        // Calculate maxIdNum based on existing members before generating a new ID
+        let maxIdNum = currentMembersData.reduce((max, member) => {
+          if (member.memberId && member.memberId.startsWith("member_")) {
+            const num = parseInt(member.memberId.split("_")[1], 10);
+            return isNaN(num) ? max : Math.max(max, num);
+          }
+          return max;
+        }, 0);
+        memberId = generateMemberId(maxIdNum + 1); // Increment for the new member
+
         const memberRef = doc(db, `users/${currentUserId}/Members/${memberId}`);
         await setDoc(memberRef, {
           ...newUser,
@@ -1170,6 +1181,23 @@ const Home = () => {
           cursor: not-allowed;
         }
 
+        /* Spinner for loading buttons */
+        @keyframes spinner {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        .spinner {
+          display: inline-block;
+          width: 1em;
+          height: 1em;
+          vertical-align: middle;
+          border: 0.15em solid currentColor;
+          border-right-color: transparent;
+          border-radius: 50%;
+          animation: spinner 0.75s linear infinite;
+        }
+
         /* Container for the Form Section (Header + Collapsible Content) */
         .member-form-section {
           background-color: #ffffff;
@@ -1565,23 +1593,6 @@ const Home = () => {
             width: 100%;
             min-width: unset;
           }
-        }
-
-        /* Spinner for loading buttons */
-        @keyframes spinner {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .spinner {
-          display: inline-block;
-          width: 1em;
-          height: 1em;
-          vertical-align: middle;
-          border: 0.15em solid currentColor;
-          border-right-color: transparent;
-          border-radius: 50%;
-          animation: spinner 0.75s linear infinite;
         }
       `}</style>
     </div>
