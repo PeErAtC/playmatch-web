@@ -1,19 +1,29 @@
 // pages/_app.js
-import React from 'react';
-import Sidebar from './components/sidebar'; // ตรวจสอบพาธให้ถูกต้อง
-import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebaseConfig'; // ตรวจสอบพาธให้ถูกต้อง
-import { Menu } from 'lucide-react'; // Import the Menu icon (hamburger)
+import React from "react";
+import Sidebar from "./components/sidebar";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../lib/firebaseConfig";
+import { Menu } from "lucide-react";
+import { useRouter } from "next/router"; // Import useRouter
 
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
   const [userIdForSidebar, setUserIdForSidebar] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // เริ่มต้นให้ sidebar ปิดอยู่บนมือถือ
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const router = useRouter(); // Initialize useRouter
+  const { pathname } = router; // Get the current pathname
+
+  // Define paths where the sidebar should NOT be displayed
+  const noSidebarPaths = ["/", "/login", "/MatchDetails"]; // '/' is for index.js
+
+  // Check if the current path is in the noSidebarPaths array
+  const showSidebar = !noSidebarPaths.includes(pathname);
 
   // Function to toggle sidebar visibility
   const toggleSidebar = () => {
-    setIsSidebarOpen(prev => !prev);
+    setIsSidebarOpen((prev) => !prev);
   };
 
   // Function to fetch user ID (can be reused)
@@ -49,11 +59,14 @@ function MyApp({ Component, pageProps }) {
         const today = new Date();
         const currentMonth = today.getMonth();
 
-        const count = allMembersSnapshot.docs.filter(doc => {
+        const count = allMembersSnapshot.docs.filter((doc) => {
           const member = doc.data();
-          if (member.birthDate && typeof member.birthDate === 'string') {
+          if (member.birthDate && typeof member.birthDate === "string") {
             const birthDateObj = new Date(member.birthDate);
-            return !isNaN(birthDateObj.getTime()) && birthDateObj.getMonth() === currentMonth;
+            return (
+              !isNaN(birthDateObj.getTime()) &&
+              birthDateObj.getMonth() === currentMonth
+            );
           }
           return false;
         }).length;
@@ -68,62 +81,80 @@ function MyApp({ Component, pageProps }) {
     }
   }, [userIdForSidebar]); // Re-fetch when userIdForSidebar changes
 
-  // ตั้งค่า isSidebarOpen เป็น true หากอยู่บน Desktop (หน้าจอกว้างกว่า 768px)
+  // Set isSidebarOpen to true if on Desktop (screen wider than 768px)
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth > 768) {
-        setIsSidebarOpen(true); // เปิด sidebar บน desktop
+        // If sidebar is supposed to be shown, open it on desktop
+        if (showSidebar) {
+          setIsSidebarOpen(true);
+        }
       } else {
-        setIsSidebarOpen(false); // ปิด sidebar บน mobile
+        setIsSidebarOpen(false); // Close sidebar on mobile
       }
     };
 
-    // ตั้งค่า initial state
+    // Set initial state
     handleResize();
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [showSidebar]); // Re-run when showSidebar changes
 
   return (
     <div className="app-layout">
-      {/* ส่ง isSidebarOpen และ toggleSidebar ไปให้ Sidebar */}
-      <Sidebar birthDayCount={birthDayCount} isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+      {/* Conditionally render the Sidebar */}
+      {showSidebar && (
+        <Sidebar
+          birthDayCount={birthDayCount}
+          isSidebarOpen={isSidebarOpen}
+          toggleSidebar={toggleSidebar}
+        />
+      )}
 
-      <main className="app-main-content">
-        {/* Hamburger button for mobile */}
-        <button className="sidebar-toggle-button" onClick={toggleSidebar}>
-          <Menu size={24} />
-        </button>
+      <main className={`app-main-content ${!showSidebar ? 'full-width' : ''}`}>
+        {/* Conditionally render Hamburger button for mobile only when sidebar is shown */}
+        {showSidebar && (
+          <button className="sidebar-toggle-button" onClick={toggleSidebar}>
+            <Menu size={24} />
+          </button>
+        )}
         <Component {...pageProps} />
       </main>
 
       <style jsx global>{`
-        html, body, #__next {
+        html,
+        body,
+        #__next {
           height: 100%;
           margin: 0;
           padding: 0;
-          overflow: hidden; /* ป้องกัน scrollbar ซ้อนกัน */
+          overflow: hidden;
         }
 
         .app-layout {
-          display: flex; /* ใช้ flexbox เพื่อวาง Sidebar และเนื้อหาข้างกัน */
-          height: 100vh; /* ทำให้ container สูงเต็มหน้าจอ */
-          width: 100vw; /* ทำให้ container กว้างเต็มหน้าจอ */
-          overflow: hidden; /* ป้องกัน scrollbar รวม */
+          display: flex;
+          height: 100vh;
+          width: 100vw;
+          overflow: hidden;
         }
 
         .app-main-content {
-          flex-grow: 1; /* ทำให้เนื้อหาหลักกินพื้นที่ที่เหลือทั้งหมด */
-          overflow-y: auto; /* เปิดใช้งาน scrollbar เฉพาะส่วนเนื้อหาหลัก */
-          background-color: #e8f0f7; /* สีพื้นหลังของเนื้อหาหลัก */
-          position: relative; /* สำหรับตำแหน่งของ toggle button */
+          flex-grow: 1;
+          overflow-y: auto;
+          background-color: #e8f0f7;
+          position: relative;
+        }
+
+        /* New style for full-width content when sidebar is not present */
+        .app-main-content.full-width {
+            margin-left: 0 !important; /* Ensure no left margin */
+            width: 100% !important; /* Take full width */
         }
 
         /* Sidebar toggle button (mobile only) */
         .sidebar-toggle-button {
-          position: fixed; /* ใช้ fixed เพื่อให้อยู่ด้านบนเสมอ */
+          position: fixed;
           top: 15px;
           left: 15px;
           background: #007bff;
@@ -132,33 +163,23 @@ function MyApp({ Component, pageProps }) {
           padding: 10px;
           border-radius: 5px;
           cursor: pointer;
-          z-index: 10; /* ให้ปุ่มอยู่เหนือเนื้อหา */
-          display: none; /* ซ่อนไว้บน desktop */
-          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+          z-index: 10;
+          display: none; /* Hidden on desktop by default */
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
 
         .sidebar-toggle-button:hover {
-            background: #0056b3;
+          background: #0056b3;
         }
 
         /* Media query for mobile screens */
         @media (max-width: 768px) {
-          .app-layout {
-            /* ไม่ต้องเปลี่ยน display เป็น block ครับ ให้คง flex ไว้ */
-            /* แต่ main-content จะต้องกินพื้นที่เต็ม */
-          }
-
           .sidebar-toggle-button {
-            display: block; /* แสดงปุ่ม toggle บนมือถือ */
-          }
-
-          .app-main-content {
-            margin-left: 0; /* ตรวจสอบให้แน่ใจว่าไม่มี margin ซ้ายค้างอยู่ */
-            width: 100%; /* เนื้อหาหลักกินพื้นที่เต็ม */
+            display: block; /* Show toggle button on mobile */
           }
         }
 
-        /* --- Global styles to reset default browser margins/paddings --- */
+        /* Global styles to reset default browser margins/paddings */
         * {
           box-sizing: border-box;
         }
