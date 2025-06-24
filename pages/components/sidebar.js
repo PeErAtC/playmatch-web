@@ -8,9 +8,12 @@ import {
   ChevronUp,
   User2,
   Gift, // Import the Gift icon for BirthDay
-  X, // Import the X icon for closing
+  X, // Import the X icon for closing (for mobile)
   LayoutDashboard, // Import the new icon for Dashboard
-} from "lucide-react"; // Make sure LayoutDashboard is available in lucide-react
+  // ChevronLeft, // Removed, no longer needed
+  // ChevronRight, // Removed, no longer needed
+} from "lucide-react";
+import Swal from "sweetalert2"; // Ensure Swal is imported
 
 const menuList = [
   {
@@ -34,36 +37,32 @@ const menuList = [
     icon: <Trophy size={20} strokeWidth={1.7} />,
   },
   {
-    label: "BirthDay", // New menu item
-    path: "/Birthday", // New path for BirthDay
-    icon: <Gift size={20} strokeWidth={1.7} />, // New icon for BirthDay
+    label: "BirthDay",
+    path: "/Birthday",
+    icon: <Gift size={20} strokeWidth={1.7} />,
   },
   {
-    label: "Dashboard", // New menu item
-    path: "/dashboard", // New path for Dashboard
-    icon: <LayoutDashboard size={20} strokeWidth={1.7} />, // New icon for Dashboard
+    label: "Dashboard",
+    path: "/dashboard",
+    icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
   },
 ];
 
-// Sidebar Component - Now accepts birthDayCount, isSidebarOpen, and toggleSidebar prop
 export default function Sidebar({
   birthDayCount = 0,
-  isSidebarOpen,
-  toggleSidebar,
+  isSidebarOpen, // This prop now controls desktop collapse/expand and mobile open/close
+  toggleSidebar, // This function toggles the isSidebarOpen state
 }) {
-  // Added toggleSidebar
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [groupName, setGroupName] = useState("");
   const [activePath, setActivePath] = useState("");
 
   useEffect(() => {
-    // Set active path based on current window location
     setActivePath(window.location.pathname);
   }, []);
 
   useEffect(() => {
-    // Check if window is defined before accessing localStorage
     if (typeof window !== "undefined") {
       const username = localStorage.getItem("loggedInUsername");
       const group = localStorage.getItem("groupName");
@@ -79,16 +78,37 @@ export default function Sidebar({
     window.location.href = "/login"; // Redirect to login page
   };
 
+  // Close dropdown if clicked outside (only relevant when dropdown is open)
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      // Check if click is outside the user info and dropdown menu
+      if (isDropdownOpen && !event.target.closest(".sidebar-user")) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [isDropdownOpen]);
+
   return (
-    <aside className={`sidebar ${isSidebarOpen ? "open" : "closed"}`}>
-      {/* Close button for mobile sidebar - conditionally render this on mobile too */}
-      <button className="sidebar-close-button" onClick={toggleSidebar}>
+    <aside className={`sidebar ${isSidebarOpen ? "open" : "collapsed"}`}>
+      {" "}
+      {/* Changed 'closed' to 'collapsed' for clarity on desktop */}
+      {/* Close button for mobile sidebar (only visible on mobile) */}
+      <button className="sidebar-mobile-close-button" onClick={toggleSidebar}>
         <X size={24} />
       </button>
-      {/* Logo & GroupName */}
-      <div className="sidebar-logo">
+      {/* Logo & GroupName - Now clickable to toggle sidebar */}
+      <div className="sidebar-logo" onClick={toggleSidebar}>
+        {" "}
+        {/* Added onClick here */}
         <div className="logo-icon">B</div>
-        <span className="logo-text">{groupName || "PlayMatch"}</span>
+        {isSidebarOpen && (
+          <span className="logo-text">{groupName || "PlayMatch"}</span>
+        )}
       </div>
       <hr className="sidebar-divider" />
       {/* Menu */}
@@ -102,9 +122,10 @@ export default function Sidebar({
             }`}
           >
             <span className="menu-icon">{item.icon}</span>
-            <span className="menu-label">{item.label}</span>
+            {isSidebarOpen && <span className="menu-label">{item.label}</span>}
             {item.label === "BirthDay" &&
-              birthDayCount > 0 && ( // Conditionally render badge for BirthDay
+              birthDayCount > 0 &&
+              isSidebarOpen && ( // Conditionally render badge and only when sidebar is open
                 <span className="birthday-badge">{birthDayCount}</span>
               )}
           </a>
@@ -120,69 +141,117 @@ export default function Sidebar({
           <div className="user-avatar">
             <User2 size={21} />
           </div>
-          <span className="user-name">{loggedInUsername || "Demo"}</span>
-          {isDropdownOpen ? (
-            <ChevronUp size={18} className="user-chevron" />
-          ) : (
-            <ChevronDown size={18} className="user-chevron" />
+          {isSidebarOpen && (
+            <span className="user-name">{loggedInUsername || "Demo"}</span>
           )}
+          {isSidebarOpen &&
+            (isDropdownOpen ? (
+              <ChevronUp size={18} className="user-chevron" />
+            ) : (
+              <ChevronDown size={18} className="user-chevron" />
+            ))}
         </div>
-        {isDropdownOpen && (
-          <div className="user-dropdown-menu">
-            <button
-              className="dropdown-item"
-              onClick={() => {
-                // Use SweetAlert2 instead of alert()
-                Swal.fire({
-                  title: "ยังไม่เปิดใช้งาน",
-                  text: "ฟังก์ชัน Settings ยังไม่พร้อมใช้งาน",
-                  icon: "info",
-                  confirmButtonText: "รับทราบ",
-                });
-              }}
-            >
-              Settings
-            </button>
-            <button className="dropdown-item" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
-        )}
+        {isDropdownOpen &&
+          isSidebarOpen && ( // Only show dropdown if sidebar is open too
+            <div className="user-dropdown-menu">
+              <button
+                className="dropdown-item"
+                onClick={() => {
+                  Swal.fire({
+                    title: "ยังไม่เปิดใช้งาน",
+                    text: "ฟังก์ชัน Settings ยังไม่พร้อมใช้งาน",
+                    icon: "info",
+                    confirmButtonText: "รับทราบ",
+                  });
+                  setIsDropdownOpen(false); // Close dropdown after clicking
+                }}
+              >
+                Settings
+              </button>
+              <button className="dropdown-item" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
+          )}
       </div>
+      {/* Removed Toggle Button for Desktop - now logo is clickable */}
+      {/* <button className="sidebar-toggle-button" onClick={toggleSidebar}>
+        {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+      </button> */}
       {/* CSS-in-JS */}
       <style jsx>{`
+        /* Global font */
+        * {
+          font-family: "Kanit", sans-serif;
+          box-sizing: border-box;
+        }
+
         .sidebar {
-          width: 240px;
           height: 100vh;
           background: #212529;
           color: #fff;
           display: flex;
           flex-direction: column;
-          position: relative; /* Important: so fixed position on mobile doesn't lose context */
+          position: relative;
           box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
           z-index: 100;
-          transition: transform 0.3s ease-in-out; /* Add transition */
-
-          /* Default desktop state - always open and visible */
-          transform: translateX(0%);
+          transition: width 0.3s ease-in-out; /* Smooth transition for width */
         }
 
-        /* Mobile sidebar hidden/open states */
+        /* Desktop state: Open */
+        .sidebar.open {
+          width: 240px;
+        }
+
+        /* Desktop state: Collapsed */
+        .sidebar.collapsed {
+          width: 70px; /* Adjust this width for collapsed state (icon size + padding) */
+        }
+
+        /* Mobile specific styles - overrides desktop collapse */
         @media (max-width: 768px) {
           .sidebar {
-            position: fixed; /* Make it float above content */
+            position: fixed;
             top: 0;
             left: 0;
-            height: 100vh; /* Full viewport height */
-            z-index: 200; /* Higher than toggle button and content */
-            /* Control display with 'open'/'closed' classes instead */
-          }
-          .sidebar.closed {
-            transform: translateX(-100%); /* Hide to the left */
-            /* display: none; Don't use display: none with transition */
+            height: 100vh;
+            z-index: 200;
+            width: 240px; /* Fixed width when open on mobile */
+            transform: translateX(-100%); /* Hidden by default on mobile */
+            transition: transform 0.3s ease-in-out; /* Slide transition */
           }
           .sidebar.open {
-            transform: translateX(0%); /* Show it */
+            transform: translateX(0%); /* Show on mobile */
+          }
+          .sidebar.collapsed {
+            /* On mobile, 'collapsed' means it's closed and off-screen */
+            transform: translateX(-100%);
+            width: 240px; /* Maintain full width when off-screen for smooth slide-in */
+          }
+
+          /* Hide desktop toggle button on mobile (now completely removed from JSX) */
+          /* .sidebar-toggle-button {
+            display: none !important;
+          } */
+
+          /* Show mobile close button on mobile */
+          .sidebar-mobile-close-button {
+            display: block !important;
+          }
+
+          /* Ensure all text elements are visible when mobile sidebar is open */
+          .sidebar-logo .logo-text,
+          .sidebar-menu-item .menu-label,
+          .sidebar-user .user-name {
+            display: block !important; /* Force display when open on mobile */
+            opacity: 1 !important;
+            visibility: visible !important;
+          }
+          .sidebar-user .user-chevron {
+            display: block !important;
+          }
+          .birthday-badge {
+            display: flex !important; /* Ensure badge is visible on mobile */
           }
         }
 
@@ -191,7 +260,19 @@ export default function Sidebar({
           align-items: center;
           gap: 14px;
           padding: 32px 22px 17px 22px;
+          overflow: hidden; /* Hide overflowing text during transition */
+          cursor: pointer; /* Indicate it's clickable */
+          user-select: none; /* Prevent text selection on click */
         }
+        .sidebar.collapsed .sidebar-logo {
+          padding-left: 17px; /* Adjust padding when collapsed */
+          padding-right: 17px;
+          justify-content: center; /* Center the icon when collapsed */
+        }
+        .sidebar-logo:hover {
+          background-color: #2a2e33; /* Slight hover effect */
+        }
+
         .logo-icon {
           width: 38px;
           height: 38px;
@@ -203,24 +284,39 @@ export default function Sidebar({
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0; /* Prevent icon from shrinking */
         }
         .logo-text {
           font-size: 1.25rem;
           font-weight: bold;
           color: #fff;
           letter-spacing: 0.01em;
+          white-space: nowrap; /* Prevent text wrap */
+          opacity: 1;
+          transition: opacity 0.3s ease-in-out;
         }
+        .sidebar.collapsed .logo-text {
+          opacity: 0;
+          width: 0; /* Collapse width to hide */
+          overflow: hidden;
+          pointer-events: none; /* Make text not clickable when hidden */
+        }
+
         .sidebar-divider {
           border: none;
           border-top: 1px solid #353945;
           margin: 0 22px 13px 22px;
         }
+        .sidebar.collapsed .sidebar-divider {
+          margin: 0 17px 13px 17px; /* Adjust margin when collapsed */
+        }
+
         .sidebar-menu {
           display: flex;
           flex-direction: column;
           gap: 6px;
           padding: 6px 0;
-          flex-grow: 1; /* Allow menu to take available space */
+          flex-grow: 1;
         }
         .sidebar-menu-item {
           display: flex;
@@ -235,12 +331,19 @@ export default function Sidebar({
           cursor: pointer;
           transition: background 0.18s, color 0.18s;
           font-weight: 500;
-          position: relative; /* Essential for positioning the badge */
+          position: relative;
         }
+        .sidebar.collapsed .sidebar-menu-item {
+          justify-content: center; /* Center icon when collapsed */
+          padding: 8px 0; /* Adjust padding for centered icon */
+          margin: 2px 5px; /* Adjust margin for more compact look */
+        }
+
         .sidebar-menu-item .menu-icon {
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
         }
         .sidebar-menu-item.active,
         .sidebar-menu-item:hover {
@@ -255,34 +358,52 @@ export default function Sidebar({
           background: #19447b;
         }
         .sidebar-menu-item .menu-label {
-          letter-spacing: 0.01em;
-          flex-grow: 1; /* Allow label to take available space */
+          white-space: nowrap; /* Prevent text wrap */
+          opacity: 1;
+          transition: opacity 0.3s ease-in-out;
+        }
+        .sidebar.collapsed .menu-label {
+          opacity: 0;
+          width: 0; /* Collapse width to hide */
+          overflow: hidden;
+          pointer-events: none;
         }
 
-        /* --- NEW: Birthday Badge Styles --- */
+        /* Birthday Badge Styles */
         .birthday-badge {
-          background-color: #dc3545; /* Red color for notification */
+          background-color: #dc3545;
           color: white;
-          font-size: 0.75rem; /* Smaller font size */
+          font-size: 0.75rem;
           font-weight: 600;
-          padding: 3px 7px; /* Padding for oval/circle shape */
-          border-radius: 12px; /* Makes it pill-shaped for 1-2 digits */
-          min-width: 20px; /* Minimum width to ensure it's visible */
+          padding: 3px 7px;
+          border-radius: 12px;
+          min-width: 20px;
           text-align: center;
-          position: absolute; /* Position relative to .sidebar-menu-item */
-          right: 15px; /* Adjust as needed to align within the margin */
+          position: absolute;
+          right: 15px;
           top: 50%;
           transform: translateY(-50%);
-          line-height: 1; /* Ensure text is vertically centered */
+          line-height: 1;
           box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+          transition: opacity 0.3s ease-in-out;
         }
-        /* --- END Birthday Badge Styles --- */
+        .sidebar.collapsed .birthday-badge {
+          opacity: 0; /* Hide badge when collapsed */
+          pointer-events: none;
+        }
 
         .sidebar-user {
-          margin-top: auto; /* Pushes user block to the bottom */
+          margin-top: auto;
           padding: 22px 16px 24px 22px;
           position: relative;
+          overflow: hidden; /* Hide overflowing user name when collapsed */
         }
+        .sidebar.collapsed .sidebar-user {
+          padding-left: 17px; /* Adjust padding when collapsed */
+          padding-right: 17px;
+          justify-content: center; /* Center the avatar */
+        }
+
         .user-info {
           display: flex;
           align-items: center;
@@ -295,6 +416,11 @@ export default function Sidebar({
           border-radius: 7px;
           transition: background 0.2s, color 0.2s;
         }
+        .sidebar.collapsed .user-info {
+          justify-content: center; /* Center content when collapsed */
+          padding: 8px 0; /* Adjust padding */
+        }
+
         .user-info:hover {
           background: #146cfa;
           color: #fff;
@@ -308,14 +434,31 @@ export default function Sidebar({
           align-items: center;
           justify-content: center;
           overflow: hidden;
+          flex-shrink: 0;
         }
         .user-name {
           flex: 1;
           font-size: 1rem;
+          white-space: nowrap; /* Prevent text wrap */
+          opacity: 1;
+          transition: opacity 0.3s ease-in-out;
+        }
+        .sidebar.collapsed .user-name {
+          opacity: 0;
+          width: 0; /* Hide text */
+          overflow: hidden;
+          pointer-events: none;
         }
         .user-chevron {
           color: #b5b5b5;
+          opacity: 1;
+          transition: opacity 0.3s ease-in-out;
         }
+        .sidebar.collapsed .user-chevron {
+          opacity: 0;
+          pointer-events: none;
+        }
+
         .user-dropdown-menu {
           position: absolute;
           left: 25px;
@@ -330,6 +473,11 @@ export default function Sidebar({
           border: 1px solid #2e3242;
           overflow: hidden;
         }
+        .sidebar.collapsed .user-dropdown-menu {
+          /* Ensure dropdown is not visible when sidebar is collapsed */
+          display: none !important;
+        }
+
         .dropdown-item {
           width: 100%;
           background: none;
@@ -347,8 +495,8 @@ export default function Sidebar({
           color: #fff;
         }
 
-        /* Sidebar close button for mobile */
-        .sidebar-close-button {
+        /* Mobile specific close button (hidden on desktop) */
+        .sidebar-mobile-close-button {
           position: absolute;
           top: 15px;
           right: 15px;
@@ -356,21 +504,63 @@ export default function Sidebar({
           border: none;
           color: #ccc;
           cursor: pointer;
-          z-index: 110; /* Higher than sidebar content */
-          display: none; /* Hidden on desktop */
+          z-index: 110;
+          display: none; /* Hidden on desktop by default */
         }
-        .sidebar-close-button:hover {
+        .sidebar-mobile-close-button:hover {
           color: white;
         }
 
+        /* Removed Desktop Toggle Button styles as button is removed from JSX */
+        /*
+        .sidebar-toggle-button { ... }
+        .sidebar.collapsed .sidebar-toggle-button { ... }
+        */
+
         @media (max-width: 768px) {
-          .sidebar-close-button {
-            display: block; /* Show close button on mobile */
-          }
           .sidebar {
-            width: 240px; /* Set sidebar width when open on mobile */
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            z-index: 200;
+            width: 240px; /* Fixed width when open on mobile */
+            transform: translateX(-100%); /* Hidden by default on mobile */
+            transition: transform 0.3s ease-in-out; /* Slide transition */
           }
-          /* No padding/margin in mobile media query; use default values defined at the top */
+          .sidebar.open {
+            transform: translateX(0%); /* Show on mobile */
+          }
+          .sidebar.collapsed {
+            /* On mobile, 'collapsed' means it's closed and off-screen */
+            transform: translateX(-100%);
+            width: 240px; /* Maintain full width when off-screen for smooth slide-in */
+          }
+
+          /* Show mobile close button on mobile */
+          .sidebar-mobile-close-button {
+            display: block !important;
+          }
+
+          /* Ensure all text elements are visible when mobile sidebar is open */
+          .sidebar-logo .logo-text,
+          .sidebar-menu-item .menu-label,
+          .sidebar-user .user-name {
+            display: block !important; /* Force display when open on mobile */
+            opacity: 1 !important;
+            visibility: visible !important;
+          }
+          .sidebar-user .user-chevron {
+            display: block !important;
+          }
+          .birthday-badge {
+            display: flex !important; /* Ensure badge is visible on mobile */
+          }
+
+          /* On mobile, the logo also triggers the toggle, but it behaves as open/close, not collapse/expand */
+          .sidebar-logo {
+            cursor: pointer;
+          }
         }
       `}</style>
     </aside>
