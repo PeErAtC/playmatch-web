@@ -172,7 +172,7 @@ export default function Login() {
           border-radius: 1.6rem;
           padding: 44px 44px 26px 44px;
           width: 100%;
-          max-width: 370px;
+          max-width: 420px;
           display: flex;
           flex-direction: column;
           align-items: center;
