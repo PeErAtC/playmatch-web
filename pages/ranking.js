@@ -27,7 +27,7 @@ const Ranking = () => {
 
   // --- State for Pagination ---
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20); // 20 รายการต่อหน้า
+  const [itemsPerPage] = useState(17); 
 
   // --- State for Search ---
   const [searchTerm, setSearchTerm] = useState("");
@@ -503,7 +503,7 @@ const Ranking = () => {
                     </div>
                     <div className="stat-item">
                       <p className="stat-value">{player.totalGames || 0}</p>
-                      <p className="stat-label">รวมเกม</p>
+                      <p className="stat-label">รวม</p>
                     </div>
                     <div className="stat-item">
                       <p className="stat-value">
@@ -589,7 +589,7 @@ const Ranking = () => {
                       <th className="table-header-wins">ชนะ</th>
                       <th className="table-header-draws">เสมอ</th>
                       <th className="table-header-losses">แพ้</th>
-                      <th className="table-header-total-games">รวมเกม</th>
+                      <th className="table-header-total-games">รวม</th>
                       <th className="table-header-win-rate">อัตราชนะ%</th>
                       <th className="table-header-score">คะแนน</th>
                     </tr>
