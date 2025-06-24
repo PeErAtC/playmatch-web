@@ -10,8 +10,8 @@ import {
   Gift, // Import the Gift icon for BirthDay
   X, // Import the X icon for closing (for mobile)
   LayoutDashboard, // Import the new icon for Dashboard
-  // ChevronLeft, // Removed, no longer needed
-  // ChevronRight, // Removed, no longer needed
+  Settings, // Import the Settings icon
+  LogOut, // Import the LogOut icon for Logout
 } from "lucide-react";
 import Swal from "sweetalert2"; // Ensure Swal is imported
 
@@ -45,6 +45,11 @@ const menuList = [
     label: "Dashboard",
     path: "/dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
+  },
+  {
+    label: "Settings", // New menu item for Settings
+    path: "/settings", // Path to the new settings page
+    icon: <Settings size={20} strokeWidth={1.7} />, // Icon for Settings
   },
 ];
 
@@ -169,6 +174,8 @@ export default function Sidebar({
                 Settings
               </button>
               <button className="dropdown-item" onClick={handleLogout}>
+                <LogOut size={18} strokeWidth={1.7} className="dropdown-icon" />{" "}
+                {/* เพิ่มไอคอน LogOut */}
                 Logout
               </button>
             </div>
@@ -195,7 +202,7 @@ export default function Sidebar({
           position: relative;
           box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
           z-index: 100;
-          transition: width 0.3s ease-in-out; /* Smooth transition for width */
+          transition: width 0.3s ease-in-out;
         }
 
         /* Desktop state: Open */
@@ -205,10 +212,10 @@ export default function Sidebar({
 
         /* Desktop state: Collapsed */
         .sidebar.collapsed {
-          width: 70px; /* Adjust this width for collapsed state (icon size + padding) */
+          width: 70px;
         }
 
-        /* Mobile specific styles - overrides desktop collapse */
+        /* Mobile specific styles */
         @media (max-width: 768px) {
           .sidebar {
             position: fixed;
@@ -216,34 +223,26 @@ export default function Sidebar({
             left: 0;
             height: 100vh;
             z-index: 200;
-            width: 240px; /* Fixed width when open on mobile */
-            transform: translateX(-100%); /* Hidden by default on mobile */
-            transition: transform 0.3s ease-in-out; /* Slide transition */
+            width: 240px;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
           }
           .sidebar.open {
-            transform: translateX(0%); /* Show on mobile */
+            transform: translateX(0%);
           }
           .sidebar.collapsed {
-            /* On mobile, 'collapsed' means it's closed and off-screen */
             transform: translateX(-100%);
-            width: 240px; /* Maintain full width when off-screen for smooth slide-in */
+            width: 240px;
           }
 
-          /* Hide desktop toggle button on mobile (now completely removed from JSX) */
-          /* .sidebar-toggle-button {
-            display: none !important;
-          } */
-
-          /* Show mobile close button on mobile */
           .sidebar-mobile-close-button {
             display: block !important;
           }
 
-          /* Ensure all text elements are visible when mobile sidebar is open */
           .sidebar-logo .logo-text,
           .sidebar-menu-item .menu-label,
           .sidebar-user .user-name {
-            display: block !important; /* Force display when open on mobile */
+            display: block !important;
             opacity: 1 !important;
             visibility: visible !important;
           }
@@ -251,7 +250,11 @@ export default function Sidebar({
             display: block !important;
           }
           .birthday-badge {
-            display: flex !important; /* Ensure badge is visible on mobile */
+            display: flex !important;
+          }
+
+          .sidebar-logo {
+            cursor: pointer;
           }
         }
 
@@ -260,17 +263,17 @@ export default function Sidebar({
           align-items: center;
           gap: 14px;
           padding: 32px 22px 17px 22px;
-          overflow: hidden; /* Hide overflowing text during transition */
-          cursor: pointer; /* Indicate it's clickable */
-          user-select: none; /* Prevent text selection on click */
+          overflow: hidden;
+          cursor: pointer;
+          user-select: none;
         }
         .sidebar.collapsed .sidebar-logo {
-          padding-left: 17px; /* Adjust padding when collapsed */
+          padding-left: 17px;
           padding-right: 17px;
-          justify-content: center; /* Center the icon when collapsed */
+          justify-content: center;
         }
         .sidebar-logo:hover {
-          background-color: #2a2e33; /* Slight hover effect */
+          background-color: #2a2e33;
         }
 
         .logo-icon {
@@ -284,22 +287,22 @@ export default function Sidebar({
           display: flex;
           align-items: center;
           justify-content: center;
-          flex-shrink: 0; /* Prevent icon from shrinking */
+          flex-shrink: 0;
         }
         .logo-text {
           font-size: 1.25rem;
           font-weight: bold;
           color: #fff;
           letter-spacing: 0.01em;
-          white-space: nowrap; /* Prevent text wrap */
+          white-space: nowrap;
           opacity: 1;
           transition: opacity 0.3s ease-in-out;
         }
         .sidebar.collapsed .logo-text {
           opacity: 0;
-          width: 0; /* Collapse width to hide */
+          width: 0;
           overflow: hidden;
-          pointer-events: none; /* Make text not clickable when hidden */
+          pointer-events: none;
         }
 
         .sidebar-divider {
@@ -308,7 +311,7 @@ export default function Sidebar({
           margin: 0 22px 13px 22px;
         }
         .sidebar.collapsed .sidebar-divider {
-          margin: 0 17px 13px 17px; /* Adjust margin when collapsed */
+          margin: 0 17px 13px 17px;
         }
 
         .sidebar-menu {
@@ -334,9 +337,9 @@ export default function Sidebar({
           position: relative;
         }
         .sidebar.collapsed .sidebar-menu-item {
-          justify-content: center; /* Center icon when collapsed */
-          padding: 8px 0; /* Adjust padding for centered icon */
-          margin: 2px 5px; /* Adjust margin for more compact look */
+          justify-content: center;
+          padding: 8px 0;
+          margin: 2px 5px;
         }
 
         .sidebar-menu-item .menu-icon {
@@ -358,13 +361,13 @@ export default function Sidebar({
           background: #19447b;
         }
         .sidebar-menu-item .menu-label {
-          white-space: nowrap; /* Prevent text wrap */
+          white-space: nowrap;
           opacity: 1;
           transition: opacity 0.3s ease-in-out;
         }
         .sidebar.collapsed .menu-label {
           opacity: 0;
-          width: 0; /* Collapse width to hide */
+          width: 0;
           overflow: hidden;
           pointer-events: none;
         }
@@ -388,7 +391,7 @@ export default function Sidebar({
           transition: opacity 0.3s ease-in-out;
         }
         .sidebar.collapsed .birthday-badge {
-          opacity: 0; /* Hide badge when collapsed */
+          opacity: 0;
           pointer-events: none;
         }
 
@@ -396,12 +399,12 @@ export default function Sidebar({
           margin-top: auto;
           padding: 22px 16px 24px 22px;
           position: relative;
-          overflow: hidden; /* Hide overflowing user name when collapsed */
+          overflow: hidden;
         }
         .sidebar.collapsed .sidebar-user {
-          padding-left: 17px; /* Adjust padding when collapsed */
+          padding-left: 17px;
           padding-right: 17px;
-          justify-content: center; /* Center the avatar */
+          justify-content: center;
         }
 
         .user-info {
@@ -417,8 +420,8 @@ export default function Sidebar({
           transition: background 0.2s, color 0.2s;
         }
         .sidebar.collapsed .user-info {
-          justify-content: center; /* Center content when collapsed */
-          padding: 8px 0; /* Adjust padding */
+          justify-content: center;
+          padding: 8px 0;
         }
 
         .user-info:hover {
@@ -439,13 +442,13 @@ export default function Sidebar({
         .user-name {
           flex: 1;
           font-size: 1rem;
-          white-space: nowrap; /* Prevent text wrap */
+          white-space: nowrap;
           opacity: 1;
           transition: opacity 0.3s ease-in-out;
         }
         .sidebar.collapsed .user-name {
           opacity: 0;
-          width: 0; /* Hide text */
+          width: 0;
           overflow: hidden;
           pointer-events: none;
         }
@@ -474,7 +477,6 @@ export default function Sidebar({
           overflow: hidden;
         }
         .sidebar.collapsed .user-dropdown-menu {
-          /* Ensure dropdown is not visible when sidebar is collapsed */
           display: none !important;
         }
 
@@ -489,6 +491,9 @@ export default function Sidebar({
           padding: 12px 18px;
           cursor: pointer;
           transition: background 0.18s, color 0.18s;
+          display: flex; /* เพิ่ม display flex เพื่อจัดเรียงไอคอนกับข้อความ */
+          align-items: center; /* จัดให้อยู่กึ่งกลางในแนวตั้ง */
+          gap: 10px; /* เพิ่มระยะห่างระหว่างไอคอนกับข้อความ */
         }
         .dropdown-item:hover {
           background: #146cfa;
@@ -505,62 +510,10 @@ export default function Sidebar({
           color: #ccc;
           cursor: pointer;
           z-index: 110;
-          display: none; /* Hidden on desktop by default */
+          display: none;
         }
         .sidebar-mobile-close-button:hover {
           color: white;
-        }
-
-        /* Removed Desktop Toggle Button styles as button is removed from JSX */
-        /*
-        .sidebar-toggle-button { ... }
-        .sidebar.collapsed .sidebar-toggle-button { ... }
-        */
-
-        @media (max-width: 768px) {
-          .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: 100vh;
-            z-index: 200;
-            width: 240px; /* Fixed width when open on mobile */
-            transform: translateX(-100%); /* Hidden by default on mobile */
-            transition: transform 0.3s ease-in-out; /* Slide transition */
-          }
-          .sidebar.open {
-            transform: translateX(0%); /* Show on mobile */
-          }
-          .sidebar.collapsed {
-            /* On mobile, 'collapsed' means it's closed and off-screen */
-            transform: translateX(-100%);
-            width: 240px; /* Maintain full width when off-screen for smooth slide-in */
-          }
-
-          /* Show mobile close button on mobile */
-          .sidebar-mobile-close-button {
-            display: block !important;
-          }
-
-          /* Ensure all text elements are visible when mobile sidebar is open */
-          .sidebar-logo .logo-text,
-          .sidebar-menu-item .menu-label,
-          .sidebar-user .user-name {
-            display: block !important; /* Force display when open on mobile */
-            opacity: 1 !important;
-            visibility: visible !important;
-          }
-          .sidebar-user .user-chevron {
-            display: block !important;
-          }
-          .birthday-badge {
-            display: flex !important; /* Ensure badge is visible on mobile */
-          }
-
-          /* On mobile, the logo also triggers the toggle, but it behaves as open/close, not collapse/expand */
-          .sidebar-logo {
-            cursor: pointer;
-          }
         }
       `}</style>
     </aside>
