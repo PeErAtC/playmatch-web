@@ -1,6 +1,5 @@
 // Home.js
-import React, { useState, useEffect, useCallback } from "react";
-// import Sidebar from "./components/sidebar"; // Remove this line
+import React, { useState, useEffect, useCallback, useMemo } from "react"; // Added useMemo
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -12,9 +11,11 @@ import {
   deleteDoc,
   query,
   where,
-  writeBatch, // Import writeBatch for efficient bulk updates
+  writeBatch,
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
+// Import ChevronUp, ChevronDown for active sorting, and ArrowUpDown for default sortable state
+import { ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'; 
 
 // Modal Component - Integrated within Home.js
 const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
@@ -207,6 +208,25 @@ const Home = () => {
   const [membersPerPage] = useState(20);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [isResettingStatus, setIsResettingStatus] = useState(false); // New state for reset status button
+
+  // State for sorting
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+
+  // Custom order for levels (from lowest to highest based on typical badminton ranking)
+  const levelOrder = useMemo(() => [
+    "C",
+    "P-",
+    "P",
+    "N-",
+    "N",
+    "S-",
+    "S",
+    "มือหน้าบ้าน",
+    "มือหน้าบ้าน1",
+    "มือหน้าบ้าน2",
+    "มือหน้าบ้าน3",
+  ], []);
+
 
   // Helper function to calculate age from birth date (YYYY-MM-DD format)
   const calculateAge = (isoBirthDate) => {
@@ -416,16 +436,16 @@ const Home = () => {
             // Generate a unique memberId for each new entry within this batch
             maxIdNum++; // Increment for each new member
             const memberId = `member_${String(maxIdNum).padStart(3, "0")}`;
-
+            
             const memberRef = doc(
-              db,
-              `users/${currentUserId}/Members/${memberId}`
+                db,
+                `users/${currentUserId}/Members/${memberId}`
             );
             // Add the operation to the batch
             batch.set(memberRef, {
-              ...newUser,
-              memberId,
-              createdAt: new Date(),
+                ...newUser,
+                memberId,
+                createdAt: new Date(),
             });
             successCount++;
           }
@@ -509,19 +529,7 @@ const Home = () => {
         ...doc.data(),
       }));
 
-      // Sort by memberId_XXX
-      membersData.sort((a, b) => {
-        const idA =
-          a.memberId && a.memberId.startsWith("member_")
-            ? parseInt(a.memberId.split("_")[1], 10)
-            : Infinity;
-        const idB =
-          b.memberId && b.memberId.startsWith("member_")
-            ? parseInt(b.memberId.split("_")[1], 10)
-            : Infinity;
-        return idA - idB;
-      });
-
+      // Sorting by memberId_XXX is no longer needed here as sorted data is handled in sortedMembers
       return membersData;
     } catch (error) {
       console.error("Error fetching members data:", error);
@@ -546,8 +554,8 @@ const Home = () => {
     }
   }, [currentUserId, fetchMembers]);
 
+  // This function is now used with a simple counter
   const generateMemberId = (currentMaxIdNum) => {
-    // This function is now used with a simple counter
     return `member_${String(currentMaxIdNum).padStart(3, "0")}`;
   };
 
@@ -647,7 +655,7 @@ const Home = () => {
           return max;
         }, 0);
         memberId = generateMemberId(maxIdNum + 1); // Increment for the new member
-
+        
         const memberRef = doc(db, `users/${currentUserId}/Members/${memberId}`);
         await setDoc(memberRef, {
           ...newUser,
@@ -719,7 +727,7 @@ const Home = () => {
     }
   };
 
-  // NEW: Function to reset all member statuses to "ไม่มา"
+  // Function to reset all member statuses to "ไม่มา"
   const handleResetAllStatus = async () => {
     const result = await Swal.fire({
       title: "รีเซ็ตสถานะทั้งหมด?",
@@ -746,32 +754,21 @@ const Home = () => {
       const membersSnapshot = await getDocs(membersRef);
 
       membersSnapshot.docs.forEach((memberDoc) => {
-        const memberRef = doc(
-          db,
-          `users/${currentUserId}/Members`,
-          memberDoc.id
-        );
+        const memberRef = doc(db, `users/${currentUserId}/Members`, memberDoc.id);
         batch.update(memberRef, { status: "ไม่มา" });
       });
 
       await batch.commit(); // Commit all updates in a single batch
-      Swal.fire(
-        "สำเร็จ!",
-        "รีเซ็ตสถานะสมาชิกทั้งหมดเป็น 'ไม่มา' สำเร็จ!",
-        "success"
-      );
+      Swal.fire("สำเร็จ!", "รีเซ็ตสถานะสมาชิกทั้งหมดเป็น 'ไม่มา' สำเร็จ!", "success");
       fetchMembers(); // Re-fetch members to update UI
     } catch (error) {
       console.error("Error resetting all statuses:", error);
-      Swal.fire(
-        "เกิดข้อผิดพลาด",
-        "ไม่สามารถรีเซ็ตสถานะได้: " + error.message,
-        "error"
-      );
+      Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถรีเซ็ตสถานะได้: " + error.message, "error");
     } finally {
       setIsResettingStatus(false);
     }
   };
+
 
   const clearForm = () => {
     setName("");
@@ -780,8 +777,8 @@ const Home = () => {
     setHanded("");
     setPhone("");
     setBirthDate(""); // Clear birthDate
+    setStatus("ไม่มา"); // Default status for new members
     setExperience("");
-    setStatus("ไม่มา");
     setSelectedUser(null);
     setIsEditing(false);
   };
@@ -791,27 +788,96 @@ const Home = () => {
     setIsFormExpanded((prev) => !prev);
   };
 
-  const filteredMembers = members.filter((user) =>
-    user.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Sorting logic
+  const sortedMembers = useMemo(() => {
+    let sortableMembers = [...members]; // Create a copy to sort
+    if (search) {
+      sortableMembers = sortableMembers.filter((user) =>
+        user.name?.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    if (sortConfig.key !== null) {
+      sortableMembers.sort((a, b) => {
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        // Custom sorting for 'level'
+        if (sortConfig.key === 'level') {
+          const aIndex = levelOrder.indexOf(aValue);
+          const bIndex = levelOrder.indexOf(bValue);
+
+          if (aIndex === -1 && bIndex === -1) return 0; // Both unknown, keep original order
+          if (aIndex === -1) return sortConfig.direction === 'ascending' ? 1 : -1; // Unknown to end
+          if (bIndex === -1) return sortConfig.direction === 'ascending' ? -1 : 1; // Known to end
+
+          if (aIndex < bIndex) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+          }
+          if (aIndex > bIndex) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+          }
+          return 0; // Values are equal
+        } 
+        // Default sorting for other keys (e.g., name, experience, etc.)
+        else if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return sortConfig.direction === 'ascending'
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        } else {
+            // Fallback for numbers or other types
+            if (aValue < bValue) {
+                return sortConfig.direction === 'ascending' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'ascending' ? 1 : -1;
+            }
+            return 0;
+        }
+      });
+    }
+    return sortableMembers;
+  }, [members, search, sortConfig, levelOrder]); // Depend on members, search, sortConfig, and levelOrder
+
+  // Function to handle sorting requests
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Function to get sorting icon
+  const getSortIcon = (key) => {
+    if (sortConfig.key === key) {
+      // If this column is currently sorted
+      if (sortConfig.direction === 'ascending') {
+        return <ChevronUp size={16} className="sort-icon" />;
+      } else {
+        return <ChevronDown size={16} className="sort-icon" />;
+      }
+    }
+    // If this column is not currently sorted, show the combined icon
+    return <ArrowUpDown size={16} className="sort-icon" />;
+  };
+
 
   const indexOfLastMember = currentPage * membersPerPage;
   const indexOfFirstMember = indexOfLastMember - membersPerPage;
-  const currentMembers = filteredMembers.slice(
+  const currentMembers = sortedMembers.slice( // Use sortedMembers here
     indexOfFirstMember,
     indexOfLastMember
   );
-  const totalPages = Math.ceil(filteredMembers.length / membersPerPage);
+  const totalPages = Math.ceil(sortedMembers.length / membersPerPage); // Use sortedMembers length
 
   return (
     <div className="overall-layout">
       <main className="main-content">
         <h2>สมาชิก</h2>
-        <hr className="title-separator" />{" "}
-        {/* Changed hr to use common class for consistency */}
-        <div className="action-buttons-top">
-          {" "}
-          {/* New container for action buttons */}
+        <hr className="title-separator" /> {/* Changed hr to use common class for consistency */}
+
+        <div className="action-buttons-top"> {/* New container for action buttons */}
           <button
             onClick={() => setShowModal(true)}
             className="generate-excel-button"
@@ -824,28 +890,26 @@ const Home = () => {
             className="reset-status-button"
           >
             {isResettingStatus ? (
-              <>
-                <span className="spinner"></span> กำลังรีเซ็ต...
-              </>
+                <>
+                    <span className="spinner"></span> กำลังรีเซ็ต...
+                </>
             ) : (
-              "รีเซ็ตสถานะทั้งหมด"
+                "รีเซ็ตสถานะทั้งหมด"
             )}
           </button>
         </div>
+
+
         <Modal
           show={showModal}
           onClose={() => setShowModal(false)}
           onGenerateTemplate={generateExcelTemplate}
           onFileUpload={handleFileUpload}
         />
+
         {/* Container for the Form Section (Header + Collapsible Content) */}
         <div className="member-form-section">
-          <div
-            className="form-header-with-toggle"
-            onClick={toggleFormExpansion}
-          >
-            {" "}
-            {/* Added onClick to header */}
+          <div className="form-header-with-toggle" onClick={toggleFormExpansion}> {/* Added onClick to header */}
             <h3 className="form-section-title">กรอกข้อมูลสมาชิก</h3>
             <button
               className="toggle-form-button"
@@ -898,7 +962,7 @@ const Home = () => {
                   {/* Change Label */}
                   <input
                     className="modern-input"
-                    type="date" // **Use type="date"**
+                    type="date" // Use type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
                   />
@@ -911,17 +975,9 @@ const Home = () => {
                     onChange={(e) => setLevel(e.target.value)}
                   >
                     <option value="">เลือกระดับ</option>
-                    <option value="มือหน้าบ้าน">มือหน้าบ้าน</option>
-                    <option value="มือหน้าบ้าน1">มือหน้าบ้าน1</option>
-                    <option value="มือหน้าบ้าน2">มือหน้าบ้าน2</option>
-                    <option value="มือหน้าบ้าน3">มือหน้าบ้าน3</option>
-                    <option value="S-">S-</option>
-                    <option value="S">S</option>
-                    <option value="N-">N-</option>
-                    <option value="N">N</option>
-                    <option value="P-">P-</option>
-                    <option value="P">P</option>
-                    <option value="C">C</option>
+                    {levelOrder.map(lvl => ( // Use levelOrder to populate options
+                        <option key={lvl} value={lvl}>{lvl}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -987,7 +1043,9 @@ const Home = () => {
             </form>
           </div>
         </div>
+
         <hr className="divider-line" />
+
         <div className="search-box">
           <input
             type="text"
@@ -997,9 +1055,11 @@ const Home = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
         <div className="total-members-display">
-          <span>จำนวนสมาชิก: {filteredMembers.length}</span>
+          <span>จำนวนสมาชิก: {sortedMembers.length}</span> {/* Use sortedMembers length */}
         </div>
+
         <div className="pagination-controls">
           <button
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
@@ -1029,13 +1089,16 @@ const Home = () => {
             ถัดไป
           </button>
         </div>
+
         <div className="table-responsive-container">
           <table className="user-table">
             <thead>
               <tr>
                 <th>เลือก</th>
                 <th>ชื่อ</th>
-                <th>ระดับ</th>
+                <th onClick={() => requestSort('level')} className="sortable-header"> {/* Clickable header for sorting */}
+                    ระดับ {getSortIcon('level')}
+                </th>
                 <th>Line ID</th>
                 <th>มือ</th>
                 <th>เบอร์โทร</th>
@@ -1103,46 +1166,44 @@ const Home = () => {
         /* Reset box-sizing for all elements */
         * {
           box-sizing: border-box;
-          font-family: "Kanit", sans-serif; /* Apply Kanit font globally within this component */
+          font-family: 'Kanit', sans-serif; /* Apply Kanit font globally within this component */
         }
 
         /* Base Layout */
         .overall-layout {
-          display: flex; /* Keep this if you want flexbox behavior for direct children */
+          display: block;
           width: 100%; /* Ensure it spans the full width */
           min-height: 100vh; /* Ensure it takes full viewport height */
-          /* If you had styles like grid-template-columns for the sidebar, remove them here */
         }
 
         /* Main Content Area */
         .main-content {
           flex-grow: 1; /* This is the key: makes it fill remaining space */
           padding: 20px; /* Adjust as needed */
-          /* If you had a fixed width or left-margin here, remove/adjust it */
           margin-left: 0; /* Ensure no leftover margin from where sidebar used to be */
           width: auto; /* Reset any fixed width */
           max-width: 100%; /* Ensure it doesn't exceed 100% of parent */
-          background-color: #f7f7f7;
+          background-color: var(--background-color, #f7f7f7); /* Use theme variable */
         }
 
         .main-content h2 {
           font-size: 18px;
           margin-bottom: 10px;
+          color: var(--text-color, #333); /* Use theme variable */
         }
 
-        .main-content .title-separator {
-          /* Use the common class */
+        .main-content .title-separator { /* Use the common class */
           border: 0;
-          border-top: 1px solid #aebdc9; /* Adjusted color for consistency */
+          border-top: 1px solid var(--border-color, #aebdc9); /* Use theme variable */
           margin-bottom: 18px;
         }
 
-        /* NEW: Top Action Buttons Container */
+        /* Top Action Buttons Container */
         .action-buttons-top {
-          display: flex;
-          gap: 15px;
-          margin-bottom: 20px;
-          flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
         }
 
         /* Excel Button Container (repurposed from .excel-button-container) */
@@ -1161,24 +1222,24 @@ const Home = () => {
           background-color: #3fc57b;
         }
 
-        /* NEW: Reset Status Button */
+        /* Reset Status Button */
         .reset-status-button {
-          background-color: #f44336; /* Red color for warning/danger */
-          color: white;
-          padding: 10px 20px;
-          border-radius: 6px;
-          border: none;
-          font-size: 14px;
-          cursor: pointer;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          transition: background-color 0.3s ease-in-out;
+            background-color: #f44336; /* Red color for warning/danger */
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease-in-out;
         }
         .reset-status-button:hover:not(:disabled) {
-          background-color: #da190b;
+            background-color: #da190b;
         }
         .reset-status-button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         /* Spinner for loading buttons */
@@ -1198,13 +1259,14 @@ const Home = () => {
           animation: spinner 0.75s linear infinite;
         }
 
+
         /* Container for the Form Section (Header + Collapsible Content) */
         .member-form-section {
-          background-color: #ffffff;
+          background-color: var(--card-background, #ffffff); /* Use theme variable */
           border-radius: 8px;
           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
           margin-bottom: 20px;
-          border: 1px solid #e9e9e9;
+          border: 1px solid var(--border-color, #e9e9e9); /* Use theme variable */
         }
 
         /* Header for the collapsible form */
@@ -1213,23 +1275,23 @@ const Home = () => {
           justify-content: space-between;
           align-items: center;
           padding: 10px 15px;
-          background-color: #e9e9e9;
+          background-color: var(--header-background, #e9e9e9); /* Use theme variable */
           border-top-left-radius: 8px;
           border-top-right-radius: 8px;
-          border-bottom: 1px solid #ddd;
+          border-bottom: 1px solid var(--border-color, #ddd); /* Use theme variable */
           cursor: pointer;
           user-select: none;
           transition: background-color 0.2s ease-in-out;
         }
 
         .form-header-with-toggle:hover {
-          background-color: #dcdcdc;
+          background-color: var(--border-color, #dcdcdc); /* Use theme variable */
         }
 
         .form-section-title {
           margin: 0;
           font-size: 14px;
-          color: #333;
+          color: var(--text-color, #333); /* Use theme variable */
         }
 
         .toggle-form-button {
@@ -1238,14 +1300,14 @@ const Home = () => {
           font-size: 20px;
           font-weight: bold;
           cursor: pointer;
-          color: #555;
+          color: var(--text-color, #555); /* Use theme variable */
           padding: 5px 8px;
           line-height: 1;
           transition: color 0.2s ease-in-out;
         }
 
         .toggle-form-button:hover {
-          color: #000;
+          color: var(--text-color, #000); /* Use theme variable */
         }
 
         /* Collapsible content for the form */
@@ -1268,24 +1330,25 @@ const Home = () => {
         /* Original Form Styles (from image_f08aa0.png) */
         .form-label {
           font-size: 12px; /* Adjusted font size */
-          color: #333;
+          color: var(--text-color, #333); /* Use theme variable */
           display: block;
           margin-bottom: 4px;
         }
 
         .modern-input {
           outline: none;
-          border: 1px solid #ccc;
+          border: 1px solid var(--input-border, #ccc); /* Use theme variable */
           padding: 8px;
           font-size: 12px; /* Adjusted font size */
-          color: #333;
+          color: var(--text-color, #333); /* Use theme variable */
           width: 100%;
           border-radius: 5px;
           transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+          background-color: var(--input-background, #fff); /* Use theme variable */
         }
 
         .modern-input:focus {
-          border-color: #333;
+          border-color: var(--text-color, #333); /* Use theme variable */
           box-shadow: 0 0 0 3px rgba(226, 226, 226, 0.2);
         }
 
@@ -1317,14 +1380,14 @@ const Home = () => {
         }
 
         .submit-btn {
-          background-color: #57e497;
+          background-color: var(--toggle-on-background, #57e497); /* Use theme variable */
           color: black;
         }
         .submit-btn.edit {
           background-color: #ff9800;
         }
         .submit-btn:hover {
-          background-color: #3fc57b;
+          background-color: var(--toggle-on-background-hover, #3fc57b); /* Use theme variable (or define specific hover) */
         }
         .submit-btn.edit:hover {
           background-color: #ffa500;
@@ -1344,35 +1407,37 @@ const Home = () => {
 
         .divider-line {
           margin: 20px 0;
-          border-top: 1px solid #aebdc9; /* Adjusted color for consistency */
+          border-top: 1px solid var(--border-color, #aebdc9); /* Use theme variable */
         }
 
-        /* Search box style (from image_f09ca6.png) */
+        /* Search box style */
         .search-box {
           margin-bottom: 20px;
         }
         .search-input {
           width: 100%;
           padding: 8px 12px;
-          border: 1px solid #ddd;
+          border: 1px solid var(--input-border, #ddd); /* Use theme variable */
           border-radius: 5px;
           font-size: 12px; /* Adjusted font size */
           outline: none;
+          background-color: var(--input-background, #fff); /* Use theme variable */
+          color: var(--text-color, #333); /* Use theme variable */
         }
         .search-input:focus {
-          border-color: #333;
+          border-color: var(--text-color, #333); /* Use theme variable */
           box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
         }
 
-        /* Total Members Display (from image_f09ca6.png) */
+        /* Total Members Display */
         .total-members-display {
           text-align: right;
           margin-bottom: 15px;
           font-size: 12px; /* Adjusted font size */
-          color: #555;
+          color: var(--text-color, #555); /* Use theme variable */
         }
 
-        /* Pagination Controls (from image_f09ca6.png and image_f09567.png) */
+        /* Pagination Controls */
         .pagination-controls {
           display: flex;
           justify-content: flex-start;
@@ -1383,17 +1448,17 @@ const Home = () => {
 
         .pagination-button {
           padding: 8px 12px;
-          border: 1px solid #ddd;
+          border: 1px solid var(--border-color, #ddd); /* Use theme variable */
           border-radius: 5px;
-          background-color: #f0f0f0;
+          background-color: var(--input-background, #f0f0f0); /* Use theme variable */
           cursor: pointer;
           font-size: 12px; /* Adjusted font size */
           transition: background-color 0.2s, border-color 0.2s;
-          color: #333;
+          color: var(--text-color, #333); /* Use theme variable */
         }
 
         .pagination-button:hover {
-          background-color: #e0e0e0;
+          background-color: var(--border-color, #e0e0e0); /* Use theme variable */
         }
 
         .pagination-button.active {
@@ -1405,7 +1470,7 @@ const Home = () => {
         .pagination-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
-          background-color: #f7f7f7;
+          background-color: var(--background-color, #f7f7f7); /* Use theme variable */
         }
 
         /* Table Styles */
@@ -1413,8 +1478,8 @@ const Home = () => {
           width: 100%;
           border-collapse: collapse;
           min-width: 700px; /* Keep minimum width for desktop view */
-          background-color: #ffffff;
-          border: 1px solid #e0e0e0; /* Added outer border */
+          background-color: var(--card-background, #ffffff); /* Use theme variable */
+          border: 1px solid var(--border-color, #e0e0e0); /* Use theme variable */
           border-radius: 8px;
           overflow: hidden;
         }
@@ -1422,11 +1487,11 @@ const Home = () => {
         .user-table th,
         .user-table td {
           padding: 10px 12px; /* Slightly reduced padding */
-          border-bottom: 1px solid #f0f0f0;
-          border-right: 1px solid #f0f0f0; /* Added right border for vertical lines */
+          border-bottom: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
+          border-right: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
           text-align: center; /* ALIGN TEXT TO CENTER */
           font-size: 12px; /* Adjusted font size */
-          color: #333;
+          color: var(--text-color, #333); /* Use theme variable */
         }
 
         /* Remove right border for the last column in header and body */
@@ -1436,10 +1501,26 @@ const Home = () => {
         }
 
         .user-table th {
-          background-color: #323943; /* Specific header background color */
-          color: white; /* Header text color */
+          background-color: var(--header-background, #323943); /* Use theme variable */
+          color: var(--header-text, white); /* Use theme variable */
           font-weight: 600;
           text-transform: none;
+        }
+
+        /* Sortable Header Styles */
+        .sortable-header {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center; /* Center content */
+            gap: 5px; /* Space between text and icon */
+        }
+        .sortable-header .sort-icon {
+            color: #ccc; /* Default icon color */
+            transition: color 0.2s;
+        }
+        .sortable-header:hover .sort-icon {
+            color: white; /* Highlight on hover */
         }
 
         /* Remove bottom border for the last row */
@@ -1449,10 +1530,10 @@ const Home = () => {
 
         /* Row Highlighting and Stripes */
         .user-table tbody tr:nth-child(odd) {
-          background-color: #ffffff;
+          background-color: var(--card-background, #ffffff); /* Use theme variable */
         }
         .user-table tbody tr:nth-child(even) {
-          background-color: #fdfdfd;
+          background-color: var(--background-color-even-row, #fdfdfd); /* Can define new for even rows */
         }
 
         /* Selected row background */
@@ -1462,7 +1543,7 @@ const Home = () => {
 
         /* Hover effect */
         .user-table tbody tr:hover:not(.selected-row) {
-          background-color: #f5f5f5;
+          background-color: var(--border-color, #f5f5f5); /* Use theme variable */
         }
 
         /* Checkbox Column */
@@ -1512,7 +1593,7 @@ const Home = () => {
         .no-data-message {
           text-align: center;
           font-style: italic;
-          color: #888;
+          color: var(--text-color, #888); /* Use theme variable */
           padding: 20px;
           font-size: 12px; /* Adjusted font size */
         }
@@ -1543,7 +1624,7 @@ const Home = () => {
 
           .user-table tr {
             margin-bottom: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color, #ddd); /* Use theme variable */
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
           }
@@ -1553,7 +1634,7 @@ const Home = () => {
             position: relative;
             padding-left: 55%; /* Increased padding-left to make space for data-label */
             text-align: right;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
           }
 
           .user-table td:last-child {
@@ -1570,8 +1651,16 @@ const Home = () => {
             content: attr(data-label);
             font-weight: bold;
             text-align: left; /* Ensure data-label text is left-aligned */
-            color: #555;
+            color: var(--text-color, #555); /* Use theme variable */
             font-size: 12px; /* Adjusted font size */
+          }
+
+          /* Ensure sorting icons are visible and aligned on mobile */
+          .user-table th.sortable-header {
+              display: flex;
+              justify-content: flex-start; /* Align text to start */
+              align-items: center;
+              padding-left: 15px; /* Match td:before left padding */
           }
 
           .form-buttons-container {
