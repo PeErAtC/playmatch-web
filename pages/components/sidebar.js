@@ -9,7 +9,8 @@ import {
   User2,
   Gift, // Import the Gift icon for BirthDay
   X, // Import the X icon for closing
-} from "lucide-react";
+  LayoutDashboard, // Import the new icon for Dashboard
+} from "lucide-react"; // Make sure LayoutDashboard is available in lucide-react
 
 const menuList = [
   {
@@ -37,20 +38,32 @@ const menuList = [
     path: "/Birthday", // New path for BirthDay
     icon: <Gift size={20} strokeWidth={1.7} />, // New icon for BirthDay
   },
+  {
+    label: "Dashboard", // New menu item
+    path: "/dashboard", // New path for Dashboard
+    icon: <LayoutDashboard size={20} strokeWidth={1.7} />, // New icon for Dashboard
+  },
 ];
 
 // Sidebar Component - Now accepts birthDayCount, isSidebarOpen, and toggleSidebar prop
-export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSidebar }) { // Added toggleSidebar
+export default function Sidebar({
+  birthDayCount = 0,
+  isSidebarOpen,
+  toggleSidebar,
+}) {
+  // Added toggleSidebar
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [groupName, setGroupName] = useState("");
   const [activePath, setActivePath] = useState("");
 
   useEffect(() => {
+    // Set active path based on current window location
     setActivePath(window.location.pathname);
   }, []);
 
   useEffect(() => {
+    // Check if window is defined before accessing localStorage
     if (typeof window !== "undefined") {
       const username = localStorage.getItem("loggedInUsername");
       const group = localStorage.getItem("groupName");
@@ -63,23 +76,21 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
     localStorage.removeItem("loggedInEmail");
     localStorage.removeItem("loggedInUsername");
     localStorage.removeItem("groupName");
-    window.location.href = "/login";
+    window.location.href = "/login"; // Redirect to login page
   };
 
   return (
-    <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}> {/* Add 'open'/'closed' classes */}
+    <aside className={`sidebar ${isSidebarOpen ? "open" : "closed"}`}>
       {/* Close button for mobile sidebar - conditionally render this on mobile too */}
       <button className="sidebar-close-button" onClick={toggleSidebar}>
-          <X size={24} />
+        <X size={24} />
       </button>
-
       {/* Logo & GroupName */}
       <div className="sidebar-logo">
         <div className="logo-icon">B</div>
         <span className="logo-text">{groupName || "PlayMatch"}</span>
       </div>
       <hr className="sidebar-divider" />
-
       {/* Menu */}
       <nav className="sidebar-menu">
         {menuList.map((item) => (
@@ -92,13 +103,13 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
           >
             <span className="menu-icon">{item.icon}</span>
             <span className="menu-label">{item.label}</span>
-            {item.label === "BirthDay" && birthDayCount > 0 && ( // Conditionally render badge for BirthDay
-              <span className="birthday-badge">{birthDayCount}</span>
-            )}
+            {item.label === "BirthDay" &&
+              birthDayCount > 0 && ( // Conditionally render badge for BirthDay
+                <span className="birthday-badge">{birthDayCount}</span>
+              )}
           </a>
         ))}
       </nav>
-
       {/* User Bottom */}
       <div className="sidebar-user">
         <div
@@ -120,7 +131,15 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
           <div className="user-dropdown-menu">
             <button
               className="dropdown-item"
-              onClick={() => alert("Settings ยังไม่เปิดใช้งาน")}
+              onClick={() => {
+                // Use SweetAlert2 instead of alert()
+                Swal.fire({
+                  title: "ยังไม่เปิดใช้งาน",
+                  text: "ฟังก์ชัน Settings ยังไม่พร้อมใช้งาน",
+                  icon: "info",
+                  confirmButtonText: "รับทราบ",
+                });
+              }}
             >
               Settings
             </button>
@@ -130,7 +149,6 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
           </div>
         )}
       </div>
-
       {/* CSS-in-JS */}
       <style jsx>{`
         .sidebar {
@@ -140,10 +158,10 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
           color: #fff;
           display: flex;
           flex-direction: column;
-          position: relative; /* สำคัญ: เพื่อให้ position: fixed บนมือถือไม่หลุด context */
+          position: relative; /* Important: so fixed position on mobile doesn't lose context */
           box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
           z-index: 100;
-          transition: transform 0.3s ease-in-out; /* เพิ่ม transition */
+          transition: transform 0.3s ease-in-out; /* Add transition */
 
           /* Default desktop state - always open and visible */
           transform: translateX(0%);
@@ -152,22 +170,21 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
         /* Mobile sidebar hidden/open states */
         @media (max-width: 768px) {
           .sidebar {
-            position: fixed; /* ทำให้มันลอยอยู่เหนือ content */
+            position: fixed; /* Make it float above content */
             top: 0;
             left: 0;
-            height: 100vh; /* ให้เต็มความสูงของ viewport */
-            z-index: 200; /* สูงกว่า toggle button และ content */
-            /* จะควบคุมการแสดงผลด้วย class 'open'/'closed' แทน */
+            height: 100vh; /* Full viewport height */
+            z-index: 200; /* Higher than toggle button and content */
+            /* Control display with 'open'/'closed' classes instead */
           }
           .sidebar.closed {
-            transform: translateX(-100%); /* ซ่อนไปทางซ้าย */
-            /* display: none;  อย่าใช้ display: none ร่วมกับ transition */
+            transform: translateX(-100%); /* Hide to the left */
+            /* display: none; Don't use display: none with transition */
           }
           .sidebar.open {
-            transform: translateX(0%); /* แสดงออกมา */
+            transform: translateX(0%); /* Show it */
           }
         }
-
 
         .sidebar-logo {
           display: flex;
@@ -257,7 +274,7 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
           top: 50%;
           transform: translateY(-50%);
           line-height: 1; /* Ensure text is vertically centered */
-          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
         /* --- END Birthday Badge Styles --- */
 
@@ -332,28 +349,28 @@ export default function Sidebar({ birthDayCount = 0, isSidebarOpen, toggleSideba
 
         /* Sidebar close button for mobile */
         .sidebar-close-button {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            color: #ccc;
-            cursor: pointer;
-            z-index: 110; /* Higher than sidebar content */
-            display: none; /* ซ่อนไว้บน desktop */
+          position: absolute;
+          top: 15px;
+          right: 15px;
+          background: none;
+          border: none;
+          color: #ccc;
+          cursor: pointer;
+          z-index: 110; /* Higher than sidebar content */
+          display: none; /* Hidden on desktop */
         }
         .sidebar-close-button:hover {
-            color: white;
+          color: white;
         }
 
         @media (max-width: 768px) {
-            .sidebar-close-button {
-                display: block; /* แสดงปุ่ม close บน mobile */
-            }
-          .sidebar {
-            width: 240px; /* กำหนดความกว้างของ sidebar เมื่อเปิดบนมือถือ */
+          .sidebar-close-button {
+            display: block; /* Show close button on mobile */
           }
-          /* ไม่มี padding/margin ใน mobile media query แล้วครับ ใช้ค่า default ที่กำหนดไว้บนสุด */
+          .sidebar {
+            width: 240px; /* Set sidebar width when open on mobile */
+          }
+          /* No padding/margin in mobile media query; use default values defined at the top */
         }
       `}</style>
     </aside>
