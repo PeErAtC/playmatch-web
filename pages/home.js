@@ -12,10 +12,11 @@ import {
   deleteDoc,
   query,
   where,
+  writeBatch, // Import writeBatch for efficient bulk updates
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
 
-// เริ่มต้น Modal Component ที่ถูกรวมเข้ามา
+// Modal Component - Integrated within Home.js
 const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
   if (!show) {
     return null;
@@ -25,12 +26,18 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
     <div className="modal-overlay">
       <div className="modal-content">
         <button className="modal-close-button" onClick={onClose}>
-          &times; {/* ไอคอนกากบาท */}
+          &times; {/* Cross icon */}
         </button>
         <h3>จัดการไฟล์ Excel สมาชิก</h3>
-        <p>คุณสามารถดาวน์โหลดไฟล์ Excel แม่แบบเพื่อเพิ่มข้อมูลสมาชิก หรืออัปโหลดไฟล์ที่มีอยู่</p>
+        <p>
+          คุณสามารถดาวน์โหลดไฟล์ Excel แม่แบบเพื่อเพิ่มข้อมูลสมาชิก
+          หรืออัปโหลดไฟล์ที่มีอยู่
+        </p>
         <div className="modal-actions">
-          <button className="modal-download-template-button" onClick={onGenerateTemplate}>
+          <button
+            className="modal-download-template-button"
+            onClick={onGenerateTemplate}
+          >
             ดาวน์โหลดไฟล์ Excel แม่แบบ
           </button>
           <hr className="modal-separator" />
@@ -107,7 +114,7 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
           gap: 15px;
         }
 
-        /* ปรับขนาดปุ่มดาวน์โหลด */
+        /* Adjust download button size */
         .modal-download-template-button {
           background-color: #4bf196;
           color: black;
@@ -178,7 +185,7 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
     </div>
   );
 };
-// สิ้นสุด Modal Component
+// End Modal Component
 
 const Home = () => {
   const [search, setSearch] = useState("");
@@ -187,18 +194,19 @@ const Home = () => {
   const [lineId, setLineId] = useState("");
   const [handed, setHanded] = useState("");
   const [phone, setPhone] = useState("");
-  const [birthDate, setBirthDate] = useState(""); // เปลี่ยนจาก birthYear เป็น birthDate
+  const [birthDate, setBirthDate] = useState(""); // Changed from birthYear to birthDate
   const [experience, setExperience] = useState("");
   const [status, setStatus] = useState("");
   const [members, setMembers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
-  const [currentUserId, setCurrentUserId] = useState(null); // เพิ่ม State สำหรับเก็บ userId
+  const [currentUserId, setCurrentUserId] = useState(null); // Added State to store userId
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [membersPerPage] = useState(20);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
+  const [isResettingStatus, setIsResettingStatus] = useState(false); // New state for reset status button
 
   // Helper function to calculate age from birth date (YYYY-MM-DD format)
   const calculateAge = (isoBirthDate) => {
@@ -217,32 +225,31 @@ const Home = () => {
   // Helper function to convert Excel date number to ISO string (YYYY-MM-DD)
   // Excel stores dates as numbers (days since 1900-01-01)
   const excelDateToISODate = (excelDateNumber) => {
-    if (typeof excelDateNumber !== 'number') return null;
+    if (typeof excelDateNumber !== "number") return null;
     // Excel's epoch starts from 1900-01-01 (day 1). JavaScript's is 1970-01-01.
     // Need to adjust for 1900-02-29 bug in Excel (Excel thinks 1900 was a leap year)
     const date = new Date((excelDateNumber - (25569 + 1)) * 86400 * 1000); // 25569 is days between 1900-01-01 and 1970-01-01, plus 1 day for Excel's 1-based indexing and the 1900 leap year bug
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
 
-
-  // ฟังก์ชันสำหรับสร้างไฟล์ Excel ต้นฉบับ พร้อมตัวอย่างข้อมูล
+  // Function to generate Excel template file with example data
   const generateExcelTemplate = () => {
-    // 1. กำหนด Header ของคอลัมน์
+    // 1. Define column headers
     const headers = [
       "name",
       "level",
       "lineId",
       "handed",
       "phone",
-      "birthDate", // เปลี่ยนเป็น birthDate
+      "birthDate", // Changed to birthDate
       "experience",
       "status",
     ];
 
-    // 2. กำหนดข้อมูลตัวอย่างให้ถูกต้องตาม Header
+    // 2. Define example data that matches headers
     const templateData = [
       {
         name: "ตัวอย่าง ชื่อ-นามสกุล",
@@ -250,7 +257,7 @@ const Home = () => {
         lineId: "example_line_id",
         handed: "Right",
         phone: "0812345678",
-        birthDate: "1990-05-15", // ตัวอย่างวันเกิด (ค.ศ.XXXX-MM-DD)
+        birthDate: "1990-05-15", // Example birth date (YYYY-MM-DD)
         experience: "2 ปี",
         status: "มา",
       },
@@ -260,43 +267,43 @@ const Home = () => {
         lineId: "second_example",
         handed: "Left",
         phone: "0998765432",
-        birthDate: "1985-11-20", // ตัวอย่างวันเกิด (ค.ศ.XXXX-MM-DD)
+        birthDate: "1985-11-20", // Example birth date (YYYY-MM-DD)
         experience: "5 ปี",
         status: "ไม่มา",
       },
     ];
 
-    // 3. สร้าง Worksheet โดยเริ่มต้นจาก Header
+    // 3. Create a Worksheet starting with the Header
     const ws = XLSX.utils.aoa_to_sheet([headers]);
 
-    // 4. เพิ่มข้อมูลตัวอย่างต่อท้ายจาก Header
+    // 4. Add example data after the Header
     XLSX.utils.sheet_add_json(ws, templateData, {
       skipHeader: true,
       origin: -1,
       header: headers,
     });
 
-    // 5. ปรับความกว้างคอลัมน์ (Optional: เพื่อให้อ่านง่ายขึ้น)
+    // 5. Adjust column width (Optional: for better readability)
     const columnWidths = [
       { wch: 20 },
       { wch: 10 },
       { wch: 15 },
       { wch: 10 },
       { wch: 15 },
-      { wch: 18 }, // เพิ่มความกว้างสำหรับ birthDate (YYYY-MM-DD)
+      { wch: 18 }, // Increase width for birthDate (YYYY-MM-DD)
       { wch: 15 },
       { wch: 10 },
     ];
     ws["!cols"] = columnWidths;
 
-    // 6. สร้าง Workbook และเขียนไฟล์
+    // 6. Create Workbook and write file
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "สมาชิก");
     const fileName = "members_template.xlsx";
     XLSX.writeFile(wb, fileName);
   };
 
-  // ฟังก์ชันสำหรับอัปโหลดไฟล์ Excel
+  // Function to upload Excel file
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
@@ -305,15 +312,23 @@ const Home = () => {
         const data = new Uint8Array(event.target.result);
         const wb = XLSX.read(data, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: null }); // Use raw: false for formatted dates
+        const jsonData = XLSX.utils.sheet_to_json(sheet, {
+          raw: false,
+          defval: null,
+        }); // Use raw: false for formatted dates
 
         try {
           if (jsonData.length === 0) {
-            Swal.fire("ไฟล์ Excel ว่างเปล่า", "ไม่พบข้อมูลในไฟล์ที่คุณอัปโหลด", "warning");
+            Swal.fire(
+              "ไฟล์ Excel ว่างเปล่า",
+              "ไม่พบข้อมูลในไฟล์ที่คุณอัปโหลด",
+              "warning"
+            );
             return;
           }
 
-          if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+          if (!currentUserId) {
+            // Use stored currentUserId
             Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
             return;
           }
@@ -332,30 +347,31 @@ const Home = () => {
               continue;
             }
 
-            const nameTrimmed = (member.name || '').toString().trim();
-            const levelTrimmed = (member.level || '').toString().trim();
-            const lineIdTrimmed = (member.lineId || '').toString().trim();
-            const handedTrimmed = (member.handed || '').toString().trim();
-            const phoneTrimmed = (member.phone || '').toString().trim();
+            const nameTrimmed = (member.name || "").toString().trim();
+            const levelTrimmed = (member.level || "").toString().trim();
+            const lineIdTrimmed = (member.lineId || "").toString().trim();
+            const handedTrimmed = (member.handed || "").toString().trim();
+            const phoneTrimmed = (member.phone || "").toString().trim();
             let birthDateValue = null;
 
             // Handle birthDate from Excel
             if (member.birthDate) {
-                // If it's a number, it's likely an Excel date serial number
-                if (typeof member.birthDate === 'number') {
-                    birthDateValue = excelDateToISODate(member.birthDate);
-                } else if (typeof member.birthDate === 'string') {
-                    // If it's a string, try to parse it as YYYY-MM-DD
-                    const parsedDate = new Date(member.birthDate);
-                    if (!isNaN(parsedDate.getTime())) {
-                        birthDateValue = member.birthDate; // Assume YYYY-MM-DD or parsable
-                    }
+              // If it's a number, it's likely an Excel date serial number
+              if (typeof member.birthDate === "number") {
+                birthDateValue = excelDateToISODate(member.birthDate);
+              } else if (typeof member.birthDate === "string") {
+                // If it's a string, try to parse it as YYYY-MM-DD
+                const parsedDate = new Date(member.birthDate);
+                if (!isNaN(parsedDate.getTime())) {
+                  birthDateValue = member.birthDate; // Assume YYYY-MM-DD or parsable
                 }
+              }
             }
 
-
-            const experienceTrimmed = (member.experience || '').toString().trim();
-            const statusTrimmed = (member.status || '').toString().trim();
+            const experienceTrimmed = (member.experience || "")
+              .toString()
+              .trim();
+            const statusTrimmed = (member.status || "").toString().trim();
 
             const newUser = {
               name: nameTrimmed,
@@ -363,7 +379,7 @@ const Home = () => {
               lineId: lineIdTrimmed,
               handed: handedTrimmed,
               phone: phoneTrimmed,
-              birthDate: birthDateValue, // เก็บ birthDate
+              birthDate: birthDateValue, // Store birthDate
               experience: experienceTrimmed,
               status: statusTrimmed,
               createBy: loggedInUsername,
@@ -375,27 +391,44 @@ const Home = () => {
             if (!newUser.lineId) rowErrors.push("Line ID");
             if (!newUser.handed) rowErrors.push("ถนัด");
             if (!newUser.phone) rowErrors.push("เบอร์โทร");
-            if (!newUser.birthDate) rowErrors.push("วันเดือนปีเกิด"); // ตรวจสอบ birthDate
+            if (!newUser.birthDate) rowErrors.push("วันเดือนปีเกิด"); // Validate birthDate
             if (!newUser.experience) rowErrors.push("ประสบการณ์");
             if (!newUser.status) rowErrors.push("สถานะ");
 
             if (rowErrors.length > 0) {
-              validationErrors.push(`แถวที่ ${rowIndex}: ข้อมูลไม่ครบถ้วนในช่อง: ${rowErrors.join(", ")}`);
+              validationErrors.push(
+                `แถวที่ ${rowIndex}: ข้อมูลไม่ครบถ้วนในช่อง: ${rowErrors.join(
+                  ", "
+                )}`
+              );
               continue;
             }
 
             try {
               const memberId = generateMemberId(existingMembers);
-              const memberRef = doc(db, `users/${currentUserId}/Members/${memberId}`); // ใช้ currentUserId
-              await setDoc(memberRef, { ...newUser, memberId, createdAt: new Date() });
+              const memberRef = doc(
+                db,
+                `users/${currentUserId}/Members/${memberId}`
+              ); // Use currentUserId
+              await setDoc(memberRef, {
+                ...newUser,
+                memberId,
+                createdAt: new Date(),
+              });
               successCount++;
             } catch (addError) {
-              validationErrors.push(`แถวที่ ${rowIndex}: ไม่สามารถเพิ่มข้อมูลได้ - ${addError.message}`);
+              validationErrors.push(
+                `แถวที่ ${rowIndex}: ไม่สามารถเพิ่มข้อมูลได้ - ${addError.message}`
+              );
             }
           }
 
           if (successCount > 0) {
-            Swal.fire("สำเร็จ!", `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`, "success");
+            Swal.fire(
+              "สำเร็จ!",
+              `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`,
+              "success"
+            );
             setShowModal(false);
             fetchMembers();
           }
@@ -403,24 +436,37 @@ const Home = () => {
           if (validationErrors.length > 0) {
             Swal.fire(
               "มีข้อผิดพลาดบางอย่าง",
-              "พบข้อผิดพลาดในการนำเข้าข้อมูลบางส่วน:\n" + validationErrors.join("\n"),
+              "พบข้อผิดพลาดในการนำเข้าข้อมูลบางส่วน:\n" +
+                validationErrors.join("\n"),
               "warning"
             );
           } else if (successCount === 0) {
-            Swal.fire("ไม่พบข้อมูลที่ถูกต้อง", "ไม่มีข้อมูลสมาชิกที่สามารถเพิ่มได้จากไฟล์ Excel", "warning");
+            Swal.fire(
+              "ไม่พบข้อมูลที่ถูกต้อง",
+              "ไม่มีข้อมูลสมาชิกที่สามารถเพิ่มได้จากไฟล์ Excel",
+              "warning"
+            );
           }
         } catch (error) {
           console.error("Error uploading Excel file:", error);
-          Swal.fire("เกิดข้อผิดพลาดในการอัปโหลดไฟล์ Excel", error.message, "error");
+          Swal.fire(
+            "เกิดข้อผิดพลาดในการอัปโหลดไฟล์ Excel",
+            error.message,
+            "error"
+          );
         }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      Swal.fire("กรุณาอัปโหลดไฟล์ Excel เท่านั้น", "ไฟล์ที่รองรับคือ .xlsx และ .xls", "warning");
+      Swal.fire(
+        "กรุณาอัปโหลดไฟล์ Excel เท่านั้น",
+        "ไฟล์ที่รองรับคือ .xlsx และ .xls",
+        "warning"
+      );
     }
   };
 
-  // ดึง Username และ UserId เมื่อ Component โหลด
+  // Fetch Username and UserId when Component mounts
   const fetchUserData = async () => {
     const email = localStorage.getItem("loggedInEmail");
     if (email) {
@@ -431,7 +477,7 @@ const Home = () => {
         if (!querySnapshot.empty) {
           const docSnapshot = querySnapshot.docs[0];
           setLoggedInUsername(docSnapshot.data().username);
-          setCurrentUserId(docSnapshot.id); // เก็บ userId ไว้ใน State
+          setCurrentUserId(docSnapshot.id); // Store userId in State
         } else {
           console.warn("User data not found for email:", email);
         }
@@ -443,17 +489,27 @@ const Home = () => {
 
   const fetchMembersData = async () => {
     try {
-      if (!currentUserId) { // ตรวจสอบ userId ก่อนดึงข้อมูลสมาชิก
+      if (!currentUserId) {
+        // Check userId before fetching member data
         return [];
       }
       const membersRef = collection(db, `users/${currentUserId}/Members`);
       const membersSnapshot = await getDocs(membersRef);
-      const membersData = membersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const membersData = membersSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-      // เรียงลำดับตาม memberId_XXX
+      // Sort by memberId_XXX
       membersData.sort((a, b) => {
-        const idA = a.memberId && a.memberId.startsWith('member_') ? parseInt(a.memberId.split('_')[1], 10) : Infinity;
-        const idB = b.memberId && b.memberId.startsWith('member_') ? parseInt(b.memberId.split('_')[1], 10) : Infinity;
+        const idA =
+          a.memberId && a.memberId.startsWith("member_")
+            ? parseInt(a.memberId.split("_")[1], 10)
+            : Infinity;
+        const idB =
+          b.memberId && b.memberId.startsWith("member_")
+            ? parseInt(b.memberId.split("_")[1], 10)
+            : Infinity;
         return idA - idB;
       });
 
@@ -464,17 +520,17 @@ const Home = () => {
     }
   };
 
-  // ใช้ useCallback เพื่อให้ fetchMembers ไม่เปลี่ยนในทุก re-render
+  // Use useCallback so fetchMembers doesn't change on every re-render
   const fetchMembers = useCallback(async () => {
     const data = await fetchMembersData();
     setMembers(data);
-  }, [currentUserId]); // currentUserId เป็น dependency
+  }, [currentUserId]); // currentUserId is a dependency
 
   useEffect(() => {
-    fetchUserData(); // ดึง username และ userId เมื่อ component โหลดครั้งแรก
-  }, []); // เรียกเพียงครั้งเดียวเมื่อ component mount
+    fetchUserData(); // Fetch username and userId on first component load
+  }, []); // Call only once on component mount
 
-  // เรียก fetchMembers เมื่อ currentUserId พร้อมใช้งาน
+  // Call fetchMembers when currentUserId is available
   useEffect(() => {
     if (currentUserId) {
       fetchMembers();
@@ -483,8 +539,8 @@ const Home = () => {
 
   const generateMemberId = (currentMembers) => {
     const maxIdNum = currentMembers.reduce((max, member) => {
-      if (member.memberId && member.memberId.startsWith('member_')) {
-        const num = parseInt(member.memberId.split('_')[1], 10);
+      if (member.memberId && member.memberId.startsWith("member_")) {
+        const num = parseInt(member.memberId.split("_")[1], 10);
         return isNaN(num) ? max : Math.max(max, num);
       }
       return max;
@@ -505,7 +561,7 @@ const Home = () => {
       setLineId(user.lineId);
       setHanded(user.handed);
       setPhone(user.phone);
-      setBirthDate(user.birthDate || ""); // กำหนดค่า birthDate จาก user
+      setBirthDate(user.birthDate || ""); // Set birthDate from user
       setExperience(user.experience);
       setStatus(user.status);
       setIsEditing(true);
@@ -522,7 +578,7 @@ const Home = () => {
       !lineId ||
       !handed ||
       !phone ||
-      !birthDate || // ตรวจสอบ birthDate
+      !birthDate || // Validate birthDate
       !experience ||
       !status
     ) {
@@ -533,13 +589,21 @@ const Home = () => {
     // Validate birthDate format (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(birthDate)) {
-        Swal.fire("รูปแบบวันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)", "warning");
-        return;
+      Swal.fire(
+        "รูปแบบวันเดือนปีเกิดไม่ถูกต้อง",
+        "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)",
+        "warning"
+      );
+      return;
     }
     const parsedDate = new Date(birthDate);
     if (isNaN(parsedDate.getTime())) {
-        Swal.fire("วันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง", "warning");
-        return;
+      Swal.fire(
+        "วันเดือนปีเกิดไม่ถูกต้อง",
+        "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง",
+        "warning"
+      );
+      return;
     }
 
     const newUser = {
@@ -548,14 +612,15 @@ const Home = () => {
       lineId,
       handed,
       phone,
-      birthDate, // เก็บ birthDate เป็น String YYYY-MM-DD
+      birthDate, // Store birthDate as YYYY-MM-DD string
       experience,
       status,
       createBy: loggedInUsername,
     };
 
     try {
-      if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+      if (!currentUserId) {
+        // Use stored currentUserId
         Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
@@ -602,7 +667,8 @@ const Home = () => {
       if (!result.isConfirmed) return;
 
       try {
-        if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+        if (!currentUserId) {
+          // Use stored currentUserId
           Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
           return;
         }
@@ -625,16 +691,74 @@ const Home = () => {
   const toggleStatus = async (user) => {
     const newStatus = user.status === "มา" || !user.status ? "ไม่มา" : "มา";
     try {
-      if (!currentUserId) { // ใช้ currentUserId ที่เก็บไว้
+      if (!currentUserId) {
+        // Use stored currentUserId
         Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
 
-      const memberRef = doc(db, `users/${currentUserId}/Members/${user.memberId}`);
+      const memberRef = doc(
+        db,
+        `users/${currentUserId}/Members/${user.memberId}`
+      );
       await updateDoc(memberRef, { status: newStatus });
       fetchMembers();
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาดในการอัปเดตสถานะ", error.message, "error");
+    }
+  };
+
+  // NEW: Function to reset all member statuses to "ไม่มา"
+  const handleResetAllStatus = async () => {
+    const result = await Swal.fire({
+      title: "รีเซ็ตสถานะทั้งหมด?",
+      text: "คุณต้องการรีเซ็ตสถานะของสมาชิกทุกคนให้เป็น 'ไม่มา' ใช่หรือไม่?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "รีเซ็ต",
+      cancelButtonText: "ยกเลิก",
+      confirmButtonColor: "#d33", // Red color for danger action
+    });
+
+    if (!result.isConfirmed) return;
+
+    setIsResettingStatus(true);
+    try {
+      if (!currentUserId) {
+        Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
+        setIsResettingStatus(false);
+        return;
+      }
+
+      const batch = writeBatch(db);
+      const membersRef = collection(db, `users/${currentUserId}/Members`);
+      const membersSnapshot = await getDocs(membersRef);
+
+      membersSnapshot.docs.forEach((memberDoc) => {
+        const memberRef = doc(
+          db,
+          `users/${currentUserId}/Members`,
+          memberDoc.id
+        );
+        batch.update(memberRef, { status: "ไม่มา" });
+      });
+
+      await batch.commit(); // Commit all updates in a single batch
+      Swal.fire(
+        "สำเร็จ!",
+        "รีเซ็ตสถานะสมาชิกทั้งหมดเป็น 'ไม่มา' สำเร็จ!",
+        "success"
+      );
+      fetchMembers(); // Re-fetch members to update UI
+    } catch (error) {
+      console.error("Error resetting all statuses:", error);
+      Swal.fire(
+        "เกิดข้อผิดพลาด",
+        "ไม่สามารถรีเซ็ตสถานะได้: " + error.message,
+        "error"
+      );
+    } finally {
+      setIsResettingStatus(false);
     }
   };
 
@@ -644,7 +768,7 @@ const Home = () => {
     setLineId("");
     setHanded("");
     setPhone("");
-    setBirthDate(""); // เคลียร์ birthDate
+    setBirthDate(""); // Clear birthDate
     setExperience("");
     setStatus("ไม่มา");
     setSelectedUser(null);
@@ -653,7 +777,7 @@ const Home = () => {
 
   // Function to toggle form expansion
   const toggleFormExpansion = () => {
-    setIsFormExpanded(prev => !prev);
+    setIsFormExpanded((prev) => !prev);
   };
 
   const filteredMembers = members.filter((user) =>
@@ -672,171 +796,187 @@ const Home = () => {
     <div className="overall-layout">
       <main className="main-content">
         <h2>สมาชิก</h2>
-        <hr />
-
-        <div className="excel-button-container">
+        <hr className="title-separator" />{" "}
+        {/* Changed hr to use common class for consistency */}
+        <div className="action-buttons-top">
+          {" "}
+          {/* New container for action buttons */}
           <button
             onClick={() => setShowModal(true)}
             className="generate-excel-button"
           >
             จัดการไฟล์ Excel
           </button>
+          <button
+            onClick={handleResetAllStatus}
+            disabled={isResettingStatus}
+            className="reset-status-button"
+          >
+            {isResettingStatus ? (
+              <>
+                <span className="spinner"></span> กำลังรีเซ็ต...
+              </>
+            ) : (
+              "รีเซ็ตสถานะทั้งหมด"
+            )}
+          </button>
         </div>
-
         <Modal
           show={showModal}
           onClose={() => setShowModal(false)}
           onGenerateTemplate={generateExcelTemplate}
           onFileUpload={handleFileUpload}
         />
-
         {/* Container for the Form Section (Header + Collapsible Content) */}
         <div className="member-form-section">
-            <div className="form-header-with-toggle">
-                <h3 className="form-section-title">กรอกข้อมูลสมาชิก</h3>
+          <div
+            className="form-header-with-toggle"
+            onClick={toggleFormExpansion}
+          >
+            {" "}
+            {/* Added onClick to header */}
+            <h3 className="form-section-title">กรอกข้อมูลสมาชิก</h3>
+            <button
+              className="toggle-form-button"
+              aria-expanded={isFormExpanded}
+            >
+              {isFormExpanded ? "-" : "+"}
+            </button>
+          </div>
+
+          <div
+            className={`form-content-collapsible ${
+              isFormExpanded ? "expanded" : "collapsed"
+            }`}
+          >
+            <form onSubmit={handleSubmit} className="form-box" noValidate>
+              <div className="form-grid-container">
+                <div>
+                  <label className="form-label">ชื่อ</label>
+                  <input
+                    className="modern-input"
+                    type="text"
+                    placeholder="ชื่อ"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Line ID</label>
+                  <input
+                    className="modern-input"
+                    type="text"
+                    placeholder="Line ID"
+                    value={lineId}
+                    onChange={(e) => setLineId(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">เบอร์โทร</label>
+                  <input
+                    className="modern-input"
+                    type="text"
+                    placeholder="เบอร์โทร"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    maxLength="10"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">วันเดือนปีเกิด</label>{" "}
+                  {/* Change Label */}
+                  <input
+                    className="modern-input"
+                    type="date" // **Use type="date"**
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">ระดับ</label>
+                  <select
+                    className="modern-input"
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value)}
+                  >
+                    <option value="">เลือกระดับ</option>
+                    <option value="มือหน้าบ้าน">มือหน้าบ้าน</option>
+                    <option value="มือหน้าบ้าน1">มือหน้าบ้าน1</option>
+                    <option value="มือหน้าบ้าน2">มือหน้าบ้าน2</option>
+                    <option value="มือหน้าบ้าน3">มือหน้าบ้าน3</option>
+                    <option value="S-">S-</option>
+                    <option value="S">S</option>
+                    <option value="N-">N-</option>
+                    <option value="N">N</option>
+                    <option value="P-">P-</option>
+                    <option value="P">P</option>
+                    <option value="C">C</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">ประสบการณ์</label>
+                  <select
+                    className="modern-input"
+                    value={experience}
+                    onChange={(e) => setExperience(e.target.value)}
+                  >
+                    <option value="">ประสบการณ์</option>
+                    <option value="น้อยกว่า 1 ปี">น้อยกว่า 1 ปี</option>
+                    {[...Array(10)].map((_, i) => (
+                      <option key={i + 1} value={`${i + 1} ปี`}>
+                        {i + 1} ปี
+                      </option>
+                    ))}
+                    <option value=">10 ปี">มากกว่า 10 ปี</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">เลือกมือที่ถนัด</label>
+                  <select
+                    className="modern-input"
+                    value={handed}
+                    onChange={(e) => setHanded(e.target.value)}
+                  >
+                    <option value="">ถนัดมือ</option>
+                    <option value="Right">ขวา</option>
+                    <option value="Left">ซ้าย</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">สถานะ</label>
+                  <select
+                    className="modern-input"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    <option value="">โปรดเลือกสถานะ</option>
+                    <option value="มา">มา</option>
+                    <option value="ไม่มา">ไม่มา</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-buttons-container">
                 <button
-                    onClick={toggleFormExpansion}
-                    className="toggle-form-button"
-                    aria-expanded={isFormExpanded}
+                  type="submit"
+                  className={`submit-btn ${isEditing ? "edit" : ""}`}
                 >
-                    {isFormExpanded ? "-" : "+"}
+                  {isEditing ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
                 </button>
-            </div>
 
-            <div className={`form-content-collapsible ${isFormExpanded ? 'expanded' : 'collapsed'}`}>
-                <form
-                  onSubmit={handleSubmit}
-                  className="form-box"
-                  noValidate
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={!selectedUser}
+                  className="delete-btn"
                 >
-                  <div className="form-grid-container">
-                    <div>
-                      <label className="form-label">ชื่อ</label>
-                      <input
-                        className="modern-input"
-                        type="text"
-                        placeholder="ชื่อ"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Line ID</label>
-                      <input
-                        className="modern-input"
-                        type="text"
-                        placeholder="Line ID"
-                        value={lineId}
-                        onChange={(e) => setLineId(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">เบอร์โทร</label>
-                      <input
-                        className="modern-input"
-                        type="text"
-                        placeholder="เบอร์โทร"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        maxLength="10"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">วันเดือนปีเกิด</label> {/* เปลี่ยน Label */}
-                      <input
-                        className="modern-input"
-                        type="date" // **ใช้ type="date"**
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">ระดับ</label>
-                      <select
-                        className="modern-input"
-                        value={level}
-                        onChange={(e) => setLevel(e.target.value)}
-                      >
-                        <option value="">เลือกระดับ</option>
-                        <option value="มือหน้าบ้าน">มือหน้าบ้าน</option>
-                        <option value="มือหน้าบ้าน1">มือหน้าบ้าน1</option>
-                        <option value="มือหน้าบ้าน2">มือหน้าบ้าน2</option>
-                        <option value="มือหน้าบ้าน3">มือหน้าบ้าน3</option>
-                        <option value="S-">S-</option>
-                        <option value="S">S</option>
-                        <option value="N-">N-</option>
-                        <option value="N">N</option>
-                        <option value="P-">P-</option>
-                        <option value="P">P</option>
-                        <option value="C">C</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label">ประสบการณ์</label>
-                      <select
-                        className="modern-input"
-                        value={experience}
-                        onChange={(e) => setExperience(e.target.value)}
-                      >
-                        <option value="">ประสบการณ์</option>
-                        <option value="น้อยกว่า 1 ปี">น้อยกว่า 1 ปี</option>
-                        {[...Array(10)].map((_, i) => (
-                          <option key={i + 1} value={`${i + 1} ปี`}>
-                            {i + 1} ปี
-                          </option>
-                        ))}
-                        <option value=">10 ปี">มากกว่า 10 ปี</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label">เลือกมือที่ถนัด</label>
-                      <select
-                        className="modern-input"
-                        value={handed}
-                        onChange={(e) => setHanded(e.target.value)}
-                      >
-                        <option value="">ถนัดมือ</option>
-                        <option value="Right">ขวา</option>
-                        <option value="Left">ซ้าย</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label">สถานะ</label>
-                      <select
-                        className="modern-input"
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                      >
-                        <option value="">โปรดเลือกสถานะ</option>
-                        <option value="มา">มา</option>
-                        <option value="ไม่มา">ไม่มา</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-buttons-container">
-                    <button
-                      type="submit"
-                      className={`submit-btn ${isEditing ? "edit" : ""}`}
-                    >
-                      {isEditing ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={!selectedUser}
-                      className="delete-btn"
-                    >
-                      ลบ
-                    </button>
-                  </div>
-                </form>
-            </div>
+                  ลบ
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-
         <hr className="divider-line" />
-
         <div className="search-box">
           <input
             type="text"
@@ -846,13 +986,9 @@ const Home = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-
         <div className="total-members-display">
-          <span>
-            จำนวนสมาชิก: {filteredMembers.length}
-          </span>
+          <span>จำนวนสมาชิก: {filteredMembers.length}</span>
         </div>
-
         <div className="pagination-controls">
           <button
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
@@ -865,7 +1001,9 @@ const Home = () => {
             <button
               key={index + 1}
               onClick={() => setCurrentPage(index + 1)}
-              className={`pagination-button ${currentPage === index + 1 ? "active" : ""}`}
+              className={`pagination-button ${
+                currentPage === index + 1 ? "active" : ""
+              }`}
             >
               {index + 1}
             </button>
@@ -880,7 +1018,6 @@ const Home = () => {
             ถัดไป
           </button>
         </div>
-
         <div className="table-responsive-container">
           <table className="user-table">
             <thead>
@@ -891,7 +1028,7 @@ const Home = () => {
                 <th>Line ID</th>
                 <th>มือ</th>
                 <th>เบอร์โทร</th>
-                <th>อายุ</th> {/* ยังคงแสดงเป็นอายุ */}
+                <th>อายุ</th>
                 <th>ประสบการณ์</th>
                 <th>สถานะ</th>
               </tr>
@@ -899,18 +1036,26 @@ const Home = () => {
             <tbody>
               {currentMembers.length === 0 && !search && (
                 <tr>
-                  <td colSpan="9" className="no-data-message">ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่</td>
+                  <td colSpan="9" className="no-data-message">
+                    ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่
+                  </td>
                 </tr>
               )}
               {currentMembers.length === 0 && search && (
                 <tr>
-                  <td colSpan="9" className="no-data-message">ไม่พบข้อมูลสมาชิกที่ค้นหา</td>
+                  <td colSpan="9" className="no-data-message">
+                    ไม่พบข้อมูลสมาชิกที่ค้นหา
+                  </td>
                 </tr>
               )}
               {currentMembers.map((user) => (
                 <tr
                   key={user.memberId}
-                  className={selectedUser?.memberId === user.memberId ? "selected-row" : ""}
+                  className={
+                    selectedUser?.memberId === user.memberId
+                      ? "selected-row"
+                      : ""
+                  }
                 >
                   <td data-label="เลือก">
                     <input
@@ -924,12 +1069,14 @@ const Home = () => {
                   <td data-label="Line ID">{user.lineId}</td>
                   <td data-label="มือ">{user.handed}</td>
                   <td data-label="เบอร์โทร">{user.phone}</td>
-                  <td data-label="อายุ">{calculateAge(user.birthDate)}</td> {/* คำนวณอายุจาก birthDate เพื่อแสดง */}
+                  <td data-label="อายุ">{calculateAge(user.birthDate)}</td>
                   <td data-label="ประสบการณ์">{user.experience}</td>
                   <td data-label="สถานะ">
                     <button
                       onClick={() => toggleStatus(user)}
-                      className={`status-button ${user.status === "มา" ? "status-มา" : "status-ไม่มา"}`}
+                      className={`status-button ${
+                        user.status === "มา" ? "status-มา" : "status-ไม่มา"
+                      }`}
                     >
                       {user.status || "ไม่ระบุ"}
                     </button>
@@ -945,6 +1092,7 @@ const Home = () => {
         /* Reset box-sizing for all elements */
         * {
           box-sizing: border-box;
+          font-family: "Kanit", sans-serif; /* Apply Kanit font globally within this component */
         }
 
         /* Base Layout */
@@ -963,6 +1111,7 @@ const Home = () => {
           margin-left: 0; /* Ensure no leftover margin from where sidebar used to be */
           width: auto; /* Reset any fixed width */
           max-width: 100%; /* Ensure it doesn't exceed 100% of parent */
+          background-color: #f7f7f7;
         }
 
         .main-content h2 {
@@ -970,95 +1119,122 @@ const Home = () => {
           margin-bottom: 10px;
         }
 
-        .main-content hr {
+        .main-content .title-separator {
+          /* Use the common class */
           border: 0;
-          border-top: 1px solid #666;
+          border-top: 1px solid #aebdc9; /* Adjusted color for consistency */
           margin-bottom: 18px;
         }
 
-        /* Excel Button Container */
-        .excel-button-container {
-            margin-bottom: 20px;
+        /* NEW: Top Action Buttons Container */
+        .action-buttons-top {
+          display: flex;
+          gap: 15px;
+          margin-bottom: 20px;
+          flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
         }
+
+        /* Excel Button Container (repurposed from .excel-button-container) */
         .generate-excel-button {
-            background-color: #57e497;
-            color: black;
-            padding: 10px 20px;
-            border-radius: 6px;
-            border: none;
-            font-size: 14px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: background-color 0.3s ease-in-out;
+          background-color: #57e497;
+          color: black;
+          padding: 10px 20px;
+          border-radius: 6px;
+          border: none;
+          font-size: 14px;
+          cursor: pointer;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          transition: background-color 0.3s ease-in-out;
         }
         .generate-excel-button:hover {
-            background-color: #3fc57b;
+          background-color: #3fc57b;
+        }
+
+        /* NEW: Reset Status Button */
+        .reset-status-button {
+          background-color: #f44336; /* Red color for warning/danger */
+          color: white;
+          padding: 10px 20px;
+          border-radius: 6px;
+          border: none;
+          font-size: 14px;
+          cursor: pointer;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          transition: background-color 0.3s ease-in-out;
+        }
+        .reset-status-button:hover:not(:disabled) {
+          background-color: #da190b;
+        }
+        .reset-status-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         /* Container for the Form Section (Header + Collapsible Content) */
         .member-form-section {
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-            margin-bottom: 20px;
-            border: 1px solid #e9e9e9;
+          background-color: #ffffff;
+          border-radius: 8px;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+          margin-bottom: 20px;
+          border: 1px solid #e9e9e9;
         }
 
         /* Header for the collapsible form */
         .form-header-with-toggle {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 15px;
-            background-color: #e9e9e9;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            border-bottom: 1px solid #ddd;
-            cursor: pointer;
-            user-select: none;
-            transition: background-color 0.2s ease-in-out;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px 15px;
+          background-color: #e9e9e9;
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+          border-bottom: 1px solid #ddd;
+          cursor: pointer;
+          user-select: none;
+          transition: background-color 0.2s ease-in-out;
         }
 
         .form-header-with-toggle:hover {
-            background-color: #dcdcdc;
+          background-color: #dcdcdc;
         }
 
         .form-section-title {
-            margin: 0;
-            font-size: 14px;
-            color: #333;
+          margin: 0;
+          font-size: 14px;
+          color: #333;
         }
 
         .toggle-form-button {
-            background: none;
-            border: none;
-            font-size: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            color: #555;
-            padding: 5px 8px;
-            line-height: 1;
-            transition: color 0.2s ease-in-out;
+          background: none;
+          border: none;
+          font-size: 20px;
+          font-weight: bold;
+          cursor: pointer;
+          color: #555;
+          padding: 5px 8px;
+          line-height: 1;
+          transition: color 0.2s ease-in-out;
         }
 
         .toggle-form-button:hover {
-            color: #000;
+          color: #000;
         }
 
         /* Collapsible content for the form */
         .form-content-collapsible {
-            overflow: hidden;
-            transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding 0.5s ease-out;
-            max-height: 500px; /* Adjust if your form is taller! */
-            opacity: 1;
-            padding: 20px 15px;
+          overflow: hidden;
+          transition: max-height 0.5s ease-out, opacity 0.5s ease-out,
+            padding 0.5s ease-out;
+          max-height: 500px; /* Adjust if your form is taller! */
+          opacity: 1;
+          padding: 20px 15px;
         }
 
         .form-content-collapsible.collapsed {
-            max-height: 0;
-            opacity: 0;
-            padding-top: 0;
-            padding-bottom: 0;
+          max-height: 0;
+          opacity: 0;
+          padding-top: 0;
+          padding-bottom: 0;
         }
 
         /* Original Form Styles (from image_f08aa0.png) */
@@ -1140,237 +1316,272 @@ const Home = () => {
 
         .divider-line {
           margin: 20px 0;
-          border-top: 1px solid #ddd;
+          border-top: 1px solid #aebdc9; /* Adjusted color for consistency */
         }
 
         /* Search box style (from image_f09ca6.png) */
         .search-box {
-            margin-bottom: 20px;
+          margin-bottom: 20px;
         }
         .search-input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 12px; /* Adjusted font size */
-            outline: none;
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          font-size: 12px; /* Adjusted font size */
+          outline: none;
         }
         .search-input:focus {
-            border-color: #333;
-            box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
+          border-color: #333;
+          box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
         }
 
         /* Total Members Display (from image_f09ca6.png) */
         .total-members-display {
-            text-align: right;
-            margin-bottom: 15px;
-            font-size: 12px; /* Adjusted font size */
-            color: #555;
+          text-align: right;
+          margin-bottom: 15px;
+          font-size: 12px; /* Adjusted font size */
+          color: #555;
         }
 
         /* Pagination Controls (from image_f09ca6.png and image_f09567.png) */
         .pagination-controls {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
+          display: flex;
+          justify-content: flex-start;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 20px;
         }
 
         .pagination-button {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f0f0f0;
-            cursor: pointer;
-            font-size: 12px; /* Adjusted font size */
-            transition: background-color 0.2s, border-color 0.2s;
-            color: #333;
+          padding: 8px 12px;
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          background-color: #f0f0f0;
+          cursor: pointer;
+          font-size: 12px; /* Adjusted font size */
+          transition: background-color 0.2s, border-color 0.2s;
+          color: #333;
         }
 
         .pagination-button:hover {
-            background-color: #e0e0e0;
+          background-color: #e0e0e0;
         }
 
         .pagination-button.active {
-            background-color: #6c757d;
-            color: black;
-            border-color: #6c757d;
+          background-color: #6c757d;
+          color: white; /* Changed to white for better contrast */
+          border-color: #6c757d;
         }
 
         .pagination-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            background-color: #f7f7f7;
+          opacity: 0.5;
+          cursor: not-allowed;
+          background-color: #f7f7f7;
         }
 
         /* Table Styles */
         .user-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 700px;
-            background-color: #ffffff;
-            border: 1px solid #e0e0e0; /* Added outer border */
-            border-radius: 8px;
-            overflow: hidden;
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 700px; /* Keep minimum width for desktop view */
+          background-color: #ffffff;
+          border: 1px solid #e0e0e0; /* Added outer border */
+          border-radius: 8px;
+          overflow: hidden;
         }
 
         .user-table th,
         .user-table td {
-            padding: 10px 12px; /* Slightly reduced padding */
-            border-bottom: 1px solid #f0f0f0;
-            border-right: 1px solid #f0f0f0; /* Added right border for vertical lines */
-            text-align: center; /* ALIGN TEXT TO CENTER */
-            font-size: 12px; /* Adjusted font size */
-            color: #333;
+          padding: 10px 12px; /* Slightly reduced padding */
+          border-bottom: 1px solid #f0f0f0;
+          border-right: 1px solid #f0f0f0; /* Added right border for vertical lines */
+          text-align: center; /* ALIGN TEXT TO CENTER */
+          font-size: 12px; /* Adjusted font size */
+          color: #333;
         }
 
         /* Remove right border for the last column in header and body */
         .user-table th:last-child,
         .user-table td:last-child {
-            border-right: none;
+          border-right: none;
         }
 
         .user-table th {
-            background-color: #323943; /* Specific header background color */
-            color: white; /* Header text color */
-            font-weight: 600;
-            text-transform: none;
+          background-color: #323943; /* Specific header background color */
+          color: white; /* Header text color */
+          font-weight: 600;
+          text-transform: none;
         }
 
         /* Remove bottom border for the last row */
         .user-table tbody tr:last-child td {
-            border-bottom: none;
+          border-bottom: none;
         }
 
         /* Row Highlighting and Stripes */
         .user-table tbody tr:nth-child(odd) {
-            background-color: #ffffff;
+          background-color: #ffffff;
         }
         .user-table tbody tr:nth-child(even) {
-            background-color: #fdfdfd;
+          background-color: #fdfdfd;
         }
 
         /* Selected row background */
         .user-table tbody tr.selected-row {
-            background-color: #e0ffe0;
+          background-color: #e0ffe0;
         }
 
         /* Hover effect */
         .user-table tbody tr:hover:not(.selected-row) {
-            background-color: #f5f5f5;
+          background-color: #f5f5f5;
         }
 
         /* Checkbox Column */
         .user-table td[data-label="เลือก"] {
-            text-align: center;
+          text-align: center;
+        }
+
+        /* Add this to your <style jsx> block */
+        .table-responsive-container {
+          overflow-x: auto; /* Adds horizontal scroll if content overflows */
+          -webkit-overflow-scrolling: touch; /* Improves scrolling on iOS */
+          padding-bottom: 10px; /* Gives some space for the scrollbar */
         }
 
         /* Status Button */
         .status-button {
-            padding: 5px 8px; /* Adjusted padding */
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-size: 11px; /* Slightly smaller for button text */
-            font-weight: 500;
-            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-            min-width: 60px; /* Adjusted min-width */
-            text-align: center;
-            color: white;
+          padding: 5px 8px; /* Adjusted padding */
+          border-radius: 5px;
+          border: none;
+          cursor: pointer;
+          font-size: 11px; /* Slightly smaller for button text */
+          font-weight: 500;
+          transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+          min-width: 60px; /* Adjusted min-width */
+          text-align: center;
+          color: white;
         }
 
         .status-มา {
-            background-color: #4CAF50;
-            color: white;
+          background-color: #4caf50;
+          color: white;
         }
 
         .status-มา:hover {
-            background-color: #45a049;
+          background-color: #45a049;
         }
 
         .status-ไม่มา {
-            background-color: #f44336;
-            color: white;
+          background-color: #f44336;
+          color: white;
         }
 
         .status-ไม่มา:hover {
-            background-color: #da190b;
+          background-color: #da190b;
         }
 
         .no-data-message {
-            text-align: center;
-            font-style: italic;
-            color: #888;
-            padding: 20px;
-            font-size: 12px; /* Adjusted font size */
+          text-align: center;
+          font-style: italic;
+          color: #888;
+          padding: 20px;
+          font-size: 12px; /* Adjusted font size */
         }
 
         /* Responsive Table */
         @media (max-width: 768px) {
-            .form-grid-container {
-                grid-template-columns: repeat(2, 1fr);
-            }
+          .form-grid-container {
+            grid-template-columns: repeat(2, 1fr);
+          }
 
-            .user-table, .user-table thead, .user-table tbody, .user-table th, .user-table td, .user-table tr {
-                display: block;
-            }
+          .user-table {
+            min-width: unset; /* Remove min-width on mobile */
+          }
+          .user-table,
+          .user-table thead,
+          .user-table tbody,
+          .user-table th,
+          .user-table td,
+          .user-table tr {
+            display: block;
+          }
 
-            .user-table thead tr {
-                position: absolute;
-                top: -9999px;
-                left: -9999px;
-            }
+          .user-table thead tr {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+          }
 
-            .user-table tr {
-                margin-bottom: 10px;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            }
+          .user-table tr {
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          }
 
-            .user-table td {
-                border: none;
-                position: relative;
-                padding-left: 50%;
-                text-align: right;
-            }
+          .user-table td {
+            border: none;
+            position: relative;
+            padding-left: 55%; /* Increased padding-left to make space for data-label */
+            text-align: right;
+            border-bottom: 1px solid #f0f0f0;
+          }
 
-            .user-table td:before {
-                position: absolute;
-                left: 15px;
-                width: 45%;
-                padding-right: 10px;
-                white-space: nowrap;
-                content: attr(data-label);
-                font-weight: bold;
-                text-align: left;
-                color: #555;
-                font-size: 12px; /* Adjusted font size */
-            }
+          .user-table td:last-child {
+            /* Fix for the last td in a row */
+            border-bottom: none;
+          }
 
-            .form-buttons-container {
-                justify-content: center;
-            }
+          .user-table td:before {
+            position: absolute;
+            left: 15px;
+            width: 40%; /* Adjusted width for the data-label */
+            padding-right: 10px;
+            white-space: nowrap;
+            content: attr(data-label);
+            font-weight: bold;
+            text-align: left; /* Ensure data-label text is left-aligned */
+            color: #555;
+            font-size: 12px; /* Adjusted font size */
+          }
+
+          .form-buttons-container {
+            justify-content: center;
+          }
         }
 
         @media (max-width: 600px) {
-            .overall-layout {
-                grid-template-columns: 1fr;
-            }
+          .main-content {
+            padding: 15px;
+          }
 
-            .main-content {
-                padding: 15px;
-            }
+          .form-grid-container {
+            grid-template-columns: 1fr;
+          }
 
-            .form-grid-container {
-                grid-template-columns: 1fr;
-            }
+          .submit-btn,
+          .delete-btn {
+            width: 100%;
+            min-width: unset;
+          }
+        }
 
-            .submit-btn, .delete-btn {
-                width: 100%;
-                min-width: unset;
-            }
+        /* Spinner for loading buttons */
+        @keyframes spinner {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        .spinner {
+          display: inline-block;
+          width: 1em;
+          height: 1em;
+          vertical-align: middle;
+          border: 0.15em solid currentColor;
+          border-right-color: transparent;
+          border-radius: 50%;
+          animation: spinner 0.75s linear infinite;
         }
       `}</style>
     </div>
