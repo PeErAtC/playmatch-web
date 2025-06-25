@@ -7,13 +7,13 @@ import {
   ChevronDown,
   ChevronUp,
   User2,
-  Gift, // Import the Gift icon for BirthDay
-  X, // Import the X icon for closing (for mobile)
-  LayoutDashboard, // Import the new icon for Dashboard
-  Settings, // Import the Settings icon
-  LogOut, // Import the LogOut icon for Logout
+  Gift,
+  X,
+  LayoutDashboard,
+  Settings,
+  LogOut,
 } from "lucide-react";
-import Swal from "sweetalert2"; // Ensure Swal is imported
+import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
 const menuList = [
   {
@@ -43,20 +43,15 @@ const menuList = [
   },
   {
     label: "Dashboard",
-    path: "/dashboard",
+    path: "/Dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
-  },
-  {
-    label: "Settings", // New menu item for Settings
-    path: "/settings", // Path to the new settings page
-    icon: <Settings size={20} strokeWidth={1.7} />, // Icon for Settings
   },
 ];
 
 export default function Sidebar({
   birthDayCount = 0,
-  isSidebarOpen, // This prop now controls desktop collapse/expand and mobile open/close
-  toggleSidebar, // This function toggles the isSidebarOpen state
+  isSidebarOpen,
+  toggleSidebar,
 }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
@@ -80,14 +75,17 @@ export default function Sidebar({
     localStorage.removeItem("loggedInEmail");
     localStorage.removeItem("loggedInUsername");
     localStorage.removeItem("groupName");
-    window.location.href = "/login"; // Redirect to login page
+    window.location.href = "/login";
   };
 
-  // Close dropdown if clicked outside (only relevant when dropdown is open)
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      // Check if click is outside the user info and dropdown menu
-      if (isDropdownOpen && !event.target.closest(".sidebar-user")) {
+      // ตรวจสอบว่าคลิกอยู่นอก user-info และ dropdown-menu
+      if (
+        isDropdownOpen &&
+        !event.target.closest(".user-info") && // ต้องไม่คลิกที่ user-info
+        !event.target.closest(".user-dropdown-menu")
+      ) {
         setIsDropdownOpen(false);
       }
     };
@@ -100,23 +98,17 @@ export default function Sidebar({
 
   return (
     <aside className={`sidebar ${isSidebarOpen ? "open" : "collapsed"}`}>
-      {" "}
-      {/* Changed 'closed' to 'collapsed' for clarity on desktop */}
-      {/* Close button for mobile sidebar (only visible on mobile) */}
       <button className="sidebar-mobile-close-button" onClick={toggleSidebar}>
         <X size={24} />
       </button>
-      {/* Logo & GroupName - Now clickable to toggle sidebar */}
       <div className="sidebar-logo" onClick={toggleSidebar}>
-        {" "}
-        {/* Added onClick here */}
-        <div className="logo-icon">B</div>
+        {/* เปลี่ยนจาก div.logo-icon เป็น img แทรกเข้ามา */}
+        <img src="/images/Logo.png" alt="Company Logo" className="logo-image" />
         {isSidebarOpen && (
           <span className="logo-text">{groupName || "PlayMatch"}</span>
         )}
       </div>
       <hr className="sidebar-divider" />
-      {/* Menu */}
       <nav className="sidebar-menu">
         {menuList.map((item) => (
           <a
@@ -130,18 +122,29 @@ export default function Sidebar({
             {isSidebarOpen && <span className="menu-label">{item.label}</span>}
             {item.label === "BirthDay" &&
               birthDayCount > 0 &&
-              isSidebarOpen && ( // Conditionally render badge and only when sidebar is open
+              isSidebarOpen && (
                 <span className="birthday-badge">{birthDayCount}</span>
               )}
           </a>
         ))}
       </nav>
-      {/* User Bottom */}
-      <div className="sidebar-user">
+
+      {/* ย้าย sidebar-user ออกมาด้านนอกของโครงสร้างก่อนหน้า sidebar-menu แต่ยังคงอยู่ใน aside */}
+      <div className="sidebar-user-wrapper">
+        {" "}
+        {/* เพิ่ม wrapper เพื่อจัดตำแหน่ง dropdown ได้ง่ายขึ้น */}
         <div
           className="user-info"
           onClick={() => setIsDropdownOpen((p) => !p)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              setIsDropdownOpen((p) => !p);
+            }
+          }}
           tabIndex={0}
+          role="button"
+          aria-expanded={isDropdownOpen}
+          aria-haspopup="true"
         >
           <div className="user-avatar">
             <User2 size={21} />
@@ -156,36 +159,28 @@ export default function Sidebar({
               <ChevronDown size={18} className="user-chevron" />
             ))}
         </div>
-        {isDropdownOpen &&
-          isSidebarOpen && ( // Only show dropdown if sidebar is open too
-            <div className="user-dropdown-menu">
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  Swal.fire({
-                    title: "ยังไม่เปิดใช้งาน",
-                    text: "ฟังก์ชัน Settings ยังไม่พร้อมใช้งาน",
-                    icon: "info",
-                    confirmButtonText: "รับทราบ",
-                  });
-                  setIsDropdownOpen(false); // Close dropdown after clicking
-                }}
-              >
-                Settings
-              </button>
-              <button className="dropdown-item" onClick={handleLogout}>
-                <LogOut size={18} strokeWidth={1.7} className="dropdown-icon" />{" "}
-                {/* เพิ่มไอคอน LogOut */}
-                Logout
-              </button>
-            </div>
-          )}
+        {isDropdownOpen && isSidebarOpen && (
+          <div className="user-dropdown-menu">
+            {" "}
+            {/* Drodown อยู่ใน wrapper เดียวกับ user-info */}
+            <button
+              className="dropdown-item"
+              onClick={() => {
+                window.location.href = "/settings";
+                setIsDropdownOpen(false);
+              }}
+            >
+              <Settings size={18} strokeWidth={1.7} className="dropdown-icon" />{" "}
+              Settings
+            </button>
+            <button className="dropdown-item" onClick={handleLogout}>
+              <LogOut size={18} strokeWidth={1.7} className="dropdown-icon" />{" "}
+              Logout
+            </button>
+          </div>
+        )}
       </div>
-      {/* Removed Toggle Button for Desktop - now logo is clickable */}
-      {/* <button className="sidebar-toggle-button" onClick={toggleSidebar}>
-        {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-      </button> */}
-      {/* CSS-in-JS */}
+
       <style jsx>{`
         /* Global font */
         * {
@@ -199,7 +194,7 @@ export default function Sidebar({
           color: #fff;
           display: flex;
           flex-direction: column;
-          position: relative;
+          position: relative; /* สำคัญ: ต้องมี position เพื่อให้ z-index ทำงานกับ child elements */
           box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
           z-index: 100;
           transition: width 0.3s ease-in-out;
@@ -241,12 +236,12 @@ export default function Sidebar({
 
           .sidebar-logo .logo-text,
           .sidebar-menu-item .menu-label,
-          .sidebar-user .user-name {
+          .sidebar-user-wrapper .user-name {
             display: block !important;
             opacity: 1 !important;
             visibility: visible !important;
           }
-          .sidebar-user .user-chevron {
+          .sidebar-user-wrapper .user-chevron {
             display: block !important;
           }
           .birthday-badge {
@@ -276,20 +271,18 @@ export default function Sidebar({
           background-color: #2a2e33;
         }
 
-        .logo-icon {
-          width: 38px;
-          height: 38px;
-          background: #0d6efd;
-          border-radius: 10px;
-          color: #fff;
-          font-weight: 700;
-          font-size: 1.45rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+        /* CSS สำหรับรูปภาพโลโก้ */
+        .logo-image {
+          width: 38px; /* กำหนดขนาดตามที่ต้องการ */
+          height: 38px; /* กำหนดขนาดตามที่ต้องการ */
+          border-radius: 10px; /* หากต้องการให้มีมุมโค้งมนเหมือนเดิม */
+          object-fit: contain; /* ปรับขนาดรูปภาพให้พอดีโดยไม่ยืด */
+          flex-shrink: 0; /* ป้องกันไม่ให้รูปภาพหดตัวเมื่อพื้นที่น้อย */
+          background: #fff; /* สีพื้นหลังเหมือนเดิม อาจปรับตามโลโก้จริง */
+          padding: 5px; /* เพิ่ม padding เพื่อให้รูปภาพไม่ชิดขอบวงกลมเกินไป */
         }
-        .logo-text {
+
+        .sidebar-logo .logo-text {
           font-size: 1.25rem;
           font-weight: bold;
           color: #fff;
@@ -395,13 +388,14 @@ export default function Sidebar({
           pointer-events: none;
         }
 
-        .sidebar-user {
-          margin-top: auto;
-          padding: 22px 16px 24px 22px;
-          position: relative;
-          overflow: hidden;
+        /* New wrapper for user info and dropdown */
+        .sidebar-user-wrapper {
+          margin-top: auto; /* Push to bottom */
+          padding: 22px 16px 24px 22px; /* same padding as before */
+          position: relative; /* ทำให้ child dropdown อ้างอิงตำแหน่งได้ */
+          z-index: 101; /* ให้สูงกว่า menuList (ถ้า menuList มี z-index) */
         }
-        .sidebar.collapsed .sidebar-user {
+        .sidebar.collapsed .sidebar-user-wrapper {
           padding-left: 17px;
           padding-right: 17px;
           justify-content: center;
@@ -464,8 +458,8 @@ export default function Sidebar({
 
         .user-dropdown-menu {
           position: absolute;
-          left: 25px;
-          bottom: 60px;
+          left: 70px;
+          bottom: calc(100% + 10px);
           min-width: 155px;
           background: #232836;
           border-radius: 8px;
@@ -491,9 +485,9 @@ export default function Sidebar({
           padding: 12px 18px;
           cursor: pointer;
           transition: background 0.18s, color 0.18s;
-          display: flex; /* เพิ่ม display flex เพื่อจัดเรียงไอคอนกับข้อความ */
-          align-items: center; /* จัดให้อยู่กึ่งกลางในแนวตั้ง */
-          gap: 10px; /* เพิ่มระยะห่างระหว่างไอคอนกับข้อความ */
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
         .dropdown-item:hover {
           background: #146cfa;
