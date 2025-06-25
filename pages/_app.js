@@ -5,18 +5,19 @@ import { useState, useEffect } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../lib/firebaseConfig";
 import { Menu } from "lucide-react";
-import { useRouter } from "next/router"; // Import useRouter
+import { useRouter } from "next/router";
+import Head from 'next/head'; // <--- เพิ่มบรรทัดนี้เข้ามา!
 
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
   const [userIdForSidebar, setUserIdForSidebar] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const router = useRouter(); // Initialize useRouter
-  const { pathname } = router; // Get the current pathname
+  const router = useRouter();
+  const { pathname } = router;
 
   // Define paths where the sidebar should NOT be displayed
-  const noSidebarPaths = ["/", "/login", "/MatchDetails"]; // '/' is for index.js
+  const noSidebarPaths = ["/", "/login", "/MatchDetails"];
 
   // Check if the current path is in the noSidebarPaths array
   const showSidebar = !noSidebarPaths.includes(pathname);
@@ -50,7 +51,7 @@ function MyApp({ Component, pageProps }) {
   useEffect(() => {
     const fetchSidebarBirthdayCount = async () => {
       if (!userIdForSidebar) {
-        setBirthDayCount(0); // Reset if no user
+        setBirthDayCount(0);
         return;
       }
       try {
@@ -79,7 +80,7 @@ function MyApp({ Component, pageProps }) {
     if (userIdForSidebar) {
       fetchSidebarBirthdayCount();
     }
-  }, [userIdForSidebar]); // Re-fetch when userIdForSidebar changes
+  }, [userIdForSidebar]);
 
   // Set isSidebarOpen to true if on Desktop (screen wider than 768px)
   useEffect(() => {
@@ -99,10 +100,17 @@ function MyApp({ Component, pageProps }) {
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [showSidebar]); // Re-run when showSidebar changes
+  }, [showSidebar]);
 
   return (
     <div className="app-layout">
+      {/* เพิ่มคอมโพเนนต์ Head ที่นี่ */}
+      <Head>
+        <title>Playmatch</title> {/* <--- เพิ่มบรรทัดนี้ */}
+        {/* Favicon ของคุณยังคงอยู่ที่นี่ด้วย */}
+        <link rel="icon" href="/images/Logo.png" type="image/png" />
+      </Head>
+
       {/* Conditionally render the Sidebar */}
       {showSidebar && (
         <Sidebar
@@ -112,7 +120,7 @@ function MyApp({ Component, pageProps }) {
         />
       )}
 
-      <main className={`app-main-content ${!showSidebar ? 'full-width' : ''}`}>
+      <main className={`app-main-content ${!showSidebar ? "full-width" : ""}`}>
         {/* Conditionally render Hamburger button for mobile only when sidebar is shown */}
         {showSidebar && (
           <button className="sidebar-toggle-button" onClick={toggleSidebar}>
@@ -148,8 +156,8 @@ function MyApp({ Component, pageProps }) {
 
         /* New style for full-width content when sidebar is not present */
         .app-main-content.full-width {
-            margin-left: 0 !important; /* Ensure no left margin */
-            width: 100% !important; /* Take full width */
+          margin-left: 0 !important;
+          width: 100% !important;
         }
 
         /* Sidebar toggle button (mobile only) */
