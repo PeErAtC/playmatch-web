@@ -6,7 +6,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../lib/firebaseConfig";
 import { Menu } from "lucide-react";
 import { useRouter } from "next/router";
-import Head from 'next/head'; // <--- เพิ่มบรรทัดนี้เข้ามา!
+import Head from "next/head";
 
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
@@ -104,11 +104,29 @@ function MyApp({ Component, pageProps }) {
 
   return (
     <div className="app-layout">
-      {/* เพิ่มคอมโพเนนต์ Head ที่นี่ */}
+      {/* เพิ่มคอมโพเนนต์ Head ที่นี่สำหรับ Title และ Favicon */}
       <Head>
-        <title>Playmatch</title> {/* <--- เพิ่มบรรทัดนี้ */}
-        {/* Favicon ของคุณยังคงอยู่ที่นี่ด้วย */}
-        <link rel="icon" href="/images/Logo.png" type="image/png" />
+        <title>Playmatch</title>
+        <link
+          rel="icon"
+          href="/images/Logo.png"
+          type="image/png"
+          sizes="32x32"
+        />
+        <link
+          rel="icon"
+          href="/images/Logo.png"
+          type="image/png"
+          sizes="16x16"
+        />
+        <link
+          rel="icon"
+          href="/images/Logo.png"
+          type="image/png"
+          sizes="48x48"
+        />
+        <link rel="apple-touch-icon" href="/images/Logo.png" sizes="180x180" />
+        <link rel="shortcut icon" href="/images/Logo.png" type="image/png" />
       </Head>
 
       {/* Conditionally render the Sidebar */}
@@ -152,6 +170,7 @@ function MyApp({ Component, pageProps }) {
           overflow-y: auto;
           background-color: #e8f0f7;
           position: relative;
+          /* ลบ padding: 20px; ออกจากที่นี่ */
         }
 
         /* New style for full-width content when sidebar is not present */
@@ -184,6 +203,13 @@ function MyApp({ Component, pageProps }) {
         @media (max-width: 768px) {
           .sidebar-toggle-button {
             display: block; /* Show toggle button on mobile */
+          }
+          /* *** คง padding-top นี้ไว้ใน Media Query เท่านั้น *** */
+          .app-main-content {
+            padding-top: 70px; /* เพิ่ม padding ด้านบน เพื่อเว้นที่ให้ปุ่มแฮมเบอร์เกอร์ */
+            padding-left: 15px;
+            padding-right: 15px;
+            padding-bottom: 15px;
           }
         }
 
