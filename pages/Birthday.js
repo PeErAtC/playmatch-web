@@ -540,7 +540,7 @@ const Birthday = () => {
           color: #2c3e50;
           font-weight: 700;
           text-transform: uppercase;
-          font-size: 14px; /* ขนาดหัวตาราง 18px */
+          font-size: 13px; /* ขนาดหัวตาราง 18px */
           position: sticky; 
           top: 0;
           z-index: 10;
