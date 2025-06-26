@@ -1,40 +1,32 @@
-// src/pages/Birthday.js (หรือ pages/Birthday.js ขึ้นอยู่กับโครงสร้างโปรเจกต์ของคุณ)
 import React, { useState, useEffect, useCallback } from "react";
-// import Sidebar from "./components/sidebar"; // <--- บรรทัดนี้ถูกลบออกไปแล้ว
-// คุณไม่จำเป็นต้อง import Sidebar ในไฟล์หน้าเพจโดยตรงอีกต่อไป
-
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig"; // ตรวจสอบพาธให้ถูกต้อง
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 const Birthday = () => {
   const [birthdayMembers, setBirthdayMembers] = useState([]);
-  const [loggedInUsername, setLoggedInUsername] = useState("");
+  const [loggedInUsername, setLoggedInUsername] = useState(""); 
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentMonthName, setCurrentMonthName] = useState("");
   const currentYear = new Date().getFullYear();
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper function to generate a random hex color
-  const getRandomColor = () => {
-    const hue = Math.floor(Math.random() * 360); // 0-359
-    const saturation = Math.floor(Math.random() * (70 - 40) + 40); // 40-70% saturation
-    const lightness = Math.floor(Math.random() * (60 - 30) + 30); // 30-60% lightness (avoids very light/dark)
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  };
+  const today = new Date();
+  const currentMonthIndex = today.getMonth(); // 0-11
+  const currentDay = today.getDate(); // วันที่ปัจจุบัน
 
-  // Helper function to generate a random hex color for the cake icon (lighter/more vibrant)
-  const getAvatarRandomColor = () => {
-    const hue = Math.floor(Math.random() * 360); // 0-359
-    const saturation = Math.floor(Math.random() * (100 - 70) + 70); // 70-100% saturation
-    const lightness = Math.floor(Math.random() * (85 - 60) + 60); // 60-85% lightness (lighter but vibrant)
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  // Helper function to get month name (current month in Thai)
+  const getMonthName = (monthIndex) => {
+    const months = [
+      "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+      "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+    return months[monthIndex];
   };
 
   // Helper function to calculate age from birth date (YYYY-MM-DD format)
   const calculateAge = (isoBirthDate) => {
     if (!isoBirthDate || typeof isoBirthDate !== 'string') {
-      console.warn("Invalid birthDate format for age calculation:", isoBirthDate);
       return "N/A";
     }
     const today = new Date();
@@ -45,7 +37,6 @@ const Birthday = () => {
     const birthDateObj = new Date(birthYear, birthMonth, birthDay);
 
     if (isNaN(birthDateObj.getTime())) {
-        console.warn("Failed to parse birthDate for age calculation:", isoBirthDate);
         return "N/A";
     }
 
@@ -55,15 +46,6 @@ const Birthday = () => {
       age--;
     }
     return age;
-  };
-
-  // Function to get month name (current month in Thai)
-  const getMonthName = (monthIndex) => {
-    const months = [
-      "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-      "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
-    ];
-    return months[monthIndex];
   };
 
   // Fetch logged-in user data (username and userId)
@@ -111,9 +93,7 @@ const Birthday = () => {
         ...doc.data(),
       }));
 
-      const today = new Date();
-      const currentMonth = today.getMonth();
-      setCurrentMonthName(getMonthName(currentMonth));
+      setCurrentMonthName(getMonthName(currentMonthIndex));
 
       const filtered = allMembersData.filter(member => {
         if (member.birthDate && typeof member.birthDate === 'string') {
@@ -122,7 +102,7 @@ const Birthday = () => {
               return false;
           }
           const monthFromFirestore = birthDateObj.getMonth();
-          return monthFromFirestore === currentMonth;
+          return monthFromFirestore === currentMonthIndex;
         }
         return false;
       });
@@ -140,7 +120,7 @@ const Birthday = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, currentMonthIndex]); 
 
   useEffect(() => {
     fetchUserData();
@@ -152,372 +132,486 @@ const Birthday = () => {
     }
   }, [currentUserId, fetchBirthdayMembers]);
 
+  // --- Calendar Logic ---
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay(); 
+
+  const totalDays = getDaysInMonth(currentYear, currentMonthIndex);
+  const firstDayOfWeek = getFirstDayOfMonth(currentYear, currentMonthIndex); 
+
+  // Get birth dates for highlighting in calendar
+  const birthdayDatesInMonth = birthdayMembers.map(member =>
+    member.birthDate ? new Date(member.birthDate).getDate() : null
+  ).filter(day => day !== null);
+
+  const renderCalendarDays = () => {
+    const days = [];
+    // Fill in leading empty cells (for days from previous month)
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      days.push(<div key={`empty-prev-${i}`} className="calendar-day empty"></div>);
+    }
+
+    // Fill in days of the current month
+    for (let day = 1; day <= totalDays; day++) {
+      const isToday = day === currentDay && currentMonthIndex === new Date().getMonth() && currentYear === new Date().getFullYear();
+      const isBirthday = birthdayDatesInMonth.includes(day); // <-- ตรวจสอบวันเกิด
+      let className = "calendar-day";
+      if (isToday) className += " today";
+      if (isBirthday) className += " birthday-highlight"; // <-- เพิ่ม class สำหรับไฮไลท์
+
+      days.push(
+        <div key={`day-${day}`} className={className}>
+          {day}
+        </div>
+      );
+    }
+
+    // Fill in trailing empty cells (for days from next month) - optional, for full weeks
+    // Calculation for remaining cells to ensure a 6-row calendar grid
+    const totalCellsRendered = days.length;
+    const remainingCells = 42 - totalCellsRendered; // 7 days * 6 rows = 42 cells
+    for (let i = 0; i < remainingCells; i++) {
+        days.push(<div key={`empty-next-${i}`} className="calendar-day empty"></div>);
+    }
+
+    return days;
+  };
+
   return (
     <div className="overall-layout">
-      {/* <Sidebar /> <-- บรรทัดนี้ถูกลบออกไปแล้ว เพราะ Sidebar ถูก Render ใน _app.js แทน */}
       <main className="main-content">
-        <h2 className="page-title">วันเกิดสมาชิกประจำเดือน : {currentMonthName}</h2>
+        {/* ปรับการจัดวาง page-title-text ให้อยู่ฝั่งซ้าย */}
+        <h2 className="page-title-text-left">
+          วันเกิดสมาชิกประจำเดือน: {currentMonthName}
+        </h2>
         <hr className="title-separator" />
 
-        <div className="birthday-summary-card">
-          <div className="summary-icon">🎉</div>
-          <div className="summary-details">
-            <h3>สุขสันต์วันเกิดสมาชิกในเดือน<br />
-              <span className="current-month-highlight">{currentMonthName}</span> {currentYear}
-            </h3>
-            <p className="total-birthdays">
-              มีสมาชิกเกิดในเดือนนี้ทั้งหมด :{" "}
-              <strong>{birthdayMembers.length}</strong> คน
-            </p>
+        <div className="top-section-grid">
+          {/* Top-Left: Summary Card */}
+          <div className="birthday-summary-section">
+            <div className="summary-card">
+              <span className="summary-icon">🎉</span>
+              <div className="summary-text">
+                <h3>
+                  สมาชิกเกิดในเดือน{" "}
+                  <span className="highlight-month">{currentMonthName}</span> {currentYear}
+                </h3>
+                <p className="total-count">{birthdayMembers.length} คน</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Top-Right: Calendar Widget */}
+          <div className="calendar-widget-container">
+            <div className="calendar-header">
+              <h3>{currentMonthName} {currentYear}</h3>
+            </div>
+            <div className="calendar-weekdays">
+              <span>อา</span>
+              <span>จ</span>
+              <span>อ</span>
+              <span>พ</span>
+              <span>พฤ</span>
+              <span>ศ</span>
+              <span>ส</span>
+            </div>
+            <div className="calendar-days-grid">
+              {renderCalendarDays()}
+            </div>
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="status-message loading-status">
-            <div className="spinner"></div>
-            กำลังโหลดข้อมูลวันเกิด...
-          </div>
-        ) : (
-          <>
-            {birthdayMembers.length === 0 ? (
-              <div className="status-message no-data-status">
-                😔 ไม่พบสมาชิกที่เกิดในเดือน{currentMonthName}นี้
-              </div>
-            ) : (
-              <div className="birthday-grid">
-                {birthdayMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="birthday-member-card-glam"
-                    style={{ background: getRandomColor() }}
-                  >
-                    <div className="card-glam-header">
-                      <div
-                        className="card-glam-avatar"
-                        style={{ background: getAvatarRandomColor() }}
-                      >
-                        <span className="glam-emoji">🎂</span>
-                      </div>
-                      <h3 className="member-name-glam">{member.name}</h3>
-                    </div>
+        {/* Bottom Section: Birthday Members Table */}
+        <div className="bottom-section-table">
+          {isLoading ? (
+            <div className="status-message loading-status">
+              <div className="spinner"></div>
+              กำลังโหลดข้อมูลวันเกิด...
+            </div>
+          ) : (
+            <>
+              {birthdayMembers.length === 0 ? (
+                <div className="status-message no-data-status">
+                  😔 ไม่พบสมาชิกที่เกิดในเดือน{currentMonthName}นี้
+                </div>
+              ) : (
+                <div className="birthday-table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ลำดับ</th>
+                        <th>ชื่อสมาชิก</th>
+                        <th>วันเกิด</th>
+                        <th>อายุ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {birthdayMembers.map((member, index) => {
+                        const birthDayOfMonth = member.birthDate ? new Date(member.birthDate).getDate() : null;
+                        const isMemberBirthdayToday = 
+                          birthDayOfMonth === currentDay && 
+                          currentMonthIndex === new Date(member.birthDate).getMonth();
 
-                    <div className="card-glam-details">
-                      <div className="detail-row-glam">
-                        <span className="detail-label-glam">วันเกิด:</span>
-                        <span className="detail-value-glam date-highlight-glam">
-                          {member.birthDate ? new Date(member.birthDate).toLocaleDateString('th-TH', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric'
-                          }) : "ไม่ระบุ"}
-                        </span>
-                      </div>
-                      <div className="detail-row-glam">
-                        <span className="detail-label-glam">อายุ:</span>
-                        <span className="detail-value-glam age-highlight-glam">{calculateAge(member.birthDate)} ปี</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+                        return (
+                          <tr 
+                            key={member.id} 
+                            className={`member-row ${isMemberBirthdayToday ? 'today-birthday-row' : ''}`}
+                          >
+                            <td>{index + 1}</td>
+                            <td className="member-name-cell">{member.name}</td>
+                            <td>
+                              {member.birthDate ? new Date(member.birthDate).toLocaleDateString('th-TH', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                }) : "ไม่ระบุ"}
+                            </td>
+                            <td>{calculateAge(member.birthDate)} ปี</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </main>
 
-      {/* --- Updated CSS Styles for Birthday.js --- */}
-      {/* CSS ยังคงอยู่ที่เดิม แต่คุณอาจต้องปรับโครงสร้าง overall-layout หากต้องการให้ main-content กินพื้นที่เต็มหน้า */}
       <style jsx>{`
         /* --- Base & Layout --- */
         .overall-layout {
-          display: grid;
-          /* เดิม: grid-template-columns: 240px 1fr;
-             ตอนนี้: _app.js จัดการ Sidebar แล้ว, คุณอาจต้องการให้ main-content
-             กินพื้นที่ 100% หรือปรับตาม Layout หลักที่คุณกำหนดใน _app.js
-             สำหรับตอนนี้ เราจะลบการกำหนด grid-template-columns ที่นี่
-             เพื่อให้มันเข้ากับ layout ที่ _app.js จัดการให้
-          */
-          /* grid-template-columns: 240px 1fr; <--- บรรทัดนี้ควรถูกจัดการที่ layout หลัก (เช่น _app.js) */
-          height: 100vh;
+          height: 100%;
+          width: 100%;
         }
 
         .main-content {
-          padding: 28px;
-          background-color: #e8f0f7;
+          padding: 20px;
+          background-color: #f7f9fc;
           border-radius: 12px;
           overflow-y: auto;
           font-family: 'Kanit', sans-serif;
-          /* หากไม่มี grid-template-columns ใน overall-layout แล้ว
-             main-content อาจจะกว้าง 100% หากไม่ได้ถูกกำหนดใน layout หลัก */
+          color: #333;
+          font-size: 14px; /* กำหนด font-size พื้นฐาน */
         }
 
-        .page-title {
-          color:rgb(0, 0, 0);
-          font-size: 18px;
-          margin-bottom: 20px;
+        /* Page Title ที่อยู่ฝั่งซ้าย */
+        .page-title-text-left { 
+          color: #2c3e50;
+          font-size: 18px; /* ขนาดหัวข้อใหญ่สุดตามที่ระบุ */
+          margin-bottom: 15px; 
           font-weight: 700;
-          display: flex;
+          display: flex; 
           align-items: center;
-          gap: 10px;
+          justify-content: flex-start; /* จัดให้อยู่ฝั่งซ้าย */
+          text-align: left; 
+          border-bottom: 2px solid #e0e6ed;
+          padding-bottom: 12px;
         }
 
         .title-separator {
-          border: none;
-          border-top: 2px solid #d4e0e8;
-          margin-bottom: 40px;
-        }
-
-        /* --- Birthday Summary Card (EVEN SMALLER DESIGN) --- */
-        .birthday-summary-card {
-          background: linear-gradient(135deg, #ff7e5f, #feb47b, #ffda7f);
-          color: #fff;
-          padding: 18px 15px;
-          border-radius: 12px;
-          margin-bottom: 25px;
-          text-align: center;
-          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .birthday-summary-card::before {
-          content: '🎉';
-          position: absolute;
-          top: 5px;
-          left: 10px;
-          font-size: 45px;
-          opacity: 0.1;
-          transform: rotate(-20deg);
-          pointer-events: none;
-        }
-
-        .birthday-summary-card::after {
-          content: '🎂';
-          position: absolute;
-          bottom: 5px;
-          right: 10px;
-          font-size: 35px;
-          opacity: 0.1;
-          transform: rotate(15deg);
-          pointer-events: none;
-        }
-
-        .summary-icon {
           display: none;
         }
 
-        .summary-details h3 {
-          margin: 0 0 3px 0;
-          font-size: 16px;
-          font-weight: 700;
-          line-height: 1.2;
-          text-shadow: 0.5px 0.5px 2px rgba(0, 0, 0, 0.2);
-        }
-
-        .current-month-highlight {
-          font-weight: 900;
-          font-size: 1.1em;
-          color: #ffeb3b;
-          text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
-          display: block;
-          margin-top: 2px;
-        }
-
-        .total-birthdays {
-          font-size: 13px;
-          margin-top: 8px;
-          font-weight: 500;
-          color: rgba(255, 255, 255, 0.9);
-          display: flex;
-          align-items: baseline;
-          gap: 5px;
-        }
-
-        .total-birthdays strong {
-          font-size: 22px;
-          font-weight: 900;
-          color: #da190b;
-          text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.4);
-          line-height: 1;
-          animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.06);
-            opacity: 0.9;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-
-        /* --- NEW BIRTHDAY MEMBER CARD DESIGN (Version Glamorous & Compact) --- */
-        .birthday-grid {
+        /* --- Top Section Grid (Summary Card + Calendar) --- */
+        .top-section-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+          grid-template-columns: 1fr 1fr;
           gap: 20px;
-          padding-top: 0px;
+          margin-top: 20px;
+          margin-bottom: 20px;
         }
 
-        .birthday-member-card-glam {
-          border-radius: 20px;
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1),
-                        0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-          overflow: hidden;
-          transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-          position: relative;
+        /* --- Birthday Summary Section --- */
+        .birthday-summary-section {
           display: flex;
-          flex-direction: column;
+          justify-content: center;
+        }
+
+        .summary-card {
+          background: linear-gradient(135deg, #74ebd5, #9face6);
+          color: #fff;
+          padding: 15px 20px;
+          border-radius: 12px;
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+          display: flex;
           align-items: center;
-          text-align: center;
-          padding-bottom: 20px;
-        }
-
-        .birthday-member-card-glam:hover {
-          transform: translateY(-8px) scale(1.01);
-          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2),
-                        0 0 0 2px rgba(255, 255, 255, 0.7) inset;
-        }
-
-        .card-glam-header {
+          gap: 12px;
+          min-width: 220px;
+          max-width: 100%;
           width: 100%;
-          background: linear-gradient(145deg, rgba(255, 221, 193, 0.5), rgba(255, 192, 203, 0.5));
-          padding: 40px 15px 60px 15px;
-          border-bottom-left-radius: 35% 25px;
-          border-bottom-right-radius: 35% 25px;
           position: relative;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 25px;
+          overflow: hidden;
         }
 
-        .card-glam-avatar {
-          width: 90px;
-          height: 90px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 50px;
-          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2),
-                        0 0 0 4px rgba(255, 255, 255, 0.8);
+        .summary-card::before {
+          content: '';
           position: absolute;
-          bottom: -45px;
-          left: 50%;
-          transform: translateX(-50%);
+          top: -15px;
+          right: -15px;
+          width: 60px;
+          height: 60px;
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 50%;
+          transform: rotate(45deg);
+        }
+
+        .summary-card::after {
+          content: '';
+          position: absolute;
+          bottom: -15px;
+          left: -15px;
+          width: 45px;
+          height: 45px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 50%;
+          transform: rotate(-30deg);
+        }
+
+        .summary-icon {
+          font-size: 30px; /* ขนาด icon */
+          line-height: 1;
+          z-index: 1;
+        }
+
+        .summary-text h3 {
+          margin: 0;
+          font-size: 14px; /* ปรับขนาดเป็น 14px */
+          font-weight: 600;
+          line-height: 1.3;
+          text-shadow: 0.5px 0.5px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .highlight-month {
+          font-weight: 800;
+          color: #ffee58;
+          text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .total-count {
+          font-size: 24px; /* ปรับขนาดตัวเลขจำนวน */
+          font-weight: 900;
+          margin-top: 3px;
+          color: #fff;
+          text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+          animation: popIn 0.8s ease-out;
+        }
+
+        /* --- Calendar Widget --- */
+        .calendar-widget-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); 
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid #e0e6ed; 
+        }
+
+        .calendar-header {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px; 
+            padding-bottom: 10px;
+            border-bottom: 2px solid #a8dadc; 
+        }
+
+        .calendar-header h3 {
+            font-size: 18px; /* ปรับขนาดเป็น 18px */
+            color: #1d3557; 
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            width: 100%;
+            text-align: center;
+            font-weight: 700;
+            color: #457b9d; 
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+
+        .calendar-weekdays span {
+            padding: 5px 0;
+            font-size: 14px; /* ปรับขนาดเป็น 14px */
+        }
+
+        .calendar-days-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px; 
+            width: 100%;
+        }
+
+        .calendar-day {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1 / 1;
+            font-size: 14px; /* ปรับขนาดเป็น 14px */
+            font-weight: 500;
+            color: #333;
+            border-radius: 50%; 
+            transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+            cursor: default; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+        }
+
+        .calendar-day:hover:not(.empty):not(.today):not(.birthday-highlight) {
+            background-color: #f1faee; 
+            transform: translateY(-1px);
+        }
+
+        .calendar-day.empty {
+            background-color: #f8f9fa; 
+            color: #adb5bd; 
+            box-shadow: none;
+        }
+
+        .calendar-day.today {
+            background-color: #457b9d; 
+            color: #fff;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(69, 123, 157, 0.4); 
+            border: 2px solid #a8dadc; 
+            transform: scale(1.05); 
+        }
+
+        .calendar-day.birthday-highlight {
+            background-color: #ffb3b3; /* สีชมพูอ่อนสำหรับวันเกิด */
+            color: #a82a2a; /* สีแดงเข้ม */
+            font-weight: 700;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(255, 179, 179, 0.5); /* เงาเน้นวันเกิด */
+            border: 2px solid #ff7b7b; /* กรอบสีชมพูเข้ม */
+        }
+
+        .calendar-day.birthday-highlight::after {
+            content: '🎂';
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 9px; /* ขนาดไอคอนเค้ก */
+            line-height: 1;
+            opacity: 0.9;
+        }
+        
+        /* Combine today and birthday highlight */
+        .calendar-day.today.birthday-highlight {
+            background-color: #e63946; /* สีแดงเข้มสำหรับวันนี้ที่เป็นวันเกิด */
+            color: #fff;
+            border: 2px solid #f1faee; /* กรอบสีขาว */
+            box-shadow: 0 6px 15px rgba(230, 57, 70, 0.6); /* เงาเน้นพิเศษ */
+        }
+
+        /* --- Bottom Section (Birthday Table) --- */
+        .bottom-section-table {
+          width: 100%;
+        }
+
+        .birthday-table-container {
+          background-color: #fff;
+          border-radius: 12px;
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); 
+          overflow-x: auto;
+          padding: 15px; 
+          min-height: 250px;
+          border: 1px solid #e0e6ed; 
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 500px;
+        }
+
+        th, td {
+          padding: 12px 15px;
+          text-align: left;
+          border-bottom: 1px solid #e0e6ed;
+        }
+
+        th {
+          background-color: #eaf6ff;
+          color: #2c3e50;
+          font-weight: 700;
+          text-transform: uppercase;
+          font-size: 14px; /* ขนาดหัวตาราง 18px */
+          position: sticky; 
+          top: 0;
           z-index: 10;
         }
 
-        .glam-emoji {
-            animation: bounceIn 1.5s ease-out;
-            animation-iteration-count: 1;
+        tbody tr:nth-child(even) { 
+          background-color: #f9fcff;
         }
 
-        @keyframes bounceIn {
-            0% { transform: scale(0.3); opacity: 0; }
-            50% { transform: scale(1.05); opacity: 1; }
-            70% { transform: scale(0.9); }
-            100% { transform: scale(1); }
-        }
-
-        .member-name-glam {
-          color: #fff;
-          font-size: 22px;
-          font-weight: 800;
-          margin-top: -15px;
-          position: relative;
-          z-index: 11;
-          text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
-        }
-
-        .card-glam-details {
-          width: 100%;
-          padding: 10px 20px;
-          padding-top: 35px;
-        }
-
-        .detail-row-glam {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 8px 0;
-          border-bottom: 1px dashed #f5f5f5;
-        }
-        .detail-row-glam:last-child {
+        tbody tr:last-child td {
           border-bottom: none;
         }
 
-        .detail-label-glam {
+        .member-row {
+          transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .member-row:hover {
+          background-color: #eaf2f7; 
+          transform: translateY(-2px); 
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); 
+        }
+
+        .member-name-cell {
           font-weight: 600;
-          color:rgb(13, 37, 61);
-          font-size: 13px;
-          margin-bottom: 3px;
-          margin-right: 0;
+          color: #34495e;
         }
 
-        .detail-value-glam {
-          color: #333;
-          font-size: 14px;
-          text-align: center;
-          flex-grow: 1;
-          word-break: break-word;
+        td {
+          color: #555;
+          font-size: 12px; /* ขนาดข้อมูลในตาราง 14px */
         }
 
-        .age-highlight-glam {
-          font-weight: 700;
-          color:rgb(247, 39, 16);
-          font-size: 1.1em;
-          letter-spacing: 0.2px;
+        .today-birthday-row {
+            background-color: #ffe0b2; 
+            font-weight: 600;
+            color: #d35400;
+            border-left: 5px solid #ff9800; 
+            animation: pulse-border 1.5s infinite alternate; 
         }
 
-        .date-highlight-glam {
-          font-weight: 600;
-          color:rgb(18, 31, 24);
+        .today-birthday-row .member-name-cell {
+            color: #e65100; 
+        }
+
+        @keyframes pulse-border {
+            0% { border-color: #ff9800; }
+            100% { border-color: #ffa726; }
         }
 
         /* --- Status Messages --- */
         .status-message {
           text-align: center;
-          padding: 40px;
-          font-size: 20px;
+          padding: 30px;
+          font-size: 14px; /* ปรับขนาดเป็น 14px */
           color: #6c757d;
-          background-color: #eef2f5;
+          background-color: #ebf2f7;
           border-radius: 10px;
-          margin-top: 40px;
-          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+          margin-top: 30px;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 15px;
-        }
-
-        .loading-status {
-          color: #007bff;
-        }
-
-        .no-data-status {
-          color: #6c757d;
+          gap: 10px;
         }
 
         .spinner {
-          border: 5px solid #f3f3f3;
-          border-top: 5px solid #007bff;
-          border-radius: 50%;
-          width: 40px;
-          height: 40px;
+          border: 4px solid #e0e0e0;
+          border-top: 4px solid #007bff;
+          width: 30px;
+          height: 30px;
           animation: spin 1s linear infinite;
         }
 
@@ -527,146 +621,152 @@ const Birthday = () => {
         }
 
         /* --- Responsive Adjustments --- */
-        @media (min-width: 1600px) {
-            .birthday-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
-        @media (max-width: 1400px) {
-            .birthday-grid {
-                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                gap: 18px;
-            }
-            .page-title {
-                font-size: 26px;
-            }
-        }
-
         @media (max-width: 1200px) {
-            .birthday-grid {
-                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                gap: 15px;
+            .top-section-grid {
+                grid-template-columns: 1fr; 
             }
-            .member-name-glam {
-                font-size: 20px;
-            }
-            .card-glam-avatar {
-                width: 80px;
-                height: 80px;
-                font-size: 45px;
-                bottom: -40px;
-            }
-            .card-glam-header {
-                padding-bottom: 50px;
-            }
-            .card-glam-details {
-                padding-top: 50px;
+            .summary-card,
+            .calendar-widget-container {
+                max-width: 450px; 
+                margin: 0 auto; 
             }
         }
 
         @media (max-width: 1024px) {
           .main-content {
-            padding: 20px;
+            padding: 15px;
+            font-size: 13px;
           }
-          .page-title {
-            font-size: 24px;
+          .page-title-text-left { 
+            font-size: 16px; 
+            padding-bottom: 10px;
           }
-          .birthday-grid {
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 15px;
+          .summary-card {
+            padding: 12px 15px;
+          }
+          .summary-icon {
+            font-size: 26px; /* ลดขนาด icon */
+          }
+          .summary-text h3 {
+            font-size: 13px; /* ลดขนาดเป็น 13px */
+          }
+          .total-count {
+            font-size: 22px; /* ลดขนาดตัวเลขจำนวน */
+          }
+          .calendar-header h3 {
+            font-size: 16px; /* ลดขนาดเป็น 16px */
+          }
+          .calendar-weekdays span {
+            font-size: 12px; /* ลดขนาดเป็น 12px */
+          }
+          .calendar-day {
+            font-size: 13px; /* ลดขนาดเป็น 13px */
+          }
+          .calendar-day.birthday-highlight::after {
+            font-size: 8px; /* ลดขนาด icon เค้ก */
+          }
+          th, td {
+            padding: 10px 12px;
+            font-size: 13px;
+          }
+          th {
+              font-size: 16px; 
+          }
+          .status-message {
+            font-size: 13px; /* ลดขนาดเป็น 13px */
           }
         }
 
         @media (max-width: 768px) {
-          .overall-layout {
-            /* ลบบรรทัดนี้ออกไปเพราะ _app.js จะจัดการ layout หลัก */
-            /* grid-template-columns: 1fr; */
-          }
           .main-content {
-            padding: 0px;
-          }
-          .page-title {
-            font-size: 22px;
-            text-align: center;
-            justify-content: center;
-          }
-          .title-separator {
-            margin-bottom: 30px;
-          }
-          .birthday-summary-card {
-            padding: 15px 12px;
-            border-radius: 10px;
-          }
-          .birthday-summary-card::before {
-            font-size: 35px;
-            top: 5px;
-            left: 8px;
-          }
-          .birthday-summary-card::after {
-            font-size: 28px;
-            bottom: 5px;
-            right: 8px;
-          }
-          .summary-details h3 {
-            font-size: 14px;
-          }
-          .current-month-highlight {
-            font-size: 1em;
-          }
-          .total-birthdays {
+            padding: 10px;
             font-size: 12px;
-            gap: 4px;
           }
-          .total-birthdays strong {
+          .page-title-text-left { 
+            font-size: 14px; 
+            padding-bottom: 8px;
+          }
+          .summary-card {
+            padding: 10px 12px;
+            gap: 8px;
+          }
+          .summary-icon {
+            font-size: 22px;
+          }
+          .summary-text h3 {
+            font-size: 12px;
+          }
+          .total-count {
             font-size: 18px;
           }
-          .birthday-grid {
-            grid-template-columns: 1fr;
-            gap: 20px;
+          .calendar-widget-container {
+            padding: 10px;
           }
-          .birthday-member-card-glam {
-            padding-bottom: 15px;
+          .calendar-header h3 {
+            font-size: 14px;
           }
-          .card-glam-header {
-            padding: 30px 15px 50px 15px;
+          .calendar-weekdays span {
+            font-size: 10px;
           }
-          .card-glam-avatar {
-            width: 80px;
-            height: 80px;
-            font-size: 45px;
-            bottom: -40px;
+          .calendar-day {
+            font-size: 11px;
+            border-radius: 50%; 
           }
-          .member-name-glam {
-            font-size: 20px;
+          .calendar-day.birthday-highlight::after {
+            font-size: 6px;
           }
-          .card-glam-details {
-            padding-top: 40px;
+          th, td {
+            padding: 8px 10px;
+            font-size: 12px;
+          }
+          th {
+              font-size: 14px;
+          }
+          .status-message {
+            font-size: 12px;
+          }
+          .spinner {
+            width: 25px;
+            height: 25px;
           }
         }
 
         @media (max-width: 480px) {
-          .birthday-summary-card {
-            padding: 10px 8px;
-            margin-bottom: 20px;
+          .main-content {
+            padding: 8px;
           }
-          .birthday-summary-card::before {
-            font-size: 30px;
+          .page-title-text-left { 
+            font-size: 12px; 
           }
-          .birthday-summary-card::after {
-            font-size: 24px;
+          .summary-card {
+            padding: 8px 10px;
           }
-          .summary-details h3 {
+          .summary-icon {
+            font-size: 20px;
+          }
+          .summary-text h3 {
+            font-size: 11px;
+          }
+          .total-count {
+            font-size: 16px;
+          }
+          .calendar-header h3 {
             font-size: 12px;
           }
-          .current-month-highlight {
-            font-size: 0.9em;
+          .calendar-weekdays span {
+            font-size: 9px;
           }
-          .total-birthdays {
+          .calendar-day {
             font-size: 10px;
           }
-          .total-birthdays strong {
-            font-size: 16px;
+          th, td {
+            font-size: 10px;
+          }
+          th {
+              font-size: 11px;
+          }
+          table {
+            min-width: 320px; /* ลด min-width ลงอีกสำหรับหน้าจอที่เล็กมากๆ */
           }
         }
       `}</style>
