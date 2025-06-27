@@ -1,4 +1,4 @@
-// pages/Ranking.js
+// pages/Ranking.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { db, auth } from "../lib/firebaseConfig"; // ตรวจสอบเส้นทางนี้ให้ถูกต้อง
 import {
@@ -13,7 +13,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import Swal from "sweetalert2";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { FaTrophy, FaCrown, FaSearch } from "react-icons/fa"; // นำ FaCalendarAlt ออก
+import { FaTrophy, FaCrown, FaSearch, FaMedal } from "react-icons/fa"; // เพิ่ม FaMedal
 
 const Ranking = () => {
   const [rankings, setRankings] = useState([]);
@@ -27,7 +27,7 @@ const Ranking = () => {
 
   // --- State for Pagination ---
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(17); 
+  const [itemsPerPage] = useState(17);
 
   // --- State for Search ---
   const [searchTerm, setSearchTerm] = useState("");
@@ -216,8 +216,13 @@ const Ranking = () => {
             const score = data[playerName].score || 0;
 
             let draws = 0;
-            if (score >= wins * 2) {
+            // Calculate draws based on score logic (assuming wins give 2 points, draws 1 point)
+            if (score > wins * 2) {
               draws = score - wins * 2;
+            } else if (score < wins * 2) {
+                // This case suggests score is less than expected from wins, implying a possible data discrepancy
+                // For robustness, ensure draws isn't negative
+                draws = 0;
             }
 
             let losses = Math.max(0, totalGames - wins - draws);
@@ -313,8 +318,9 @@ const Ranking = () => {
       player.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // แยกอันดับ 1, 2, 3
   const top3Rankings = filteredRankings.slice(0, 3);
-  const otherRankings = filteredRankings.slice(3); // Other rankings start after top 3
+  const otherRankings = filteredRankings.slice(3); // อันดับที่เหลือ
 
   // --- Pagination Logic for otherRankings ---
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -340,1514 +346,932 @@ const Ranking = () => {
     }
   };
 
-  // --- Effect to adjust hero section padding based on table padding ---
-  useEffect(() => {
-    const adjustHeroSectionPadding = () => {
-      const rankingContainer = document.querySelector('.ranking-container');
-      const rankingHeroSection = document.querySelector('.ranking-hero-section');
-      const rankingTableWrapper = document.querySelector('.ranking-table-wrapper');
-
-      if (rankingContainer && rankingHeroSection && rankingTableWrapper) {
-        // Add a class to indicate table exists, useful for CSS targeting if needed
-        rankingContainer.classList.add('table-exists');
-
-        // Get computed padding of the table wrapper
-        const computedStyle = window.getComputedStyle(rankingTableWrapper);
-        const tablePaddingLeft = computedStyle.getPropertyValue('padding-left');
-        const tablePaddingRight = computedStyle.getPropertyValue('padding-right');
-        const tableBorderLeft = computedStyle.getPropertyValue('border-left-width');
-        const tableBorderRight = computedStyle.getPropertyValue('border-right-width');
-
-        // Apply these paddings/borders to the hero section
-        rankingHeroSection.style.paddingLeft = `calc(${tablePaddingLeft} + ${tableBorderLeft})`;
-        rankingHeroSection.style.paddingRight = `calc(${tablePaddingRight} + ${tableBorderRight})`;
-
-        // You might need to adjust margin-left/right if the table wrapper has margins
-        // For simplicity, we assume rankingContainer directly controls max-width and table is inside it.
-      } else if (rankingContainer && rankingHeroSection) {
-         // If table doesn't exist, reset to a default padding or match container's natural padding
-         rankingContainer.classList.remove('table-exists');
-         rankingHeroSection.style.paddingLeft = '20px'; // Default padding
-         rankingHeroSection.style.paddingRight = '20px'; // Default padding
-      }
-    };
-
-    // Run on mount and window resize
-    adjustHeroSectionPadding();
-    window.addEventListener('resize', adjustHeroSectionPadding);
-    return () => window.removeEventListener('resize', adjustHeroSectionPadding);
-  }, [rankings, selectedMonth, selectedYear]); // Re-run if rankings change (table might appear/disappear)
-
-
   return (
-    <div className="main-content">
+    <div style={styles.container}>
       <Head>
         <title>Ranking - PBTH</title>
       </Head>
 
-      {/* --- Dedicated Background Pattern Div --- */}
-      <div className="background-pattern"></div>
+      {/* --- Ranking Hero Section & Filters --- */}
+      <div style={styles.rankingHeroSection}>
+        <h1 style={styles.rankingPageTitle}>
+          <FaTrophy style={styles.titleIcon} /> อันดับผู้เล่นยอดเยี่ยม
+        </h1>
+        <p style={styles.rankingSubtitle}>
+          ประจำเดือน{" "}
+          <span style={styles.highlightText}>
+            {selectedMonth ? getMonthName(selectedMonth) : "..."}
+          </span>{" "}
+          ปี{" "}
+          <span style={styles.highlightText}>
+            {selectedYear ? `พ.ศ. ${parseInt(selectedYear) + 543}` : "..."}
+          </span>
+        </p>
 
-      <div className="ranking-container">
-        {/* --- Ranking Hero Section & Filters --- */}
-        <div className="ranking-hero-section">
-          <h1 className="ranking-page-title">
-            <FaTrophy className="title-icon" /> อันดับผู้เล่นยอดเยี่ยม
-          </h1>
-          <p className="ranking-subtitle">
-            ประจำเดือน{" "}
-            <span className="highlight-text">
-              {selectedMonth ? getMonthName(selectedMonth) : "..."}
-            </span>{" "}
-            ปี{" "}
-            <span className="highlight-text">
-              {selectedYear ? `พ.ศ. ${parseInt(selectedYear) + 543}` : "..."}
-            </span>
-          </p>
-
-          <div className="filter-controls">
-            <div className="filter-item">
-              <label htmlFor="month-select" className="sr-only">
-                เลือกเดือน
-              </label>
-              {/* <FaCalendarAlt className="filter-icon" /> // Removed Icon */}
-              <select
-                id="month-select"
-                value={selectedMonth}
-                onChange={handleMonthChange}
-                className="month-select-new"
-                aria-label="Select Ranking Month"
-              >
-                <option value="">เลือกเดือน</option>
-                {availableMonths.map((month) => (
-                  <option key={month} value={month}>
-                    {getMonthName(month)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="filter-item">
-              <label htmlFor="year-select" className="sr-only">
-                เลือกปี
-              </label>
-              {/* <FaCalendarAlt className="filter-icon" /> // Removed Icon */}
-              <select
-                id="year-select"
-                value={selectedYear}
-                onChange={handleYearChange}
-                className="year-select-new"
-                aria-label="Select Ranking Year"
-              >
-                <option value="">เลือกปี</option>
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    ปี {parseInt(year) + 543}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div style={styles.filterControls}>
+          <div style={styles.filterItem}>
+            <label htmlFor="month-select" style={{ display: 'none' }}>
+              เลือกเดือน
+            </label>
+            <select
+              id="month-select"
+              value={selectedMonth}
+              onChange={handleMonthChange}
+              style={styles.selectControl}
+              aria-label="Select Ranking Month"
+            >
+              <option value="">เลือกเดือน</option>
+              {availableMonths.map((month) => (
+                <option key={month} value={month}>
+                  {getMonthName(month)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={styles.filterItem}>
+            <label htmlFor="year-select" style={{ display: 'none' }}>
+              เลือกปี
+            </label>
+            <select
+              id="year-select"
+              value={selectedYear}
+              onChange={handleYearChange}
+              style={styles.selectControl}
+              aria-label="Select Ranking Year"
+            >
+              <option value="">เลือกปี</option>
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  ปี {parseInt(year) + 543}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-
-        {/* --- Conditional Rendering based on Loading/Error/Data --- */}
-        {loading ? (
-          <div className="loading-state">
-            <div className="loading-spinner"></div>
-            <p>กำลังโหลดข้อมูลอันดับ...</p>
-          </div>
-        ) : error ? (
-          <div className="message-box error-box">
-            <p>เกิดข้อผิดพลาด: {error}</p>
-          </div>
-        ) : rankings.length > 0 ? (
-          <>
-            {/* --- Top 3 Rankings Section --- */}
-            <div className="top3-cards-wrapper">
-              {top3Rankings.map((player, index) => (
-                <div
-                  key={player.name}
-                  className={`player-card rank-${index + 1}`}
-                >
-                  <div className="player-rank-circle">
-                    <span className="rank-text">
-                      {index + 1}
-                      {index === 0 && (
-                        <FaCrown className="crown-icon" />
-                      )}{" "}
-                      {/* มงกุฎสำหรับอันดับ 1 */}
-                    </span>
-                  </div>
-                  <h3 className="player-card-name">{player.name}</h3>
-                  <p className="player-card-level">Level: {player.level}</p>
-                  <div className="score-detail">
-                    <p className="player-card-score">{player.score || 0}</p>
-                  </div>
-                  <div className="stats-row">
-                    <div className="stat-item">
-                      <p className="stat-value wins-value">
-                        {player.wins || 0}
-                      </p>
-                      <p className="stat-label">ชนะ</p>
-                    </div>
-                    <div className="stat-item">
-                      <p className="stat-value draws-value">
-                        {player.draws || 0}
-                      </p>
-                      <p className="stat-label">เสมอ</p>
-                    </div>
-                    <div className="stat-item">
-                      <p className="stat-value losses-value">
-                        {player.losses || 0}
-                      </p>
-                      <p className="stat-label">แพ้</p>
-                    </div>
-                    <div className="stat-item">
-                      <p className="stat-value">{player.totalGames || 0}</p>
-                      <p className="stat-label">รวม</p>
-                    </div>
-                    <div className="stat-item">
-                      <p className="stat-value">
-                        {player.winRate || "0.00"}%
-                      </p>
-                      <p className="stat-label">อัตราชนะ</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* --- Other Rankings Table Controls (Search, Pagination, Total) --- */}
-            {otherRankings.length > 0 && (
-              <div className="table-controls-wrapper">
-                {/* Pagination Controls - Left */}
-                {totalPages > 1 && (
-                    <div className="pagination">
-                      <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className="pagination-button"
-                        aria-label="Previous Page"
-                      >
-                        ย้อนกลับ
-                      </button>
-                      {Array.from({ length: totalPages }, (_, i) => (
-                        <button
-                          key={i + 1}
-                          onClick={() => paginate(i + 1)}
-                          className={`pagination-button ${
-                            currentPage === i + 1 ? "active" : ""
-                          }`}
-                          aria-label={`Page ${i + 1}`}
-                        >
-                          {i + 1}
-                        </button>
-                      ))}
-                      <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className="pagination-button"
-                        aria-label="Next Page"
-                      >
-                        ถัดไป
-                      </button>
-                    </div>
-                  )}
-
-                {/* Search Bar - Center */}
-                <div className="search-bar">
-                  <FaSearch className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder="ค้นหารายชื่อผู้เล่น..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setCurrentPage(1); // Reset to first page on search
-                    }}
-                    className="search-input"
-                    aria-label="Search Player Name"
-                  />
-                </div>
-
-                {/* Total Members - Right */}
-                <div className="total-members">
-                    สมาชิกทั้งหมด:{" "}
-                    <span className="total-count">{filteredRankings.length}</span> คน
-                </div>
-              </div>
-            )}
-
-            {/* --- Other Rankings Table --- */}
-            {currentOtherRankings.length > 0 ? (
-              <div className="ranking-table-wrapper">
-                <table className="ranking-table">
-                  <thead>
-                    <tr>
-                      <th className="table-header-rank">ลำดับ</th>
-                      <th className="table-header-player">ผู้เล่น</th>
-                      <th className="table-header-level">Level</th>
-                      <th className="table-header-wins">ชนะ</th>
-                      <th className="table-header-draws">เสมอ</th>
-                      <th className="table-header-losses">แพ้</th>
-                      <th className="table-header-total-games">รวม</th>
-                      <th className="table-header-win-rate">อัตราชนะ%</th>
-                      <th className="table-header-score">คะแนน</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentOtherRankings.map((player, index) => (
-                      <tr key={player.name}>
-                        <td className="rank-cell">
-                          <span className="rank-number-table">
-                            {indexOfFirstItem + index + 1 + 3}{" "}
-                            {/* Adjust rank for top 3 offset */}
-                          </span>
-                        </td>
-                        <td className="player-name-cell-table">
-                          {player.name}
-                        </td>
-                        <td className="level-cell-table">
-                          {player.level || "-"}
-                        </td>
-                        <td className="wins-cell-table">
-                          <span className="wins-badge">
-                            {player.wins || 0}
-                          </span>
-                        </td>
-                        <td className="draws-cell-table">
-                          <span className="draws-badge">
-                            {player.draws || 0}
-                          </span>
-                        </td>
-                        <td className="losses-cell-table">
-                          <span className="losses-badge">
-                            {player.losses || 0}
-                          </span>
-                        </td>
-                        <td className="total-games-cell-table">
-                          {player.totalGames || 0}
-                        </td>
-                        <td className="win-rate-cell-table">
-                          <span className="win-rate-badge">
-                            {player.winRate || "0.00"}%
-                          </span>
-                        </td>
-                        <td className="score-cell-table">
-                          <span className="score-badge">
-                            {player.score || 0}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="message-box info-box">
-                <p>ไม่พบผู้เล่นที่ตรงกับคำค้นหาของคุณ</p>
-              </div>
-            )}
-          </>
-        ) : (
-          // --- No data or not logged in message ---
-          <div className="message-box info-box">
-            {!loggedInUserId ? (
-              <p>โปรดเข้าสู่ระบบเพื่อดูข้อมูลอันดับผู้เล่น</p>
-            ) : selectedMonth && selectedYear ? (
-              <p>
-                ไม่พบข้อมูล Ranking สำหรับเดือน{" "}
-                {getMonthName(selectedMonth)} ปี{" "}
-                {parseInt(selectedYear) + 543}
-              </p>
-            ) : (
-              <p>กรุณาเลือกเดือนและปีเพื่อดูข้อมูล Ranking</p>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* --- Global Styles for Ranking Page --- */}
-      <style jsx>{`
-        /* --- General Layout and Reset --- */
-        .main-content {
-          padding: 8px;
-          background-color: #f0f2f5;
-          min-height: calc(100vh - 56px);
-          display: flex;
-          justify-content: center;
-          align-items: flex-start;
-          box-sizing: border-box;
-          font-family: "Kanit", sans-serif;
-          color: #333;
-          position: relative;
-          overflow: hidden;
-          font-size: 0.85em; /* ลดขนาดฟอนต์เริ่มต้นลงอีกนิด */
-        }
-
-        /* --- Dedicated Background Pattern Div --- */
-        .background-pattern {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background-image: url("/images/firework-light.png"),
-            url("/images/trophy-light.png"),
-            url("/images/necklace-light.png");
-          background-repeat: no-repeat;
-          background-size: 200px auto, 120px auto, 100px auto;
-          background-position: 20% 10%, 80% 50%, 50% 85%;
-          background-attachment: fixed;
-          opacity: 0.03;
-          filter: grayscale(100%) brightness(180%) blur(0.5px);
-          transition: background-position 1s ease-in-out;
-          animation: background-pan 60s linear infinite alternate;
-          z-index: -1;
-        }
-
-        /* Keyframes for background panning */
-        @keyframes background-pan {
-          0% {
-            background-position: 20% 10%, 80% 50%, 50% 85%;
-          }
-          25% {
-            background-position: 15% 20%, 85% 40%, 40% 90%;
-          }
-          50% {
-            background-position: 25% 0%, 75% 60%, 60% 80%;
-          }
-          75% {
-            background-position: 30% 15%, 70% 45%, 55% 95%;
-          }
-          100% {
-            background-position: 20% 10%, 80% 50%, 50% 85%;
-          }
-        }
-
-        /* --- Main Ranking Container (Outer Wrapper) --- */
-        .ranking-container {
-          background-color: transparent; /* Keep transparent */
-          border-radius: 0; /* Keep 0 */
-          padding: 0; /* Keep 0 */
-          width: 100%; /* Make it fill parent width */
-          max-width: 1200px; /* Adjust max-width as needed */
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          z-index: 1;
-          position: relative;
-        }
-
-        /* --- Ranking Hero Section & Filters (NEW STYLES - GOLD THEME) --- */
-        .ranking-hero-section {
-          text-align: center;
-          margin-bottom: 15px; /* Increased margin for separation */
-          padding: 25px 20px; /* Increased padding - will be overridden by JS */
-          border-radius: 12px; /* Nicer rounded corners */
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); /* More prominent shadow */
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(135deg, #ff7e5f, #feb47b, #ffda7f);
-          color: #5a4000; /* Dark gold text for contrast */
-          width: 100%; /* Make it fill parent width */
-          box-sizing: border-box; /* Include padding in width */
-          /* Initial padding here, will be adjusted by JS based on table padding */
-          padding-left: 20px;
-          padding-right: 20px;
-        }
-
-        .ranking-hero-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url('/images/gold-pattern-light.svg'); /* Subtle gold pattern */
-            background-size: cover;
-            opacity: 0.15; /* Slightly more visible */
-            z-index: -1;
-        }
-
-        .ranking-page-title {
-          font-size: 2.2em; /* Larger title */
-          font-weight: 800;
-          color: #5a4000; /* Dark gold text */
-          margin-bottom: 8px; /* Adjusted margin */
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px; /* Increased gap */
-          text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); /* Stronger text shadow */
-        }
-
-        .ranking-page-title .title-icon {
-          font-size: 0.8em; /* Larger icon */
-          color: #fff3cd; /* Lighter gold for trophy */
-          filter: drop-shadow(0 0 8px rgba(255, 243, 205, 0.8)); /* Stronger glow */
-        }
-
-        .ranking-subtitle {
-          font-size: 1.1em; /* Larger subtitle */
-          color: #75601c; /* Slightly lighter dark gold */
-          margin-bottom: 20px; /* Increased margin */
-          font-weight: 400;
-          text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.15);
-        }
-
-        .highlight-text {
-          font-weight: 700;
-          color: #fffacd; /* Even lighter gold */
-        }
-
-        .filter-controls {
-          display: flex;
-          justify-content: center;
-          gap: 12px; /* Increased gap */
-          flex-wrap: wrap;
-        }
-
-        .filter-item {
-          display: flex;
-          align-items: center;
-          background-color: rgba(255, 255, 255, 0.8); /* Solid white background */
-          border-radius: 20px; /* More rounded */
-          padding: 8px 15px; /* Increased padding */
-          border: 1px solid rgba(255, 255, 255, 0.9); /* Lighter border */
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow */
-          transition: all 0.3s ease;
-          cursor: pointer;
-        }
-
-        .filter-item:hover {
-          background-color: rgba(255, 255, 255, 0.9);
-          border-color: rgba(255, 255, 255, 1);
-          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-          transform: translateY(-2px);
-        }
-
-        /* .filter-icon { REMOVED } */
-
-        .month-select-new,
-        .year-select-new {
-          padding: 2px 0;
-          border: none;
-          background-color: transparent;
-          font-size: 0.9em; /* Larger font */
-          color: #5a4000; /* Dark gold text */
-          outline: none;
-          cursor: pointer;
-          -webkit-appearance: none;
-          -moz-appearance: none;
-          appearance: none;
-          min-width: 100px; /* Increased min-width */
-          text-align: center;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235A4000'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3Csvg%3E"); /* Dark gold arrow */
-          background-repeat: no-repeat;
-          background-position: right 8px center; /* Adjusted arrow position */
-          padding-right: 25px; /* Increased padding */
-          font-weight: 600;
-        }
-        .month-select-new::-ms-expand,
-        .year-select-new::-ms-expand {
-          display: none;
-        }
-        .month-select-new option,
-        .year-select-new option {
-            color: #333; /* Make dropdown options readable */
-            background-color: #f8f9fa;
-        }
-
-
-        /* --- Loading and Messages --- */
-        .loading-state,
-        .message-box {
-          text-align: center;
-          padding: 8px; /* ลด padding */
-          border-radius: 5px; /* ลด border-radius */
-          font-size: 0.8em; /* ลดขนาดฟอนต์ */
-          font-weight: 500;
-          margin: 5px auto; /* ลด margin */
-          max-width: 380px; /* ลด max-width */
-          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.03); /* ลด shadow */
-        }
-
-        .loading-state {
-          background-color: #e0f7fa;
-          color: #007bb6;
-          border: 1px solid #80deea;
-        }
-
-        .message-box {
-          color: #666;
-          border: 1px solid #ccc;
-          background-color: #fefefe;
-        }
-
-        .info-box {
-          background-color: #e3f2fd;
-          color: #2196f3;
-          border-color: #90caf9;
-        }
-
-        .error-box {
-          background-color: #ffebee;
-          color: #ef5350;
-          border-color: #ef9a9a;
-        }
-
-        .loading-spinner {
-          border: 2px solid #e0e0e0;
-          border-top: 2px solid #42a5f5;
-          width: 16px; /* ลดขนาด spinner */
-          height: 16px; /* ลดขนาด spinner */
-          margin: 0 auto 4px auto; /* ลด margin */
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-
-        /* --- Top 3 Cards Section --- */
-        .top3-cards-wrapper {
-          display: flex;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 10px; /* ลด gap ระหว่าง card */
-          margin-bottom: 10px; /* ลด margin */
-          perspective: 1000px;
-        }
-
-        .player-card {
-          background: #ffffff;
-          border-radius: 6px; /* ลด border-radius */
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05); /* ลด shadow */
-          padding: 8px 8px 6px; /* ลด padding ด้านบน/ล่าง ลงอีก */
-          text-align: center;
-          width: 180px; /* ลดความกว้างของแต่ละ card อีก */
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          transition: transform 0.4s ease-out, box-shadow 0.4s ease-out,
-            background 0.4s ease-out;
-          position: relative;
-          overflow: hidden;
-          transform-style: preserve-3d;
-          animation: card-lift-in 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)
-            forwards;
-          opacity: 0;
-          border: 1px solid transparent;
-        }
-
-        /* Animation for card appearance */
-        @keyframes card-lift-in {
-          0% {
-            opacity: 0;
-            transform: translateY(12px) rotateX(-5deg) scale(0.88); /* ลด scale */
-            box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0) rotateX(0deg) scale(1);
-            box-shadow: var(--card-shadow-final);
-          }
-        }
-
-        /* Delay for each card */
-        .player-card.rank-1 {
-          animation-delay: 0.1s;
-        }
-        .player-card.rank-2 {
-          animation-delay: 0.2s;
-        }
-        .player-card.rank-3 {
-          animation-delay: 0.3s;
-        }
-
-        .player-card::before {
-          content: "";
-          position: absolute;
-          top: -5%;
-          left: -5%;
-          width: 110%;
-          height: 110%;
-          background: var(--card-background-gradient);
-          clip-path: polygon(0 0, 100% 0, 100% 88%, 0 100%);
-          opacity: 0.6;
-          z-index: 1;
-          transition: clip-path 0.4s ease-out;
-        }
-
-        .player-card:hover::before {
-          clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%);
-        }
-
-        .player-card::after {
-          content: "";
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          height: 2px;
-          background: var(--card-accent-color);
-          z-index: 2;
-        }
-
-        .player-card:hover {
-          transform: translateY(-2px) scale(1.005);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        /* Specific card colors and properties */
-        .player-card.rank-1 {
-          --card-background-gradient: linear-gradient(135deg, #ffd700, #ffc107);
-          --card-accent-color: #e0a800;
-          --card-shadow-final: 0 3px 10px rgba(255, 193, 7, 0.12);
-          color: #5a4000;
-          border-color: #e0a800;
-        }
-        .player-card.rank-2 {
-          --card-background-gradient: linear-gradient(135deg, #c0c0c0, #a0a0a0);
-          --card-accent-color: #8c8c8c;
-          --card-shadow-final: 0 3px 10px rgba(192, 192, 192, 0.12);
-          color: #3a3a3a;
-          border-color: #8c8c8c;
-        }
-        .player-card.rank-3 {
-          --card-background-gradient: linear-gradient(135deg, #cd7f32, #b86b29);
-          --card-accent-color: #a35d21;
-          --card-shadow-final: 0 3px 10px rgba(205, 127, 50, 0.12);
-          color: #6d3f18;
-          border-color: #a35d21;
-        }
-
-        .player-rank-circle {
-          width: 35px; /* ลดขนาด */
-          height: 35px; /* ลดขนาด */
-          border-radius: 50%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          font-size: 1.4em; /* ลดขนาดตัวเลขอันดับ */
-          font-weight: 900;
-          color: #ffffff;
-          margin-bottom: 6px; /* ลด margin */
-          margin-top: 0px; /* ลด margin */
-          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1); /* ลด shadow */
-          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-          z-index: 2;
-          position: relative;
-          background: var(--card-accent-color);
-          animation: rank-circle-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)
-            forwards;
-          transform: scale(0);
-        }
-
-        @keyframes rank-circle-pop {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          70% {
-            transform: scale(1.03);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1);
-          }
-        }
-
-        .player-card.rank-1 .player-rank-circle {
-          animation-delay: 0.3s;
-        }
-        .player-card.rank-2 .player-rank-circle {
-          animation-delay: 0.4s;
-        }
-        .player-card.rank-3 .player-rank-circle {
-          animation-delay: 0.5s;
-        }
-
-        .rank-text {
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100%;
-          width: 100%;
-          z-index: 1;
-          line-height: 1;
-        }
-
-        /* Crown Icon Styling */
-        .crown-icon {
-          position: absolute;
-          top: -0.4em; /* ปรับตำแหน่ง */
-          left: 50%;
-          transform: translateX(-50%);
-          color: gold;
-          font-size: 0.55em; /* ลดขนาด */
-          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2)); /* ลด shadow */
-          z-index: 2;
-          animation: crown-bounce 1s infinite alternate ease-in-out;
-        }
-
-        @keyframes crown-bounce {
-          0% {
-            transform: translateX(-50%) translateY(0);
-          }
-          50% {
-            transform: translateX(-50%) translateY(-1px);
-          }
-          100% {
-            transform: translateX(-50%) translateY(0);
-          }
-        }
-
-        .player-card-name {
-          font-size: 1.2em; /* ลดขนาดฟอนต์ */
-          font-weight: 700;
-          margin-bottom: 2px; /* ลด margin */
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 100%;
-          color: var(--card-text-color, #2c3e50);
-          z-index: 2;
-        }
-
-        .player-card.rank-1 .player-card-name {
-          color:rgb(210, 168, 14);
-        }
-        .player-card.rank-2 .player-card-name {
-          color: #555;
-        }
-        .player-card.rank-3 .player-card-name {
-          color: #8c4c1a;
-        }
-
-        .player-card-level {
-          font-size: 0.7em; /* ลดขนาดฟอนต์ */
-          color: #777;
-          margin-bottom: 4px; /* ลด margin */
-          z-index: 2;
-        }
-
-        .score-detail {
-          margin-top: 3px; /* ลด margin */
-          margin-bottom: 6px; /* ลด margin */
-          z-index: 2;
-        }
-
-        .player-card-score {
-          font-size: 1.4em; /* ลดขนาดฟอนต์ */
-          font-weight: 800;
-          color: #28a745;
-          background: #e6ffed;
-          padding: 3px 10px; /* ลด padding */
-          border-radius: 16px; /* ลด border-radius */
-          min-width: 60px; /* ลด min-width */
-          box-shadow: 0 1px 5px rgba(40, 167, 69, 0.08); /* ลด shadow */
-          display: inline-block;
-          transition: transform 0.3s ease;
-        }
-
-        .player-card-score:hover {
-          transform: scale(1.02);
-        }
-
-        .stats-row {
-          display: flex;
-          justify-content: space-around;
-          width: 100%;
-          margin-top: 5px; /* ลด margin */
-          z-index: 2;
-        }
-
-        .stat-item {
-          flex: 1;
-          text-align: center;
-          padding: 0 3px; /* ลด padding */
-          border-left: 1px solid rgba(0, 0, 0, 0.05);
-        }
-
-        .stat-item:first-child {
-          border-left: none;
-        }
-
-        .stat-value {
-          font-size: 0.85em; /* ลดขนาดฟอนต์ */
-          font-weight: 700;
-          color: #34495e;
-          margin-bottom: 0px;
-        }
-
-        /* Top 3 Card specific stat value colors */
-        .stat-value.wins-value {
-          color: #28a745;
-        }
-        .stat-value.draws-value {
-          color: #6c757d;
-        }
-        .stat-value.losses-value {
-          color: #dc3545;
-        }
-
-        .stat-label {
-          font-size: 0.6em; /* ลดขนาดฟอนต์ */
-          color: #777;
-        }
-
-        /* --- Other Rankings Table Controls (Search, Pagination, Total) --- */
-        .table-controls-wrapper {
-            display: flex;
-            flex-direction: row; /* ให้จัดเรียงเป็นแถวเสมอ */
-            justify-content: space-between; /* กระจายองค์ประกอบ */
-            align-items: center;
-            gap: 10px; /* ปรับ gap ระหว่าง องค์ประกอบหลัก */
-            margin-bottom: 10px;
-            padding: 10px;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
-            flex-wrap: wrap; /* อนุญาตให้ขึ้นบรรทัดใหม่เมื่อหน้าจอเล็ก */
-        }
-
-        .search-bar {
-            display: flex;
-            align-items: center;
-            width: auto; /* ปล่อยให้ปรับความกว้างอัตโนมัติ */
-            flex-grow: 1; /* ให้ขยายเท่าที่ทำได้ */
-            max-width: 350px; /* จำกัดความกว้างสูงสุดของช่องค้นหา */
-            border: 1px solid #ced4da;
-            border-radius: 20px;
-            padding: 5px 12px;
-            background-color: #f8f9fa;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
-            transition: all 0.2s ease-in-out;
-            margin: 0 auto; /* ทำให้ search bar อยู่ตรงกลาง เมื่อมีพื้นที่พอ*/
-        }
-
-        .search-bar:focus-within {
-            border-color: #80bdff;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 0.2rem rgba(0,123,255,.25);
-            background-color: #fff;
-        }
-
-        .search-icon {
-            color: #6c757d;
-            margin-right: 8px;
-            font-size: 0.9em;
-        }
-
-        .search-input {
-            flex-grow: 1;
-            border: none;
-            outline: none;
-            font-size: 0.85em;
-            padding: 2px 0;
-            background-color: transparent;
-            color: #495057;
-        }
-
-        .search-input::placeholder {
-            color: #adb5bd;
-            font-size: 0.85em;
-        }
-        
-        .pagination {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap; /* ให้ปุ่มขึ้นบรรทัดใหม่ได้ */
-            justify-content: flex-start; /* จัดให้อยู่ฝั่งซ้าย */
-        }
-
-        .total-members {
-            font-size: 0.85em;
-            color: #555;
-            font-weight: 500;
-            white-space: nowrap; /* ป้องกันไม่ให้ข้อความขึ้นบรรทัดใหม่ */
-            margin-left: auto; /* ดันไปทางขวาสุด */
-        }
-
-        .total-members .total-count {
-            font-weight: 700;
-            color:rgb(11, 11, 11);
-            font-size: 1.1em;
-        }
-
-        .pagination-button {
-            background-color: #cccccc;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.75em;
-            font-weight: 600;
-            transition: background-color 0.2s ease, transform 0.1s ease;
-            white-space: nowrap; /* ป้องกันไม่ให้ข้อความปุ่มขึ้นบรรทัดใหม่ */
-        }
-
-        .pagination-button:hover:not(:disabled) {
-            background-color: #6c757d;
-            transform: translateY(-1px);
-        }
-
-        .pagination-button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-
-        .pagination-button.active {
-            background-color: #6c757d;
-            box-shadow: 0 0 0 2px #e6ffed, 0 1px 3px rgba(0,0,0,0.15);
-            font-weight: 700;
-        }
-
-        /* --- Other Rankings Table --- */
-        .ranking-table-wrapper {
-          overflow-x: auto;
-          border-radius: 8px;
-          box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
-          background-color: #ffffff;
-          border: 1px solid #e9ecef;
-          width: 100%;
-          padding: 15px; /* Added padding to table wrapper */
-          box-sizing: border-box; /* Include padding in width */
-        }
-
-        .ranking-table {
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          min-width: 700px;
-        }
-
-        .ranking-table thead {
-          background: #323943;
-          color: #ffffff;
-          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-        }
-
-        .ranking-table th {
-          padding: 8px 6px;
-          text-align: center;
-          font-weight: 600;
-          font-size: 0.85em;
-          letter-spacing: 0.4px;
-          text-transform: uppercase;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .ranking-table th:first-child {
-          border-top-left-radius: 8px;
-        }
-        .ranking-table th:last-child {
-          border-top-right-radius: 8px;
-        }
-
-        /* Specific header alignment and width adjustments */
-        .table-header-rank {
-          width: 45px;
-        }
-        .table-header-player {
-          width: 130px;
-        }
-        .table-header-level {
-          width: 65px;
-        }
-        .table-header-wins,
-        .table-header-draws,
-        .table-header-losses,
-        .table-header-total-games,
-        .table-header-score {
-          width: 55px;
-        }
-        .table-header-win-rate {
-          width: 85px;
-        }
-
-        .ranking-table td {
-          padding: 6px 6px;
-          border-bottom: 1px solid #f1f3f5;
-          font-size: 0.8em;
-          color: #495057;
-          text-align: center;
-          vertical-align: middle;
-          position: relative;
-          transition: background-color 0.2s ease;
-        }
-
-        /* Add subtle horizontal lines between cells */
-        .ranking-table td:not(:last-child)::after {
-          content: "";
-          position: absolute;
-          right: 0;
-          top: 15%;
-          height: 70%;
-          width: 1px;
-          background-color: #e0e0e0;
-        }
-
-        .ranking-table tbody tr {
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-          border-radius: 6px;
-          margin-bottom: 4px;
-          display: table-row;
-        }
-
-        .ranking-table tbody tr:nth-child(odd) {
-          background-color: #ffffff;
-        }
-
-        .ranking-table tbody tr:nth-child(even) {
-          background-color: #f8f9fa;
-        }
-
-        .ranking-table tbody tr:hover {
-          background-color: #eaf6ff;
-          cursor: pointer;
-          transform: translateY(-1px);
-          box-shadow: 0 3px 8px rgba(0, 123, 255, 0.08);
-          transition: background-color 0.2s ease, transform 0.2s ease,
-            box-shadow 0.2s ease;
-        }
-
-        /* Table Cell Specific Styles */
-        .rank-cell .rank-number-table {
-          font-weight: 600;
-          color: #34495e;
-          background-color: #e9ecef;
-          padding: 2px 7px;
-          border-radius: 12px;
-          display: inline-block;
-          min-width: 22px;
-          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
-        }
-        .player-name-cell-table {
-          text-align: left !important;
-          font-weight: 600;
-          color: #2c3e50;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .level-cell-table {
-          font-weight: 500;
-          color: #555;
-        }
-        .total-games-cell-table {
-          color: #6c757d;
-          font-weight: 500;
-        }
-
-        .wins-cell-table .wins-badge {
-          background: linear-gradient(45deg, #28a745, #218838);
-          color: #fff;
-          padding: 4px 7px;
-          border-radius: 16px;
-          min-width: 40px;
-          box-shadow: 0 1px 5px rgba(40, 167, 69, 0.12);
-          font-size: 0.8em;
-          font-weight: 700;
-          text-align: center;
-          display: inline-block;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .wins-cell-table .wins-badge:hover {
-          transform: translateY(-1px) scale(1.05);
-          box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
-        }
-
-        .draws-cell-table .draws-badge {
-          background: linear-gradient(45deg, #6c757d, #5a6268);
-          color: #fff;
-          padding: 4px 7px;
-          border-radius: 16px;
-          min-width: 40px;
-          box-shadow: 0 1px 5px rgba(108, 117, 125, 0.12);
-          font-size: 0.8em;
-          font-weight: 700;
-          text-align: center;
-          display: inline-block;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .draws-cell-table .draws-badge:hover {
-          transform: translateY(-1px) scale(1.05);
-          box-shadow: 0 2px 8px rgba(108, 117, 125, 0.2);
-        }
-
-        .losses-cell-table .losses-badge {
-          background: linear-gradient(45deg, #dc3545, #c82333);
-          color: #fff;
-          padding: 4px 7px;
-          border-radius: 16px;
-          min-width: 40px;
-          box-shadow: 0 1px 5px rgba(220, 53, 69, 0.12);
-          font-size: 0.8em;
-          font-weight: 700;
-          text-align: center;
-          display: inline-block;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .losses-cell-table .losses-badge:hover {
-          transform: translateY(-1px) scale(1.05);
-          box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
-        }
-
-        .win-rate-cell-table .win-rate-badge {
-          background: linear-gradient(45deg, #17a2b8, #138496);
-          color: #fff;
-          padding: 4px 7px;
-          border-radius: 16px;
-          min-width: 50px;
-          box-shadow: 0 1px 5px rgba(23, 162, 184, 0.12);
-          font-size: 0.8em;
-          font-weight: 700;
-          text-align: center;
-          display: inline-block;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .win-rate-cell-table .win-rate-badge:hover {
-          transform: translateY(-1px) scale(1.05);
-          box-shadow: 0 2px 8px rgba(23, 162, 184, 0.2);
-        }
-
-        .score-cell-table {
-          text-align: center;
-        }
-        .score-cell-table .score-badge {
-          background: linear-gradient(45deg, #ffc107, #e0a800);
-          color: #fff;
-          padding: 4px 9px;
-          border-radius: 16px;
-          min-width: 50px;
-          box-shadow: 0 1px 5px rgba(255, 193, 7, 0.12);
-          font-size: 0.85em;
-          font-weight: 700;
-          text-align: center;
-          display: inline-block;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .score-cell-table .score-badge:hover {
-          transform: translateY(-1px) scale(1.05);
-          box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
-        }
-
-        /* --- Responsive Adjustments --- */
-        @media (max-width: 992px) {
-          .player-card {
-            width: 170px; /* ปรับลดขนาดการ์ดเพิ่มเติม */
-            padding: 8px 7px 6px; /* ลด padding */
-          }
-          .player-rank-circle {
-            width: 35px;
-            height: 35px;
-            font-size: 1.4em;
-          }
-          .player-card-name {
-            font-size: 1.1em;
-          }
-          .player-card-level {
-            font-size: 0.65em;
-            margin-bottom: 3px;
-          }
-          .player-card-score {
-            font-size: 1.3em;
-            padding: 2px 8px;
-          }
-          .score-detail {
-            margin-top: 2px;
-            margin-bottom: 5px;
-          }
-          .stat-value {
-            font-size: 0.8em;
-          }
-          .stat-label {
-            font-size: 0.55em;
-          }
-          .stats-row {
-            margin-top: 4px;
-          }
-          .ranking-table {
-            min-width: 600px;
-          }
-          .ranking-table th,
-          .ranking-table td {
-            font-size: 0.75em;
-            padding: 5px 5px;
-          }
-          .wins-cell-table .wins-badge,
-          .draws-cell-table .draws-badge,
-          .losses-cell-table .losses-badge,
-          .win-rate-cell-table .win-rate-badge,
-          .score-cell-table .score-badge {
-            font-size: 0.75em;
-            padding: 3px 5px;
-            min-width: 35px;
-          }
-
-          /* Responsive for table controls */
-          .table-controls-wrapper {
-              flex-wrap: wrap; /* อนุญาตให้ขึ้นบรรทัดใหม่ */
-              justify-content: center; /* จัดให้อยู่ตรงกลางเมื่อขึ้นบรรทัดใหม่ */
-              gap: 10px; /* ช่องว่างระหว่างแถว */
-          }
-          .pagination, .search-bar, .total-members {
-              width: 100%; /* ให้เต็มความกว้างเมื่อหน้าจอเล็ก */
-              max-width: none; /* ยกเลิก max-width */
-              justify-content: center; /* จัดเนื้อหาตรงกลาง */
-              margin: 0; /* ยกเลิก margin auto */
-          }
-          .search-bar {
-            max-width: 300px; /* จำกัดความกว้างของ search bar ในหน้าจอมือถือ */
-          }
-          .total-members {
-            margin-left: 0; /* ยกเลิก margin auto */
-            text-align: center;
-          }
-
-          /* New responsive for hero section */
-          .ranking-hero-section {
-            padding: 20px 15px; /* Adjust padding, JS will fine-tune */
-          }
-          .ranking-page-title {
-            font-size: 1.8em; /* Slightly smaller title */
-          }
-          .ranking-page-title .title-icon {
-            font-size: 0.7em;
-          }
-          .ranking-subtitle {
-            font-size: 1em;
-          }
-          .filter-controls {
-            gap: 10px;
-          }
-          .filter-item {
-            padding: 7px 12px;
-            border-radius: 18px;
-          }
-          .month-select-new,
-          .year-select-new {
-            font-size: 0.85em;
-            min-width: 70px;
-            padding-right: 20px;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .main-content {
-            padding: 5px;
-            font-size: 0.8em;
-          }
-          .ranking-container {
-            gap: 10px;
-          }
-          .ranking-hero-section {
-            padding: 15px 10px; /* Further adjust padding, JS will fine-tune */
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-          }
-          .ranking-page-title {
-            font-size: 1.5em; /* Smaller title */
-            gap: 8px;
-          }
-          .ranking-page-title .title-icon {
-            font-size: 0.6em;
-          }
-          .ranking-subtitle {
-            font-size: 0.9em;
-            margin-bottom: 15px;
-          }
-          .filter-controls {
-            gap: 8px;
-            flex-direction: column; /* Stack filters vertically */
-          }
-          .filter-item {
-            width: 100%; /* Make filter items full width */
-            max-width: 250px; /* Limit max width for stacking */
-            justify-content: center;
-            padding: 6px 10px;
-            border-radius: 16px;
-          }
-          .month-select-new,
-          .year-select-new {
-            font-size: 0.8em;
-            min-width: auto; /* Allow auto width */
-            flex-grow: 1; /* Make them grow */
-            padding-right: 15px;
-          }
-          .loading-state,
-          .message-box {
-            font-size: 0.75em;
-          }
-          .top3-cards-wrapper {
-            gap: 6px;
-            flex-direction: column;
-            align-items: center;
-          }
-          .player-card {
-            width: 90%;
-            max-width: 240px; /* ลด max-width */
-            padding: 6px 5px 4px; /* ลด padding */
-          }
-          .player-rank-circle {
-            width: 32px;
-            height: 32px;
-            font-size: 1.3em;
-            margin-bottom: 5px;
-          }
-          .player-card-name {
-            font-size: 1em;
-          }
-          .player-card-level {
-            font-size: 0.6em;
-            margin-bottom: 2px;
-          }
-          .score-detail {
-            margin-top: 2px;
-            margin-bottom: 4px;
-          }
-          .player-card-score {
-            font-size: 1.2em;
-            padding: 2px 7px;
-          }
-          .stat-value {
-            font-size: 0.75em;
-          }
-          .stat-label {
-            font-size: 0.55em;
-          }
-          .stats-row {
-            margin-top: 3px;
-          }
-          .ranking-table {
-            min-width: 480px;
-          }
-          .ranking-table th,
-          .ranking-table td {
-            font-size: 0.7em;
-            padding: 4px 4px;
-          }
-          .wins-cell-table .wins-badge,
-          .draws-cell-table .draws-badge,
-          .losses-cell-table .losses-badge,
-          .win-rate-cell-table .win-rate-badge,
-          .score-cell-table .score-badge {
-            font-size: 0.7em;
-            padding: 3px 5px;
-            min-width: 35px;
-          }
-          .rank-cell .rank-number-table {
-            padding: 1px 4px;
-            min-width: 16px;
-            font-size: 0.65em;
-          }
-          .crown-icon {
-            font-size: 0.5em;
-            top: -0.3em;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .main-content {
-            padding: 3px;
-            font-size: 0.75em;
-          }
-          .ranking-hero-section {
-            padding: 12px 8px; /* Further adjust padding, JS will fine-tune */
-          }
-          .ranking-page-title {
-            font-size: 1.1em;
-            gap: 6px;
-          }
-          .ranking-page-title .title-icon {
-            font-size: 0.5em;
-          }
-          .ranking-subtitle {
-            font-size: 0.75em;
-            margin-bottom: 10px;
-          }
-          .filter-controls {
-            gap: 6px;
-          }
-          .filter-item {
-            padding: 5px 8px;
-          }
-          .month-select-new,
-          .year-select-new {
-            font-size: 0.7em;
-            padding-right: 12px;
-          }
-          .player-card {
-            width: 95%;
-            max-width: 200px; /* ลด max-width */
-            padding: 5px 4px 3px; /* ลด padding */
-          }
-          .player-rank-circle {
-            width: 28px;
-            height: 28px;
-            font-size: 1.1em;
-            margin-bottom: 4px;
-          }
-          .player-card-name {
-            font-size: 0.9em;
-          }
-          .player-card-level {
-            font-size: 0.55em;
-            margin-bottom: 1px;
-          }
-          .score-detail {
-            margin-top: 1px;
-            margin-bottom: 3px;
-          }
-          .player-card-score {
-            font-size: 1.05em;
-            padding: 1px 5px;
-          }
-          .stat-value {
-            font-size: 0.7em;
-          }
-          .stat-label {
-            font-size: 0.45em;
-          }
-          .stats-row {
-            margin-top: 2px;
-          }
-          .ranking-table {
-            min-width: 360px;
-          }
-          .ranking-table th,
-          .ranking-table td {
-            font-size: 0.6em;
-            padding: 3px 3px;
-          }
-          .wins-cell-table .wins-badge,
-          .draws-cell-table .draws-badge,
-          .losses-cell-table .losses-badge,
-          .win-rate-cell-table .win-rate-badge,
-          .score-cell-table .score-badge {
-            font-size: 0.6em;
-            padding: 1px 3px;
-            min-width: 25px;
-          }
-          .rank-cell .rank-number-table {
-            padding: 1px 4px;
-            min-width: 16px;
-            font-size: 0.65em;
-          }
-        }
-      `}</style>
+      {/* --- Conditional Rendering based on Loading/Error/Data --- */}
+      {loading ? (
+        <div style={styles.loadingState}>
+          <div style={styles.loadingSpinner}></div>
+          <p>กำลังโหลดข้อมูลอันดับ...</p>
+        </div>
+      ) : error ? (
+        <div style={styles.messageBoxError}>
+          <p>เกิดข้อผิดพลาด: {error}</p>
+        </div>
+      ) : rankings.length > 0 ? (
+        <>
+          {/* --- Top 3 Rankings Section --- */}
+          <div style={styles.top3CardsWrapper}>
+            {/* Rank 2 Card */}
+            {top3Rankings[1] && (
+              <div
+                key={top3Rankings[1].name}
+                style={{ ...styles.playerCardElite, ...styles.silverCard, ...styles.rank2CardElite }}
+              >
+                <div style={styles.cardGlowEffect}></div> {/* Glow effect */}
+                <span style={styles.cardPatternIconElite}>🥈</span> {/* เปลี่ยนไอคอน */}
+                {/* Removed playerRankNumberCircleElite for Rank 2 */}
+                <div style={styles.playerRankIconOnly}>
+                    <FaMedal style={{ ...styles.rankIconElite, color: '#A9A9A9' }} /> {/* ไอคอนเหรียญ */}
+                </div>
+                <h3 style={styles.playerCardNameElite}>{top3Rankings[1].name}</h3>
+                <p style={styles.playerCardLevelElite}>ระดับ: {top3Rankings[1].level}</p>
+                <p style={styles.playerCardScoreLargeElite}>{top3Rankings[1].score || 0}</p>
+              </div>
+            )}
+
+            {/* Rank 1 Card (Center, Largest) */}
+            {top3Rankings[0] && (
+              <div
+                key={top3Rankings[0].name}
+                style={{ ...styles.playerCardElite, ...styles.goldCard, ...styles.rank1CardElite }}
+              >
+                <div style={styles.cardGlowEffect}></div> {/* Glow effect */}
+                <span style={styles.cardPatternIconElite}>🥇</span> {/* เปลี่ยนไอคอน */}
+                {/* Removed playerRankNumberCircleElite for Rank 1 */}
+                <div style={styles.playerRankIconOnly}>
+                    <FaCrown style={styles.crownIconElite} />
+                </div>
+                <h3 style={styles.playerCardNameElite}>{top3Rankings[0].name}</h3>
+                <p style={styles.playerCardLevelElite}>ระดับ: {top3Rankings[0].level}</p>
+                <p style={styles.playerCardScoreLargestElite}>{top3Rankings[0].score || 0}</p>
+                <div style={styles.sparkleOverlay}></div> {/* เพิ่มประกาย */}
+              </div>
+            )}
+
+            {/* Rank 3 Card */}
+            {top3Rankings[2] && (
+              <div
+                key={top3Rankings[2].name}
+                style={{ ...styles.playerCardElite, ...styles.bronzeCard, ...styles.rank3CardElite }}
+              >
+                <div style={styles.cardGlowEffect}></div> {/* Glow effect */}
+                <span style={styles.cardPatternIconElite}>🥉</span> {/* เปลี่ยนไอคอน */}
+                {/* Removed playerRankNumberCircleElite for Rank 3 */}
+                <div style={styles.playerRankIconOnly}>
+                    <FaMedal style={{ ...styles.rankIconElite, color: '#CD7F32' }} /> {/* ไอคอนเหรียญ */}
+                </div>
+                <h3 style={styles.playerCardNameElite}>{top3Rankings[2].name}</h3>
+                <p style={styles.playerCardLevelElite}>ระดับ: {top3Rankings[2].level}</p>
+                <p style={styles.playerCardScoreLargeElite}>{top3Rankings[2].score || 0}</p>
+              </div>
+            )}
+          </div>
+
+          {/* --- Other Rankings Table Controls (Search, Pagination, Total) --- */}
+          {filteredRankings.length > 0 && (
+            <div style={styles.tableControlsWrapper}>
+              {/* Search Bar - Left */}
+              <div style={styles.searchBar}>
+                <FaSearch style={styles.searchIcon} />
+                <input
+                  type="text"
+                  placeholder="ค้นหารายชื่อผู้เล่น..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1); // Reset to first page on search
+                  }}
+                  style={styles.searchInput}
+                  aria-label="Search Player Name"
+                />
+              </div>
+
+              {/* Total Members - Center (Adjusted position) */}
+              <div style={styles.totalMembers}>
+                สมาชิกทั้งหมด:{" "}
+                <span style={styles.totalCount}>{filteredRankings.length}</span>{" "}
+                คน
+              </div>
+
+              {/* Pagination Controls - Right */}
+              {totalPages > 1 && (
+                <div style={styles.pagination}>
+                  <button
+                    onClick={prevPage}
+                    disabled={currentPage === 1}
+                    style={styles.paginationButton}
+                    aria-label="Previous Page"
+                  >
+                    ย้อนกลับ
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                      key={i + 1}
+                      onClick={() => paginate(i + 1)}
+                      style={{
+                        ...styles.paginationButton,
+                        ...(currentPage === i + 1 ? styles.paginationButtonActive : {}),
+                      }}
+                      aria-label={`Page ${i + 1}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={nextPage}
+                    disabled={currentPage === totalPages}
+                    style={styles.paginationButton}
+                    aria-label="Next Page"
+                  >
+                    ถัดไป
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* --- Other Rankings Table --- */}
+          {currentOtherRankings.length > 0 ? (
+            <div style={styles.rankingTableWrapper}>
+              <table style={styles.rankingTable}>
+                <thead>
+                  <tr>
+                    <th style={styles.tableHeader}>Rank</th>
+                    <th style={styles.tableHeader}>Name</th>
+                    <th style={styles.tableHeader}>Skill Level</th>
+                    <th style={styles.tableHeader}>Games Lost</th>
+                    <th style={styles.tableHeader}>Games Tied</th>
+                    <th style={styles.tableHeader}>Games Won</th>
+                    <th style={styles.tableHeader}>Total Score</th>
+                    <th style={styles.tableHeader}>Win Rate (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentOtherRankings.map((player, index) => (
+                    <tr key={player.name} style={styles.tableRow}>
+                      <td style={styles.tableCell}>
+                        <span style={styles.tableRankNumber}>
+                          {indexOfFirstItem + index + 1 + top3Rankings.length}{" "}
+                        </span>
+                      </td>
+                      <td style={styles.tableCell}>{player.name}</td>
+                      <td style={styles.tableCell}>{player.level || "-"}</td>
+                      <td style={styles.tableCell}>{player.losses || 0}</td>
+                      <td style={styles.tableCell}>{player.draws || 0}</td>
+                      <td style={styles.tableCell}>{player.wins || 0}</td>
+                      <td style={styles.tableCell}>{player.score || 0}</td> {/* Add score column as per image */}
+                      <td style={styles.tableCell}>{player.winRate || "0.00"}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={styles.messageBoxInfo}>
+              <p>ไม่พบผู้เล่นที่ตรงกับคำค้นหาของคุณในเดือนนี้</p>
+            </div>
+          )}
+        </>
+      ) : (
+        // --- No data or not logged in message ---
+        <div style={styles.messageBoxInfo}>
+          {!loggedInUserId ? (
+            <p>โปรดเข้าสู่ระบบเพื่อดูข้อมูลอันดับผู้เล่น</p>
+          ) : selectedMonth && selectedYear ? (
+            <p>
+              ไม่พบข้อมูล Ranking สำหรับเดือน{" "}
+              {getMonthName(selectedMonth)} ปี{" "}
+              {parseInt(selectedYear) + 543}
+            </p>
+          ) : (
+            <p>กรุณาเลือกเดือนและปีเพื่อดูข้อมูล Ranking</p>
+          )}
+        </div>
+      )}
     </div>
   );
+};
+
+const styles = {
+  container: {
+    fontFamily: 'Arial, sans-serif',
+    backgroundColor: '#1C1C28', // Dark background as in the image
+    color: '#E0E0E0',
+    padding: '30px 20px',
+    minHeight: '100vh',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    // backgroundImage: 'url("/path/to/your/background-pattern.png")', // If you have a background pattern
+  },
+  rankingHeroSection: {
+    textAlign: 'center',
+    marginBottom: '40px',
+    width: '100%',
+    maxWidth: '1200px',
+  },
+  rankingPageTitle: {
+    fontSize: '2.5rem',
+    fontWeight: 'bold',
+    color: '#F0F0F0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    marginBottom: '10px',
+  },
+  titleIcon: {
+    color: '#FFD700', // Gold color for trophy
+    fontSize: '2.8rem',
+  },
+  rankingSubtitle: {
+    fontSize: '1.2rem',
+    color: '#B0B0B0',
+    marginBottom: '20px',
+  },
+  highlightText: {
+    color: '#FFD700', // Gold highlight
+    fontWeight: 'bold',
+  },
+  filterControls: {
+    display: 'flex',
+    gap: '15px',
+    justifyContent: 'center',
+    marginBottom: '30px',
+  },
+  filterItem: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  selectControl: {
+    padding: '10px 15px',
+    borderRadius: '8px',
+    border: '1px solid #444',
+    backgroundColor: '#2A2A3A',
+    color: '#E0E0E0',
+    fontSize: '1rem',
+    cursor: 'pointer',
+    appearance: 'none', // Remove default dropdown arrow
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23E0E0E0'%3E%3Cpath fillRule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clipRule='evenodd'%3E%3C/path%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 10px center',
+    backgroundSize: '1.2em',
+    transition: 'border-color 0.3s ease, background-color 0.3s ease',
+    '&:hover': {
+      borderColor: '#666',
+      backgroundColor: '#3A3A4A',
+    },
+    '&:focus': {
+      outline: 'none',
+      borderColor: '#FFD700',
+      boxShadow: '0 0 0 2px rgba(255, 215, 0, 0.3)',
+    },
+  },
+  loadingState: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '200px',
+    color: '#B0B0B0',
+  },
+  loadingSpinner: {
+    border: '4px solid rgba(255, 255, 255, 0.3)',
+    borderTop: '4px solid #FFD700',
+    borderRadius: '50%',
+    width: '40px',
+    height: '40px',
+    animation: 'spin 1s linear infinite',
+    marginBottom: '15px',
+  },
+  '@keyframes spin': {
+    '0%': { transform: 'rotate(0deg)' },
+    '100%': { transform: 'rotate(360deg)' },
+  },
+  messageBoxError: {
+    backgroundColor: '#D32F2F',
+    color: '#FFFFFF',
+    padding: '15px',
+    borderRadius: '8px',
+    textAlign: 'center',
+    width: '100%',
+    maxWidth: '600px',
+    margin: '20px auto',
+  },
+  messageBoxInfo: {
+    backgroundColor: '#2196F3',
+    color: '#FFFFFF',
+    padding: '15px',
+    borderRadius: '8px',
+    textAlign: 'center',
+    width: '100%',
+    maxWidth: '600px',
+    margin: '20px auto',
+  },
+  top3CardsWrapper: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-end', // Align cards at the bottom for podium effect
+    gap: '8px', // ลด gap ลงไปอีก
+    marginBottom: '40px',
+    flexWrap: 'wrap',
+    width: '100%',
+    maxWidth: '1200px',
+  },
+  playerCardElite: { // เปลี่ยนชื่อจาก Slim เป็น Elite เพื่อสื่อถึงความพรีเมียม
+    borderRadius: '18px', // เพิ่มความโค้งมนเล็กน้อย
+    padding: '25px 12px', // เพิ่ม padding แนวตั้ง ลดแนวนอนอีก
+    width: 'calc(20% - 8px)', // ลดความกว้างลงอย่างมาก
+    minWidth: '160px', // ปรับ min-width ให้รองรับการ์ดที่แคบลง
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255,255,255,0.15)', // เพิ่มเงา
+    transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease, filter 0.4s ease',
+    cursor: 'pointer',
+    zIndex: 1, // กำหนด zIndex พื้นฐาน
+    '&:hover': {
+      transform: 'translateY(-12px) scale(1.03) rotateZ(1.5deg)', // Hover effect ที่โดดเด่นขึ้น
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7), inset 0 0 25px rgba(255,255,255,0.3)',
+      filter: 'brightness(1.2)', // เพิ่มความสว่างชัดเจน
+    },
+    // เพิ่มเอฟเฟกต์แสงวิบวับรอบการ์ด
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: '-50%',
+      left: '-50%',
+      width: '200%',
+      height: '200%',
+      background: 'radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
+      opacity: 0,
+      transition: 'opacity 0.4s ease',
+      zIndex: 0,
+    },
+    '&:hover::before': {
+      opacity: 1,
+      animation: 'cardLightSweep 2s infinite linear',
+    }
+  },
+  '@keyframes cardLightSweep': {
+    '0%': { transform: 'rotate(0deg)' },
+    '100%': { transform: 'rotate(360deg)' },
+  },
+  cardGlowEffect: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 'inherit',
+    boxShadow: '0 0 30px rgba(255,215,0,0.5), inset 0 0 15px rgba(255,215,0,0.3)', // Default glow
+    opacity: 0,
+    transition: 'opacity 0.4s ease',
+    zIndex: 0,
+  },
+  'playerCardElite:hover .cardGlowEffect': {
+    opacity: 1,
+  },
+  cardPatternIconElite: { // ไอคอนตกแต่งด้านบน
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    fontSize: '35px',
+    opacity: '0.25',
+    zIndex: 0,
+    pointerEvents: 'none',
+    textShadow: '0 0 5px rgba(255,255,255,0.5)',
+  },
+  goldCard: {
+    background: 'linear-gradient(160deg, #FFD700 0%, #DAA520 60%, #B8860B 100%)', // Gradient ที่เข้มขึ้น
+    color: '#3A2B00', // สีตัวอักษรเข้มขึ้น
+    border: '2px solid #FFECB3', // ขอบหนาขึ้น
+    boxShadow: '0 12px 30px rgba(255,215,0,0.4), inset 0 0 20px rgba(255,215,0,0.2)', // เงาสีทอง
+  },
+  silverCard: {
+    background: 'linear-gradient(160deg, #C0C0C0 0%, #A9A9A9 60%, #7F8C8D 100%)',
+    color: '#303030',
+    border: '2px solid #E0E0E0',
+    boxShadow: '0 12px 30px rgba(192,192,192,0.4), inset 0 0 20px rgba(192,192,192,0.2)',
+  },
+  bronzeCard: {
+    background: 'linear-gradient(160deg, #CD7F32 0%, #8B4513 60%, #603E19 100%)',
+    color: '#402000',
+    border: '2px solid #FFCC99',
+    boxShadow: '0 12px 30px rgba(205,127,50,0.4), inset 0 0 20px rgba(205,127,50,0.2)',
+  },
+  // Podium specific sizes (Elite)
+  rank1CardElite: {
+    width: 'calc(24% - 8px)', // อันดับ 1 กว้างขึ้นเล็กน้อย แต่ยังคง "แคบ"
+    height: '320px', // กำหนดความสูงให้ชัดเจน
+    transform: 'translateY(-25px)', // ยกสูงขึ้นมาก
+    zIndex: 3,
+    boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255,215,0,0.7), inset 0 0 30px rgba(255,215,0,0.4)', // เงาอลังการ
+    animation: 'pulseGold 2s infinite ease-in-out', // เพิ่ม animation
+    '&:hover': {
+        transform: 'translateY(-35px) scale(1.05) rotateZ(0deg)', // Hover effect ที่โดดเด่นขึ้น
+    }
+  },
+  '@keyframes pulseGold': {
+    '0%': { transform: 'translateY(-25px) scale(1)', boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255,215,0,0.7), inset 0 0 30px rgba(255,215,0,0.4)' },
+    '50%': { transform: 'translateY(-28px) scale(1.005)', boxShadow: '0 30px 60px rgba(0, 0, 0, 0.9), 0 0 50px rgba(255,215,0,0.9), inset 0 0 35px rgba(255,215,0,0.5)' },
+    '100%': { transform: 'translateY(-25px) scale(1)', boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255,215,0,0.7), inset 0 0 30px rgba(255,215,0,0.4)' },
+  },
+  rank2CardElite: {
+    height: '280px', // กำหนดความสูง
+    transform: 'translateY(-15px)', // ยกสูงขึ้น
+    zIndex: 2,
+    '&:hover': {
+        transform: 'translateY(-20px) scale(1.03) rotateZ(1.5deg)',
+    }
+  },
+  rank3CardElite: {
+    height: '280px', // ปรับความสูงให้เท่ากับอันดับ 2 เพื่อให้ข้อมูลแสดงครบถ้วน
+    transform: 'translateY(-5px)', // ยกสูงขึ้นเล็กน้อย
+    zIndex: 1,
+    '&:hover': {
+        transform: 'translateY(-10px) scale(1.03) rotateZ(1.5deg)',
+    }
+  },
+  playerRankIconOnly: { // New style for icon without a large background circle
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '10px',
+    position: 'relative',
+    // No explicit width/height or background for a large circle
+  },
+  rankIconElite: { // ไอคอนเหรียญสำหรับอันดับ 2, 3
+    fontSize: '3.5rem', // Increased size to be more prominent without circle
+    filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.6))',
+  },
+  crownIconElite: {
+    fontSize: '4rem', // ขยายขนาดมงกุฎให้ใหญ่ขึ้นอีก
+    color: '#FFD700',
+    zIndex: 2,
+    filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.7))', // เพิ่มเงา
+  },
+  playerCardNameElite: {
+    fontSize: '1.6rem', // ขยายชื่อ
+    fontWeight: 'bold',
+    marginBottom: '8px',
+    color: 'inherit',
+    zIndex: 1,
+    textShadow: '1px 1px 2px rgba(0,0,0,0.25)',
+  },
+  playerCardLevelElite: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)', // เข้มขึ้นเล็กน้อย
+    padding: '8px 15px', // เพิ่ม padding
+    borderRadius: '20px',
+    fontSize: '1.1rem', // ขยายขนาด
+    fontWeight: 'bold',
+    color: 'inherit',
+    textShadow: '0.5px 0.5px 1px rgba(0,0,0,0.15)',
+    marginBottom: '12px',
+  },
+  playerCardScoreLargeElite: {
+    fontSize: '2rem', // ขยายขนาดคะแนน
+    fontWeight: 'extrabold',
+    color: 'inherit',
+    textShadow: '2px 2px 3px rgba(0,0,0,0.35)',
+    marginTop: 'auto',
+  },
+  playerCardScoreLargestElite: {
+    fontSize: '3rem', // ขยายขนาดคะแนนอันดับ 1
+    fontWeight: 'extrabold',
+    color: 'inherit',
+    textShadow: '3px 3px 5px rgba(0,0,0,0.5)',
+    marginTop: 'auto',
+  },
+  sparkleOverlay: { // เอฟเฟกต์ประกายสำหรับ Rank 1
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'%3E%3Cdefs%3E%3CradialGradient id=\'grad1\' cx=\'50%\' cy=\'50%\' r=\'50%\'%3E%3Cstop offset=\'0%\' stop-color=\'%23FFFFFF\' stop-opacity=\'1\'/%3E%3Cstop offset=\'100%\' stop-color=\'%23FFFFFF\' stop-opacity=\'0\'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cg opacity=\'0.2\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'80\' cy=\'20\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'50\' cy=\'50\' r=\'15\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'20\' cy=\'80\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'80\' cy=\'80\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3C/g%3E%3C/svg%3E")',
+    backgroundSize: '150% 150%',
+    backgroundRepeat: 'repeat',
+    opacity: 0.15,
+    animation: 'sparkleMove 15s infinite linear',
+    zIndex: 0,
+    pointerEvents: 'none',
+  },
+  '@keyframes sparkleMove': {
+    '0%': { backgroundPosition: '0% 0%' },
+    '100%': { backgroundPosition: '100% 100%' },
+  },
+
+  tableControlsWrapper: {
+    backgroundColor: '#282838',
+    borderRadius: '12px',
+    padding: '20px 30px',
+    marginBottom: '25px',
+    width: '100%',
+    maxWidth: '1200px',
+    boxSizing: 'border-box',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '20px',
+    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.3)',
+  },
+  searchBar: {
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#3A3A4A',
+    borderRadius: '8px',
+    padding: '8px 15px',
+    flexGrow: 1,
+    maxWidth: '350px',
+  },
+  searchIcon: {
+    color: '#A0A0B0',
+    marginRight: '10px',
+    fontSize: '1.1rem',
+  },
+  searchInput: {
+    background: 'none',
+    border: 'none',
+    color: '#E0E0E0',
+    fontSize: '1rem',
+    width: '100%',
+    '&:focus': {
+      outline: 'none',
+    },
+    '::placeholder': {
+      color: '#A0A0B0',
+    },
+  },
+  totalMembers: {
+    fontSize: '1.1rem',
+    color: '#B0B0C0',
+    whiteSpace: 'nowrap',
+  },
+  totalCount: {
+    fontWeight: 'bold',
+    color: '#FFD700',
+  },
+  pagination: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  paginationButton: {
+    background: '#4A4A5A',
+    color: '#E0E0E0',
+    border: 'none',
+    padding: '8px 15px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '0.95rem',
+    transition: 'background-color 0.3s ease',
+    '&:hover': {
+      backgroundColor: '#5A5A6A',
+    },
+    '&:disabled': {
+      opacity: '0.5',
+      cursor: 'not-allowed',
+    },
+  },
+  paginationButtonActive: {
+    background: '#FFD700',
+    color: '#333',
+    fontWeight: 'bold',
+    '&:hover': {
+      backgroundColor: '#FFC800',
+    },
+  },
+  rankingTableWrapper: {
+    backgroundColor: '#282838',
+    borderRadius: '12px',
+    overflowX: 'auto',
+    width: '100%',
+    maxWidth: '1200px',
+    boxSizing: 'border-box',
+    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.3)',
+  },
+  rankingTable: {
+    width: '100%',
+    borderCollapse: 'separate',
+    borderSpacing: '0 8px',
+    padding: '0 15px',
+  },
+  tableHeader: {
+    backgroundColor: '#3A3A4A',
+    padding: '15px 10px',
+    textAlign: 'left',
+    color: '#A0A0B0',
+    fontSize: '0.9rem',
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    borderBottom: '1px solid #4A4A5A',
+    whiteSpace: 'nowrap',
+    '&:first-child': {
+      borderTopLeftRadius: '8px',
+    },
+    '&:last-child': {
+      borderTopRightRadius: '8px',
+    },
+  },
+  tableRow: {
+    backgroundColor: '#2F2F3F',
+    transition: 'background-color 0.2s ease',
+    '&:hover': {
+      backgroundColor: '#3A3A4A',
+    },
+    marginBottom: '8px',
+  },
+  tableCell: {
+    padding: '12px 10px',
+    color: '#E0E0E0',
+    fontSize: '0.95rem',
+    borderBottom: '1px solid #3A3A4A',
+    whiteSpace: 'nowrap',
+  },
+  tableRankNumber: {
+    fontWeight: 'bold',
+    color: '#FFD700',
+  },
+
+  // Responsive adjustments
+  '@media (max-width: 1024px)': {
+    playerCardElite: {
+      width: 'calc(40% - 8px)', // ปรับความกว้างสำหรับการ์ด 2 ใบต่อแถว
+      minWidth: '170px',
+      padding: '20px 10px',
+    },
+    rank1CardElite: {
+      width: 'calc(50% - 8px)', // อันดับ 1 กว้างขึ้นเล็กน้อย
+      height: '300px',
+    },
+    rank2CardElite: {
+        width: 'calc(40% - 8px)',
+        height: '260px',
+    },
+    rank3CardElite: {
+        width: 'calc(40% - 8px)',
+        height: '260px', // ปรับความสูงให้เท่ากับอันดับ 2
+    },
+    top3CardsWrapper: {
+        flexDirection: 'column',
+        alignItems: 'center',
+    },
+    rank2CardElite: {
+        order: 2,
+    },
+    rank1CardElite: {
+        order: 1,
+    },
+    rank3CardElite: {
+        order: 3,
+    },
+    playerRankIconOnly: {
+        // Adjusted for smaller screens if needed
+    },
+    crownIconElite: {
+      fontSize: '3.5rem', // Adjusted size
+    },
+    rankIconElite: { // Adjusted size
+      fontSize: '3rem',
+    },
+    playerCardNameElite: {
+      fontSize: '1.4rem',
+    },
+    playerCardLevelElite: {
+      fontSize: '1rem',
+    },
+    playerCardScoreLargeElite: {
+      fontSize: '1.8rem',
+    },
+    playerCardScoreLargestElite: {
+      fontSize: '2.5rem',
+    },
+  },
+  '@media (max-width: 768px)': {
+    rankingPageTitle: {
+      fontSize: '2rem',
+    },
+    titleIcon: {
+      fontSize: '2.2rem',
+    },
+    rankingSubtitle: {
+      fontSize: '1rem',
+    },
+    filterControls: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+    },
+    selectControl: {
+      width: '100%',
+    },
+    top3CardsWrapper: {
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '15px',
+    },
+    playerCardElite: {
+      width: '90%',
+      padding: '18px 10px',
+      minWidth: 'unset',
+      transform: 'none !important',
+      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.3), inset 0 0 8px rgba(255,255,255,0.08)',
+      '&:hover': {
+        transform: 'scale(1.01) !important',
+        boxShadow: '0 10px 20px rgba(0, 0, 0, 0.4), inset 0 0 12px rgba(255,255,255,0.1)',
+      },
+      animation: 'none',
+      '&::before': { display: 'none' }, // ซ่อน light sweep
+    },
+    rank1CardElite: {
+        width: '95%',
+        height: '280px',
+        marginBottom: '10px',
+    },
+    rank2CardElite: {
+        width: '90%',
+        height: '240px',
+        marginBottom: '10px',
+    },
+    rank3CardElite: {
+        width: '90%',
+        height: '240px', // ปรับความสูงให้เท่ากับอันดับ 2
+        marginBottom: '10px',
+    },
+    playerRankIconOnly: {
+        // Adjusted for smaller screens if needed
+    },
+    crownIconElite: {
+      fontSize: '3rem', // Adjusted size
+    },
+    rankIconElite: { // Adjusted size
+      fontSize: '2.5rem',
+    },
+    playerCardNameElite: {
+      fontSize: '1.2rem',
+    },
+    playerCardLevelElite: {
+      fontSize: '0.9rem',
+      padding: '6px 10px',
+    },
+    playerCardScoreLargeElite: {
+      fontSize: '1.6rem',
+    },
+    playerCardScoreLargestElite: {
+      fontSize: '2.2rem',
+    },
+    tableControlsWrapper: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      padding: '15px 20px',
+    },
+    searchBar: {
+      maxWidth: '100%',
+    },
+    pagination: {
+      justifyContent: 'center',
+    },
+    tableHeader: {
+      padding: '10px 8px',
+      fontSize: '0.8rem',
+    },
+    tableCell: {
+      padding: '10px 8px',
+      fontSize: '0.85rem',
+    },
+  },
+  '@media (max-width: 480px)': {
+    container: {
+      padding: '15px 10px',
+    },
+    rankingPageTitle: {
+      fontSize: '1.6rem',
+    },
+    titleIcon: {
+      fontSize: '1.8rem',
+    },
+    rankingSubtitle: {
+      fontSize: '0.9rem',
+    },
+    playerCardElite: {
+      width: '100%',
+      padding: '15px 10px',
+    },
+    rank1CardElite: {
+        width: '100%',
+        height: '260px',
+    },
+    rank2CardElite: {
+        width: '100%',
+        height: '220px',
+    },
+    rank3CardElite: {
+        width: '100%',
+        height: '220px', // ปรับความสูงให้เท่ากับอันดับ 2
+    },
+    playerRankIconOnly: {
+        // Adjusted for smaller screens if needed
+    },
+    crownIconElite: {
+      fontSize: '2.5rem', // Adjusted size
+    },
+    rankIconElite: { // Adjusted size
+      fontSize: '2rem',
+    },
+    playerCardNameElite: {
+      fontSize: '1rem',
+    },
+    playerCardLevelElite: {
+      fontSize: '0.75rem',
+      padding: '5px 8px',
+    },
+    playerCardScoreLargeElite: {
+      fontSize: '1.4rem',
+    },
+    playerCardScoreLargestElite: {
+      fontSize: '1.9rem',
+    },
+    rankingTableWrapper: {
+        padding: '0',
+    },
+    rankingTable: {
+        padding: '0 5px',
+        borderSpacing: '0 5px',
+    },
+    tableHeader: {
+      fontSize: '0.7rem',
+      padding: '6px 4px',
+    },
+    tableCell: {
+      fontSize: '0.72rem',
+      padding: '6px 4px',
+    },
+    paginationButton: {
+      padding: '6px 10px',
+      fontSize: '0.8rem',
+    },
+  },
 };
 
 export default Ranking;
