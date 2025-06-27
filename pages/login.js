@@ -58,7 +58,7 @@ export default function Login() {
       <div className="login-form-wrapper">
         <div className="login-logo">
           <Image
-            src="/images/Logo.png"
+            src="/images/Logo-iconnew.png"
             alt="PlayMatch Logo"
             width={74}
             height={86}
@@ -115,7 +115,7 @@ export default function Login() {
             aria-label="Line"
           >
             <span>
-              <img src="/images/line.png" alt="Line Icon" />
+              <img src="/images/Line-icon.png" alt="Line Icon" />
             </span>
           </a>
           <a
@@ -124,13 +124,13 @@ export default function Login() {
             aria-label="Email"
           >
             <span>
-              <img src="/images/Email.png" alt="Email Icon" />
+              <img src="/images/Email-icon.png" alt="Email Icon" />
             </span>
           </a>
         </div>
 
         <div className="login-copyright">
-          © 2024–2025 PlayMatch
+          © 2025–2026 PlayMatch version 1.0.0
         </div>
       </div>
 
@@ -172,7 +172,7 @@ export default function Login() {
           border-radius: 1.6rem;
           padding: 44px 44px 26px 44px;
           width: 100%;
-          max-width: 420px;
+          max-width: 440px;
           display: flex;
           flex-direction: column;
           align-items: center;
