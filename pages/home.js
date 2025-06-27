@@ -12,6 +12,10 @@ import {
   query,
   where,
   writeBatch,
+  limit, // Import limit
+  orderBy, // Import orderBy
+  startAfter, // Import startAfter
+  endBefore, // Import endBefore
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
 // Import ChevronUp, ChevronDown for active sorting, and ArrowUpDown for default sortable state
@@ -205,9 +209,16 @@ const Home = () => {
   const [currentUserId, setCurrentUserId] = useState(null); // Added State to store userId
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [membersPerPage] = useState(20);
+  const [membersPerPage] = useState(30);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [isResettingStatus, setIsResettingStatus] = useState(false); // New state for reset status button
+
+  // States for server-side pagination cursors
+  const [lastVisible, setLastVisible] = useState(null);
+  const [firstVisible, setFirstVisible] = useState(null);
+  const [hasMoreNext, setHasMoreNext] = useState(false);
+  const [hasMorePrev, setHasMorePrev] = useState(false);
+
 
   // State for sorting
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
@@ -348,22 +359,12 @@ const Home = () => {
           }
 
           if (!currentUserId) {
-            // Use stored currentUserId
             Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
             return;
           }
 
           let validationErrors = [];
           let successCount = 0;
-
-          const existingMembers = await fetchMembersData();
-          let maxIdNum = existingMembers.reduce((max, member) => {
-            if (member.memberId && member.memberId.startsWith("member_")) {
-              const num = parseInt(member.memberId.split("_")[1], 10);
-              return isNaN(num) ? max : Math.max(max, num);
-            }
-            return max;
-          }, 0);
 
           const batch = writeBatch(db); // Initialize batch
 
@@ -433,18 +434,14 @@ const Home = () => {
               continue;
             }
 
-            // Generate a unique memberId for each new entry within this batch
-            maxIdNum++; // Increment for each new member
-            const memberId = `member_${String(maxIdNum).padStart(3, "0")}`;
-            
-            const memberRef = doc(
-                db,
-                `users/${currentUserId}/Members/${memberId}`
-            );
+            // Use Firestore's auto-generated ID for new documents to avoid extra reads
+            const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
+            const memberId = newMemberRef.id; // Get the auto-generated ID
+
             // Add the operation to the batch
-            batch.set(memberRef, {
+            batch.set(newMemberRef, {
                 ...newUser,
-                memberId,
+                memberId, // Store the auto-generated ID
                 createdAt: new Date(),
             });
             successCount++;
@@ -459,7 +456,8 @@ const Home = () => {
               "success"
             );
             setShowModal(false);
-            fetchMembers(); // Re-fetch members to update the UI
+            setCurrentPage(1); // Reset to first page after bulk upload
+            fetchMembers('current', null); // Re-fetch members to update the UI
           }
 
           if (validationErrors.length > 0) {
@@ -516,48 +514,143 @@ const Home = () => {
     }
   };
 
-  const fetchMembersData = async () => {
+  // Centralized fetch function for paginated and sorted data
+  const fetchMembers = useCallback(async (direction = 'current', cursor = null) => {
+    if (!currentUserId) {
+        setMembers([]);
+        setFirstVisible(null);
+        setLastVisible(null);
+        setHasMoreNext(false);
+        setHasMorePrev(false);
+        return;
+    }
+
     try {
-      if (!currentUserId) {
-        // Check userId before fetching member data
-        return [];
-      }
-      const membersRef = collection(db, `users/${currentUserId}/Members`);
-      const membersSnapshot = await getDocs(membersRef);
-      const membersData = membersSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+        const membersRef = collection(db, `users/${currentUserId}/Members`);
+        let baseQuery = membersRef;
 
-      // Sorting by memberId_XXX is no longer needed here as sorted data is handled in sortedMembers
-      return membersData;
+        let appliedOrderByKey = sortConfig.key || 'createdAt'; // Default sort key for pagination
+        let appliedOrderByDirection = sortConfig.direction === 'descending' ? 'desc' : 'asc';
+
+        // Apply search filter if present (Firestore prefix search)
+        if (search) {
+            baseQuery = query(
+                baseQuery,
+                where('name', '>=', search),
+                where('name', '<=', search + '\uf8ff') // \uf8ff is a high-value Unicode character
+            );
+            // When searching, sort by 'name' to make prefix search effective.
+            // If the user then clicks another sort header, it will re-fetch based on that sort.
+            appliedOrderByKey = 'name';
+            appliedOrderByDirection = sortConfig.direction === 'descending' ? 'desc' : 'asc';
+        }
+
+        let q;
+        if (direction === 'next' && cursor) {
+            q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection), startAfter(cursor), limit(membersPerPage));
+        } else if (direction === 'prev' && cursor) {
+            // To go back, we order by the opposite direction, then startAfter the current first document
+            // and then reverse the results after fetching.
+            q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'), startAfter(cursor), limit(membersPerPage));
+        } else { // 'current' or initial load, or when sort/search changes
+            q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection), limit(membersPerPage));
+        }
+        
+        const documentSnapshots = await getDocs(q);
+        let fetchedMembers = documentSnapshots.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        // If going backwards, reverse the fetched results to maintain correct order
+        if (direction === 'prev') {
+            fetchedMembers = fetchedMembers.reverse();
+        }
+        
+        // Client-side sorting for 'level' and 'birthDate' if they are the primary sort key
+        // This is necessary because Firestore cannot directly sort by custom string order (e.g., C, P-, P)
+        // or calculated values like age. We fetch the paginated batch and then sort it in memory.
+        if (sortConfig.key === 'level') {
+            fetchedMembers.sort((a, b) => {
+                const aIndex = levelOrder.indexOf(a.level);
+                const bIndex = levelOrder.indexOf(b.level);
+                // Handle cases where level might not be in levelOrder
+                if (sortConfig.direction === 'ascending') {
+                    return (aIndex === -1 ? Infinity : aIndex) - (bIndex === -1 ? Infinity : bIndex);
+                } else {
+                    return (bIndex === -1 ? Infinity : bIndex) - (aIndex === -1 ? Infinity : aIndex);
+                }
+            });
+        } else if (sortConfig.key === 'birthDate') {
+            fetchedMembers.sort((a, b) => {
+                const ageA = calculateAge(a.birthDate);
+                const ageB = calculateAge(b.birthDate);
+                // Handle null ages
+                if (sortConfig.direction === 'ascending') {
+                    return (ageA === null ? Infinity : ageA) - (ageB === null ? Infinity : ageB);
+                } else {
+                    return (ageB === null ? Infinity : ageB) - (ageA === null ? Infinity : ageA);
+                }
+            });
+        }
+
+        setMembers(fetchedMembers);
+
+        if (fetchedMembers.length > 0) {
+            setFirstVisible(documentSnapshots.docs[0]);
+            setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+
+            // Check if there are more documents after the last one
+            const nextDocsQuery = query(
+                baseQuery, // Use baseQuery to include search filters
+                orderBy(appliedOrderByKey, appliedOrderByDirection),
+                startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]),
+                limit(1) // Just fetch one to check existence
+            );
+            const nextDocsSnapshot = await getDocs(nextDocsQuery);
+            setHasMoreNext(!nextDocsSnapshot.empty);
+
+            // Check if there are documents before the first one
+            const prevDocsQuery = query(
+                baseQuery, // Use baseQuery to include search filters
+                orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'), // Reverse order for checking previous
+                startAfter(documentSnapshots.docs[0]), // Start after the current first document
+                limit(1) // Just fetch one to check existence
+            );
+            const prevDocsSnapshot = await getDocs(prevDocsQuery);
+            setHasMorePrev(!prevDocsSnapshot.empty);
+
+        } else {
+            setFirstVisible(null);
+            setLastVisible(null);
+            setHasMoreNext(false);
+            setHasMorePrev(false);
+        }
+
     } catch (error) {
-      console.error("Error fetching members data:", error);
-      return [];
+        console.error("Error fetching paginated members:", error);
+        Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถดึงข้อมูลสมาชิกได้: " + error.message, "error");
+        setMembers([]);
+        setFirstVisible(null);
+        setLastVisible(null);
+        setHasMoreNext(false);
+        setHasMorePrev(false);
     }
-  };
+}, [currentUserId, membersPerPage, sortConfig, levelOrder, search]); // Add search to dependencies
 
-  // Use useCallback so fetchMembers doesn't change on every re-render
-  const fetchMembers = useCallback(async () => {
-    const data = await fetchMembersData();
-    setMembers(data);
-  }, [currentUserId]); // currentUserId is a dependency
-
-  useEffect(() => {
+useEffect(() => {
     fetchUserData(); // Fetch username and userId on first component load
-  }, []); // Call only once on component mount
+}, []);
 
-  // Call fetchMembers when currentUserId is available
-  useEffect(() => {
+// Call fetchMembers when currentUserId, sortConfig, or search changes
+useEffect(() => {
     if (currentUserId) {
-      fetchMembers();
+        // When currentUserId, sortConfig, or search changes, reset pagination and fetch first page
+        setCurrentPage(1); // Always go to page 1 for new sort/search
+        fetchMembers('current', null);
     }
-  }, [currentUserId, fetchMembers]);
+}, [currentUserId, fetchMembers, sortConfig, search]);
 
-  // This function is now used with a simple counter
-  const generateMemberId = (currentMaxIdNum) => {
-    return `member_${String(currentMaxIdNum).padStart(3, "0")}`;
-  };
 
   const handleSelectUser = (user) => {
     if (selectedUser && selectedUser.memberId === user.memberId) {
@@ -630,14 +723,11 @@ const Home = () => {
 
     try {
       if (!currentUserId) {
-        // Use stored currentUserId
         Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
 
-      let memberId;
       if (isEditing && selectedUser) {
-        memberId = selectedUser.memberId;
         const memberRef = doc(
           db,
           `users/${currentUserId}/Members/${selectedUser.memberId}`
@@ -645,28 +735,21 @@ const Home = () => {
         await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
         Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
       } else {
-        const currentMembersData = await fetchMembersData();
-        // Calculate maxIdNum based on existing members before generating a new ID
-        let maxIdNum = currentMembersData.reduce((max, member) => {
-          if (member.memberId && member.memberId.startsWith("member_")) {
-            const num = parseInt(member.memberId.split("_")[1], 10);
-            return isNaN(num) ? max : Math.max(max, num);
-          }
-          return max;
-        }, 0);
-        memberId = generateMemberId(maxIdNum + 1); // Increment for the new member
+        // Use Firestore's auto-generated ID for new documents
+        const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
+        const memberId = newMemberRef.id;
         
-        const memberRef = doc(db, `users/${currentUserId}/Members/${memberId}`);
-        await setDoc(memberRef, {
+        await setDoc(newMemberRef, {
           ...newUser,
-          memberId,
+          memberId, // Store the auto-generated ID
           createdAt: new Date(),
         });
         Swal.fire("สำเร็จ!", "เพิ่มสมาชิกสำเร็จ!", "success");
       }
 
       clearForm();
-      fetchMembers();
+      setCurrentPage(1); // Reset to first page after add/edit
+      fetchMembers('current', null); // Re-fetch the first page of members
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
@@ -687,7 +770,6 @@ const Home = () => {
 
       try {
         if (!currentUserId) {
-          // Use stored currentUserId
           Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
           return;
         }
@@ -700,7 +782,8 @@ const Home = () => {
         Swal.fire("ลบสำเร็จ!", "", "success");
 
         clearForm();
-        fetchMembers();
+        setCurrentPage(1); // Reset to first page after delete
+        fetchMembers('current', null); // Re-fetch the first page of members
       } catch (error) {
         Swal.fire("เกิดข้อผิดพลาดในการลบ", error.message, "error");
       }
@@ -711,7 +794,6 @@ const Home = () => {
     const newStatus = user.status === "มา" || !user.status ? "ไม่มา" : "มา";
     try {
       if (!currentUserId) {
-        // Use stored currentUserId
         Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
@@ -721,7 +803,7 @@ const Home = () => {
         `users/${currentUserId}/Members/${user.memberId}`
       );
       await updateDoc(memberRef, { status: newStatus });
-      fetchMembers();
+      fetchMembers('current', firstVisible); // Re-fetch current page to update status
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาดในการอัปเดตสถานะ", error.message, "error");
     }
@@ -751,7 +833,12 @@ const Home = () => {
 
       const batch = writeBatch(db);
       const membersRef = collection(db, `users/${currentUserId}/Members`);
-      const membersSnapshot = await getDocs(membersRef);
+      // To reset all status, we still need to read all members to update them.
+      // For very large collections, this operation would be costly in terms of reads and writes.
+      // A Cloud Function triggered by a manual event would be more scalable for this.
+      // For now, we'll fetch all members and update in a batch.
+      // If this operation is frequent with huge datasets, consider a Cloud Function.
+      const membersSnapshot = await getDocs(membersRef); 
 
       membersSnapshot.docs.forEach((memberDoc) => {
         const memberRef = doc(db, `users/${currentUserId}/Members`, memberDoc.id);
@@ -760,7 +847,7 @@ const Home = () => {
 
       await batch.commit(); // Commit all updates in a single batch
       Swal.fire("สำเร็จ!", "รีเซ็ตสถานะสมาชิกทั้งหมดเป็น 'ไม่มา' สำเร็จ!", "success");
-      fetchMembers(); // Re-fetch members to update UI
+      fetchMembers('current', null); // Re-fetch first page to update UI
     } catch (error) {
       console.error("Error resetting all statuses:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถรีเซ็ตสถานะได้: " + error.message, "error");
@@ -788,57 +875,6 @@ const Home = () => {
     setIsFormExpanded((prev) => !prev);
   };
 
-  // Sorting logic
-  const sortedMembers = useMemo(() => {
-    let sortableMembers = [...members]; // Create a copy to sort
-    if (search) {
-      sortableMembers = sortableMembers.filter((user) =>
-        user.name?.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    if (sortConfig.key !== null) {
-      sortableMembers.sort((a, b) => {
-        let aValue = a[sortConfig.key];
-        let bValue = b[sortConfig.key];
-
-        // Custom sorting for 'level'
-        if (sortConfig.key === 'level') {
-          const aIndex = levelOrder.indexOf(aValue);
-          const bIndex = levelOrder.indexOf(bValue);
-
-          if (aIndex === -1 && bIndex === -1) return 0; // Both unknown, keep original order
-          if (aIndex === -1) return sortConfig.direction === 'ascending' ? 1 : -1; // Unknown to end
-          if (bIndex === -1) return sortConfig.direction === 'ascending' ? -1 : 1; // Known to end
-
-          if (aIndex < bIndex) {
-            return sortConfig.direction === 'ascending' ? -1 : 1;
-          }
-          if (aIndex > bIndex) {
-            return sortConfig.direction === 'ascending' ? 1 : -1;
-          }
-          return 0; // Values are equal
-        } 
-        // Default sorting for other keys (e.g., name, experience, etc.)
-        else if (typeof aValue === 'string' && typeof bValue === 'string') {
-          return sortConfig.direction === 'ascending'
-            ? aValue.localeCompare(bValue)
-            : bValue.localeCompare(aValue);
-        } else {
-            // Fallback for numbers or other types
-            if (aValue < bValue) {
-                return sortConfig.direction === 'ascending' ? -1 : 1;
-            }
-            if (aValue > bValue) {
-                return sortConfig.direction === 'ascending' ? 1 : -1;
-            }
-            return 0;
-        }
-      });
-    }
-    return sortableMembers;
-  }, [members, search, sortConfig, levelOrder]); // Depend on members, search, sortConfig, and levelOrder
-
   // Function to handle sorting requests
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -846,6 +882,7 @@ const Home = () => {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1); // Reset to first page on sort change
   };
 
   // Function to get sorting icon
@@ -862,14 +899,21 @@ const Home = () => {
     return <ArrowUpDown size={16} className="sort-icon" />;
   };
 
+  // Pagination handlers for next/previous buttons
+  const goToNextPage = () => {
+    if (hasMoreNext) {
+        setCurrentPage(prev => prev + 1);
+        fetchMembers('next', lastVisible);
+    }
+  };
 
-  const indexOfLastMember = currentPage * membersPerPage;
-  const indexOfFirstMember = indexOfLastMember - membersPerPage;
-  const currentMembers = sortedMembers.slice( // Use sortedMembers here
-    indexOfFirstMember,
-    indexOfLastMember
-  );
-  const totalPages = Math.ceil(sortedMembers.length / membersPerPage); // Use sortedMembers length
+  const goToPrevPage = () => {
+    if (hasMorePrev) {
+        setCurrentPage(prev => prev - 1);
+        fetchMembers('prev', firstVisible);
+    }
+  };
+
 
   return (
     <div className="overall-layout">
@@ -1057,34 +1101,23 @@ const Home = () => {
         </div>
 
         <div className="total-members-display">
-          <span>จำนวนสมาชิก: {sortedMembers.length}</span> {/* Use sortedMembers length */}
+          <span>จำนวนสมาชิกในหน้านี้: {members.length}</span> {/* Display count of members on current page */}
         </div>
 
         <div className="pagination-controls">
           <button
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            onClick={goToPrevPage}
             className="pagination-button"
-            disabled={currentPage === 1}
+            disabled={!hasMorePrev}
           >
             ย้อนกลับ
           </button>
-          {Array.from({ length: totalPages }, (_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => setCurrentPage(index + 1)}
-              className={`pagination-button ${
-                currentPage === index + 1 ? "active" : ""
-              }`}
-            >
-              {index + 1}
-            </button>
-          ))}
+          {/* Removed numeric page buttons for true cursor-based pagination */}
+          <span className="current-page-display">หน้า {currentPage}</span>
           <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-            }
+            onClick={goToNextPage}
             className="pagination-button"
-            disabled={currentPage === totalPages || totalPages === 0}
+            disabled={!hasMoreNext}
           >
             ถัดไป
           </button>
@@ -1102,27 +1135,29 @@ const Home = () => {
                 <th>Line ID</th>
                 <th>มือ</th>
                 <th>เบอร์โทร</th>
-                <th>อายุ</th>
+                <th onClick={() => requestSort('birthDate')} className="sortable-header">
+                  อายุ {getSortIcon('birthDate')}
+                </th>
                 <th>ประสบการณ์</th>
                 <th>สถานะ</th>
               </tr>
             </thead>
             <tbody>
-              {currentMembers.length === 0 && !search && (
+              {members.length === 0 && !search && (
                 <tr>
                   <td colSpan="9" className="no-data-message">
                     ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่
                   </td>
                 </tr>
               )}
-              {currentMembers.length === 0 && search && (
+              {members.length === 0 && search && (
                 <tr>
                   <td colSpan="9" className="no-data-message">
                     ไม่พบข้อมูลสมาชิกที่ค้นหา
                   </td>
                 </tr>
               )}
-              {currentMembers.map((user) => (
+              {members.map((user) => (
                 <tr
                   key={user.memberId}
                   className={
@@ -1473,6 +1508,12 @@ const Home = () => {
           background-color: var(--background-color, #f7f7f7); /* Use theme variable */
         }
 
+        .current-page-display {
+            padding: 0 10px;
+            font-size: 12px;
+            color: var(--text-color, #555);
+        }
+
         /* Table Styles */
         .user-table {
           width: 100%;
@@ -1514,6 +1555,7 @@ const Home = () => {
             align-items: center;
             justify-content: center; /* Center content */
             gap: 5px; /* Space between text and icon */
+            white-space: nowrap; /* Prevent text and icon from wrapping */
         }
         .sortable-header .sort-icon {
             color: #ccc; /* Default icon color */
@@ -1573,12 +1615,12 @@ const Home = () => {
         }
 
         .status-มา {
-          background-color: #4caf50;
+          background-color: #57e497;
           color: white;
         }
 
         .status-มา:hover {
-          background-color: #45a049;
+          background-color: #3fc57b;
         }
 
         .status-ไม่มา {
@@ -1635,6 +1677,12 @@ const Home = () => {
             padding-left: 55%; /* Increased padding-left to make space for data-label */
             text-align: right;
             border-bottom: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
+          }
+
+          /* Specific adjustments for 'ระดับ' and 'อายุ' columns */
+          .user-table td[data-label="ระดับ"]:before,
+          .user-table td[data-label="อายุ"]:before {
+            width: 45%; /* Give more space for these labels */
           }
 
           .user-table td:last-child {
