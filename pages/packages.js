@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import Head from "next/head";
-import Navbar from "./components/navbar";
+import Navbar from "./components/navbar"; // <--- นำ Navbar กลับมา
 import { useInView } from "react-intersection-observer";
 import { ChevronDown } from "lucide-react";
 
@@ -69,7 +69,7 @@ const packageData = [
     ],
     monthlyPrice: "699",
     yearlyPrice: "6,990",
-    yearlyDiscountText: "ประหย0ยัดกว่า 1,398 บาท/ปี",
+    yearlyDiscountText: "ประหยัดกว่า 1,398 บาท/ปี",
     buttonText: "ติดต่อทีมงาน",
     isPopular: false,
     buttonVariant: "primary-outline",
@@ -161,7 +161,7 @@ function Packages() {
         />
       </Head>
 
-      {/* <Navbar /> */}
+      <Navbar /> {/* <--- Navbar ถูกนำกลับมาใช้งาน */}
 
       <main style={styles.main}>
         <section style={styles.heroSection}>
