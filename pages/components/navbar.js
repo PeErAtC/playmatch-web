@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link"; // Import Link component
+
+const LINE_OA_URL = "https://page.line.me/136rjkgt"; // Define Line OA URL
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -11,6 +14,13 @@ const Navbar = () => {
 
   const handleGetStartedClick = () => {
     router.push("/login");
+  };
+
+  // New function for Contact button to open Line OA
+  const handleContactClick = (e) => {
+    e.preventDefault(); // Prevent default Link behavior
+    window.open(LINE_OA_URL, "_blank"); // Open in a new tab
+    setMenuOpen(false); // Close menu if it's open (for mobile)
   };
 
   return (
@@ -35,19 +45,43 @@ const Navbar = () => {
         <div className={`navbar-menu ${menuOpen ? "open" : ""}`}>
           <ul>
             <li>
-              <a href="#">หน้าหลัก</a>
+              <Link href="/" legacyBehavior>
+                <a className={router.pathname === "/" ? "active" : ""}>
+                  หน้าหลัก
+                </a>
+              </Link>
             </li>
             <li>
-              <a href="#">เกี่ยวกับ</a>
+              <Link href="/about" legacyBehavior>
+                <a className={router.pathname === "/about" ? "active" : ""}>
+                  เกี่ยวกับ
+                </a>
+              </Link>
             </li>
             <li>
-              <a href="#">บริการ</a>
+              <Link href="/services" legacyBehavior>
+                <a className={router.pathname === "/services" ? "active" : ""}>
+                  บริการ
+                </a>
+              </Link>
             </li>
             <li>
-              <a href="#">แพ็กเกจ</a>
+              <Link href="/packages" legacyBehavior>
+                <a className={router.pathname === "/packages" ? "active" : ""}>
+                  แพ็กเกจ
+                </a>
+              </Link>
             </li>
             <li>
-              <a href="#">ติดต่อเรา</a>
+              {/* **เพิ่ม onClick handler สำหรับ "ติดต่อเรา" ที่นี่** */}
+              <Link href="/contact" legacyBehavior>
+                <a
+                  className={router.pathname === "/contact" ? "active" : ""}
+                  onClick={handleContactClick} // Call the new handler
+                >
+                  ติดต่อเรา
+                </a>
+              </Link>
             </li>
           </ul>
         </div>
@@ -69,6 +103,7 @@ const Navbar = () => {
         </button>
       </nav>
 
+      {/* สไตล์ CSS ทั้งหมดเหมือนเดิม ไม่มีอะไรเปลี่ยนแปลงในส่วนนี้ */}
       <style jsx>{`
         .navbar {
           position: fixed;
@@ -205,6 +240,9 @@ const Navbar = () => {
             height: 48px;
             width: 38px;
             margin-right: 6px;
+          }
+          .navbar-logo span {
+            font-size: 1.05rem;
           }
         }
 
