@@ -69,7 +69,7 @@ const packageData = [
     ],
     monthlyPrice: "699",
     yearlyPrice: "6,990",
-    yearlyDiscountText: "ประหยัดกว่า 1,398 บาท/ปี",
+    yearlyDiscountText: "ประหย0ยัดกว่า 1,398 บาท/ปี",
     buttonText: "ติดต่อทีมงาน",
     isPopular: false,
     buttonVariant: "primary-outline",
@@ -161,7 +161,7 @@ function Packages() {
         />
       </Head>
 
-      {/* <Navbar /> */} {/* Navbar is commented out in your original code */}
+      {/* <Navbar /> */}
 
       <main style={styles.main}>
         <section style={styles.heroSection}>
@@ -322,7 +322,7 @@ function Packages() {
                         key={i}
                         style={{
                           ...styles.featureItem,
-                          color: featureColor,
+                          color: featureColor, // สีข้อความฟีเจอร์
                           // ปรับ borderBottom สำหรับ Premium Card
                           borderBottom:
                             pkg.cardType === "premium"
@@ -330,7 +330,15 @@ function Packages() {
                               : styles.featureItem.borderBottom,
                         }}
                       >
-                        ✔️ {feature}
+                        <span
+                          style={{
+                            color: pkg.cardType === "premium" ? "#FFD700" : "#2e7d32", // สีทองสำหรับ Premium, สีเขียวสำหรับ Standard
+                            marginRight: "10px", // เพิ่มระยะห่างเล็กน้อย
+                          }}
+                        >
+                          ✔️
+                        </span>
+                        {feature}
                       </li>
                     ))}
                   </ul>
