@@ -12,36 +12,49 @@ const packageData = [
     name: "ก๊วนเล็ก",
     description: "เหมาะสำหรับก๊วนเพื่อน, ก๊วนครอบครัว",
     features: [
-      "สมาชิกก๊วนสูงสุด 40 คน",
-      "จัด Match ได้ไม่เกิน 30 Match ต่อเดือน",
-      "ระบบแจ้งเตือน Match",
+      "สมาชิกก๊วนสูงสุด 60 คน",
+      "จัด Match ได้ไม่เกิน 15 Match ต่อเดือน",
+      "ระบบเช็คชื่อสมาชิก",
+      "สร้าง Matches ประจำวัน",
       "บันทึกผลการแข่งขัน",
-      "สถิติพื้นฐาน",
+      "คำนวณค่าใช้จ่ายของสมาชิก",
+      "สถิติและกราฟวิเคราะห์",
     ],
-    monthlyPrice: "149",
-    yearlyPrice: "1,490",
-    yearlyDiscountText: "ประหยัดกว่า 188 บาท/ปี",
+    monthlyPrice: "259",
+    yearlyPrice: "2,590",
+    yearlyDiscountText: "ประหยัดกว่า 518 บาท/ปี",
     buttonText: "เริ่มต้นเลย",
     isPopular: false,
     buttonVariant: "primary-outline",
+    isSale: false,
+    badgeText: "แนะนำ",
+    cardType: "standard", // กำหนดประเภทของการ์ด
   },
   {
     name: "ก๊วนมาตรฐาน",
     description: "เหมาะสำหรับก๊วนประจำ, ชมรมขนาดกลาง",
     features: [
-      "สมาชิกก๊วนสูงสุด 100 คน",
-      "จัด Match ได้ไม่เกิน 70 Match ต่อเดือน",
-      "ระบบแจ้งเตือนและยืนยัน Match",
+      "สมาชิกก๊วนสูงสุด 200 คน",
+      "จัด Match ได้ไม่เกิน 40 Match ต่อเดือน",
+      "ระบบเช็คชื่อสมาชิก",
+      "สร้าง Matches ประจำวัน",
       "บันทึกผลการแข่งขันขั้นสูง",
+      "คำนวณค่าใช้จ่ายของสมาชิกขั้นสูง",
+      "ระบบแจ้งเตือนวันเกิดสมาชิก",
       "สถิติและกราฟวิเคราะห์",
       "ระบบจัดอันดับสมาชิก (Ranking)",
     ],
-    monthlyPrice: "299",
-    yearlyPrice: "2,990",
-    yearlyDiscountText: "ประหยัดกว่า 588 บาท/ปี",
+    monthlyPrice: "299", // ราคาลดแล้ว
+    originalMonthlyPrice: "399", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
+    yearlyPrice: "2,990", // ราคาใหม่รายปีที่ลดแล้ว
+    originalYearlyPrice: "3,990", // ราคาเดิมรายปีสำหรับขีดฆ่า
+    yearlyDiscountText: "ประหยัดกว่า 1,798 บาท/ปี",
     buttonText: "เลือกแพ็กเกจนี้!",
     isPopular: true,
     buttonVariant: "primary-filled",
+    isSale: true,
+    saleBadgeText: "ลดพิเศษ!",
+    cardType: "standard", // กำหนดประเภทของการ์ด
   },
   {
     name: "ก๊วนใหญ่/พรีเมียม",
@@ -54,12 +67,16 @@ const packageData = [
       "รองรับการเชื่อมต่อ API (Custom Integration)",
       "สิทธิพิเศษเข้าร่วมงาน PlayMatch Exclusive",
     ],
-    monthlyPrice: "599",
-    yearlyPrice: "5,990",
-    yearlyDiscountText: "ประหยัดกว่า 1,188 บาท/ปี",
+    monthlyPrice: "699",
+    yearlyPrice: "6,990",
+    yearlyDiscountText: "ประหยัดกว่า 1,398 บาท/ปี",
     buttonText: "ติดต่อทีมงาน",
     isPopular: false,
     buttonVariant: "primary-outline",
+    isSale: false,
+    badgeText: "พรีเมียม",
+    badgeStyle: "premium",
+    cardType: "premium", // กำหนดประเภทของการ์ดเป็น Premium
   },
 ];
 
@@ -96,9 +113,9 @@ const faqData = [
 const FAQItem = ({ question, answer, index }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { ref, inView } = useInView({
-    triggerOnce: true, // Trigger animation only once
-    threshold: 0.1, // Element is 10% visible
-    delay: index * 100, // Delay animation based on index
+    triggerOnce: true,
+    threshold: 0.1,
+    delay: index * 100,
   });
 
   return (
@@ -108,7 +125,7 @@ const FAQItem = ({ question, answer, index }) => {
         ...styles.faqItem,
         opacity: inView ? 1 : 0,
         transform: inView ? "translateY(0)" : "translateY(20px)",
-        transitionDelay: `${index * 0.1}s`, // Stagger delay for FAQ items
+        transitionDelay: `${index * 0.1}s`,
       }}
     >
       <button
@@ -130,9 +147,8 @@ const FAQItem = ({ question, answer, index }) => {
 };
 
 function Packages() {
-  // ฟังก์ชันสำหรับเปิด Line OA
   const handleButtonClick = () => {
-    window.open(LINE_OA_URL, "_blank"); // เปิดในแท็บใหม่
+    window.open(LINE_OA_URL, "_blank");
   };
 
   return (
@@ -145,7 +161,7 @@ function Packages() {
         />
       </Head>
 
-      <Navbar />
+      {/* <Navbar /> */} {/* Navbar is commented out in your original code */}
 
       <main style={styles.main}>
         <section style={styles.heroSection}>
@@ -167,6 +183,35 @@ function Packages() {
                 threshold: 0.2,
               });
 
+              // กำหนดสีตัวอักษรเริ่มต้นและสำหรับ Premium Card
+              const textColor =
+                pkg.cardType === "premium" ? "#e0e0e0" : styles.packageTitle.color;
+              const descriptionColor =
+                pkg.cardType === "premium" ? "#b0bec5" : styles.packageDescription.color;
+              const featureColor =
+                pkg.cardType === "premium" ? "#e0e0e0" : styles.featureItem.color;
+              const pricePrimaryColor =
+                pkg.cardType === "premium" ? "#fff" : styles.monthlyPrice.color;
+              const priceSecondaryColor =
+                pkg.cardType === "premium" ? "#b0bec5" : styles.yearlyPrice.color;
+              const discountTextColor =
+                pkg.cardType === "premium" ? "#81c784" : styles.discountText.color;
+              const originalPriceColor =
+                pkg.cardType === "premium" ? "#999" : styles.originalPriceValue.color;
+
+              // Calculate discount percentage if applicable
+              let discountPercentage = null;
+              if (pkg.isSale && pkg.originalMonthlyPrice && pkg.monthlyPrice) {
+                const originalMonthly = parseFloat(pkg.originalMonthlyPrice);
+                const currentMonthly = parseFloat(pkg.monthlyPrice);
+                if (originalMonthly > currentMonthly) {
+                  discountPercentage = (
+                    ((originalMonthly - currentMonthly) / originalMonthly) *
+                    100
+                  ).toFixed(0); // No decimal places for percentage
+                }
+              }
+
               return (
                 <div
                   key={index}
@@ -174,6 +219,8 @@ function Packages() {
                   style={{
                     ...styles.packageCard,
                     ...(pkg.isPopular ? styles.popularPackage : {}),
+                    ...(pkg.cardType === "standard" ? styles.standardCard : {}),
+                    ...(pkg.cardType === "premium" ? styles.premiumCard : {}),
                     opacity: inView ? 1 : 0,
                     transform: inView ? "translateY(0)" : "translateY(50px)",
                     transition: `opacity 0.6s ease-out ${
@@ -184,28 +231,105 @@ function Packages() {
                   {pkg.isPopular && (
                     <div style={styles.popularBadge}>👑 ยอดนิยม</div>
                   )}
-                  <h3 style={styles.packageTitle}>{pkg.name}</h3>
-                  <p style={styles.packageDescription}>{pkg.description}</p>
-                  <div style={styles.priceContainer}>
-                    <div style={styles.monthlyPrice}>
-                      <span style={styles.priceCurrency}>฿</span>
-                      <span style={styles.priceValue}>{pkg.monthlyPrice}</span>
-                      <span style={styles.priceUnit}>/เดือน</span>
+                  {pkg.isSale && (
+                    <div style={styles.saleBadge}>
+                      <span>
+                        {pkg.saleBadgeText}{" "}
+                        {discountPercentage && `-${discountPercentage}%`}
+                      </span>
                     </div>
-                    <div style={styles.yearlyPrice}>
+                  )}
+                  {pkg.badgeText &&
+                    !pkg.isPopular &&
+                    !pkg.isSale &&
+                    pkg.badgeStyle !== "premium" && (
+                      <div style={styles.packageBadge}>
+                        <span>{pkg.badgeText}</span>
+                      </div>
+                    )}
+                  {pkg.badgeText && pkg.badgeStyle === "premium" && (
+                    <div style={styles.premiumBadge}>
+                      <span>{pkg.badgeText}</span>
+                    </div>
+                  )}
+
+                  <h3 style={{ ...styles.packageTitle, color: textColor }}>
+                    {pkg.name}
+                  </h3>
+                  <p
+                    style={{ ...styles.packageDescription, color: descriptionColor }}
+                  >
+                    {pkg.description}
+                  </p>
+                  <div style={styles.priceContainer}>
+                    <div style={{ ...styles.monthlyPrice, color: pricePrimaryColor }}>
+                      <span style={{ ...styles.priceCurrency, color: pricePrimaryColor }}>
+                        ฿
+                      </span>
+                      {pkg.originalMonthlyPrice && (
+                        <span
+                          style={{
+                            ...styles.originalPriceValue,
+                            color: originalPriceColor,
+                          }}
+                        >
+                          {pkg.originalMonthlyPrice}
+                        </span>
+                      )}
+                      <span
+                        style={
+                          pkg.isSale
+                            ? styles.salePriceValue
+                            : { ...styles.priceValue, color: pricePrimaryColor }
+                        }
+                      >
+                        {pkg.monthlyPrice}
+                      </span>
+                      <span style={{ ...styles.priceUnit, color: priceSecondaryColor }}>
+                        /เดือน
+                      </span>
+                    </div>
+                    <div style={{ ...styles.yearlyPrice, color: priceSecondaryColor }}>
                       หรือ{" "}
-                      <span style={styles.yearlyPriceValue}>
+                      {pkg.originalYearlyPrice && (
+                        <span
+                          style={{
+                            ...styles.originalYearlyPriceValue,
+                            color: originalPriceColor,
+                          }}
+                        >
+                          ฿{pkg.originalYearlyPrice}
+                        </span>
+                      )}
+                      <span
+                        style={
+                          pkg.isSale
+                            ? styles.saleYearlyPriceValue
+                            : { ...styles.yearlyPriceValue, color: pricePrimaryColor }
+                        }
+                      >
                         ฿{pkg.yearlyPrice}
                       </span>
                       /ปี
-                      <p style={styles.discountText}>
+                      <p style={{ ...styles.discountText, color: discountTextColor }}>
                         {pkg.yearlyDiscountText}
                       </p>
                     </div>
                   </div>
                   <ul style={styles.featureList}>
                     {pkg.features.map((feature, i) => (
-                      <li key={i} style={styles.featureItem}>
+                      <li
+                        key={i}
+                        style={{
+                          ...styles.featureItem,
+                          color: featureColor,
+                          // ปรับ borderBottom สำหรับ Premium Card
+                          borderBottom:
+                            pkg.cardType === "premium"
+                              ? "1px solid rgba(255,255,255,0.1)"
+                              : styles.featureItem.borderBottom,
+                        }}
+                      >
                         ✔️ {feature}
                       </li>
                     ))}
@@ -216,7 +340,7 @@ function Packages() {
                         ? styles.selectButtonFilled
                         : styles.selectButtonOutline
                     }
-                    onClick={handleButtonClick} // เพิ่ม onClick handler ที่นี่
+                    onClick={handleButtonClick}
                   >
                     {pkg.buttonText}
                   </button>
@@ -246,7 +370,7 @@ function Packages() {
   );
 }
 
-// Inline Styles (เหมือนเดิมจากเวอร์ชันก่อนหน้า)
+// Inline Styles
 const styles = {
   container: {
     fontFamily: '"Kanit", sans-serif',
@@ -304,16 +428,30 @@ const styles = {
     alignItems: "stretch",
   },
   packageCard: {
-    backgroundColor: "#fff",
     borderRadius: "12px",
-    boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)",
     padding: "35px",
     textAlign: "center",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     transition: "transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out",
-    cursor: "pointer", // ตรวจสอบให้แน่ใจว่ามี cursor pointer
+    cursor: "pointer",
+    position: "relative",
+  },
+  standardCard: {
+    backgroundColor: "#fff",
+    border: "1px solid #e0e0e0",
+    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.08)",
+  },
+  premiumCard: {
+    // ปรับปรุงให้ดูเงาๆ เงินๆ
+    backgroundColor: "#36454F", // Charcoal Gray - สีเทาเข้มออกดำ
+    backgroundImage: "linear-gradient(to bottom, #424242, #212121)", // Gradient เพิ่มมิติ
+    color: "#e0e0e0", // สีตัวอักษรหลักใน Premium Card
+    border: "2px solid #BDB76B", // Dark Goldenrod - ขอบสีทองเข้มขึ้น
+    boxShadow:
+      "0 15px 40px rgba(0, 0, 0, 0.6), inset 0 2px 5px rgba(255, 255, 255, 0.1)", // เงาที่ลึกและมีมิติมากขึ้น พร้อมเงาด้านใน
+    textShadow: "1px 1px 2px rgba(0,0,0,0.3)", // เงาข้อความเล็กน้อย
   },
   "packageCard:hover": {
     transform: "translateY(-8px)",
@@ -329,25 +467,79 @@ const styles = {
     position: "absolute",
     top: "0px",
     right: "0px",
-    backgroundColor: "#64b5f6",
+    backgroundColor: "#64b5f5",
     color: "#fff",
     padding: "8px 18px",
     borderRadius: "0 12px 0 12px",
     fontWeight: "700",
+    fontSize: "0.9rem",
+    letterSpacing: "0.05em",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+    zIndex: 3,
+  },
+  saleBadge: {
+    position: "absolute",
+    top: "0",
+    left: "0",
+    backgroundColor: "#e53935",
+    color: "#fff",
+    padding: "10px 15px",
+    borderRadius: "12px 0 12px 0",
+    fontWeight: "700",
     fontSize: "0.95rem",
     letterSpacing: "0.05em",
     boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+    transform: "rotate(-5deg) translateX(-15px) translateY(15px)",
+    transformOrigin: "top left",
+    zIndex: 3,
+  },
+  packageBadge: {
+    position: "absolute",
+    top: "0px",
+    left: "0px",
+    backgroundColor: "#4CAF50",
+    color: "#fff",
+    padding: "8px 12px",
+    borderRadius: "0 12px 0 12px",
+    fontWeight: "600",
+    fontSize: "0.85rem",
+    letterSpacing: "0.05em",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+    zIndex: 3,
+    transform: "rotate(-5deg) translateX(-5px) translateY(10px)",
+    transformOrigin: "top left",
+  },
+  premiumBadge: {
+    position: "absolute",
+    top: "0px",
+    left: "0px",
+    backgroundColor: "#FFC107",
+    color: "#212121",
+    padding: "10px 15px",
+    borderRadius: "0 12px 0 12px",
+    fontWeight: "700",
+    fontSize: "0.9rem",
+    letterSpacing: "0.05em",
+    boxShadow: "0 3px 10px rgba(0,0,0,0.3)",
+    zIndex: 3,
+    transform: "rotate(-5deg) translateX(-10px) translateY(10px)",
+    transformOrigin: "top left",
+    backgroundImage: "linear-gradient(to bottom right, #FFECB3, #FFC107)",
+    border: "1px solid #BCAAA4",
   },
   packageTitle: {
-    fontSize: "2.1rem",
+    fontSize: "2rem",
     fontWeight: "700",
-    color: "#1c315e",
-    marginBottom: "10px",
+    marginBottom: "8px",
+    marginTop: "20px",
+    color: "#1c315e", // Default color
   },
   packageDescription: {
-    color: "#546e7a",
+    color: "#546e7a", // Default color
     marginBottom: "20px",
     minHeight: "50px",
+    fontSize: "0.95rem",
+    lineHeight: "1.5",
   },
   priceContainer: {
     marginBottom: "25px",
@@ -358,38 +550,68 @@ const styles = {
   monthlyPrice: {
     display: "flex",
     alignItems: "flex-end",
-    color: "#1c315e",
     marginBottom: "5px",
+    color: "#1c315e", // Default color
   },
   priceCurrency: {
-    fontSize: "1.6rem",
+    fontSize: "1.5rem",
     fontWeight: "600",
     marginRight: "5px",
   },
   priceValue: {
+    fontSize: "3rem",
+    fontWeight: "800",
+    lineHeight: "1",
+    color: "#1c315e", // Default color
+  },
+  salePriceValue: {
     fontSize: "3.2rem",
     fontWeight: "800",
     lineHeight: "1",
+    color: "#e53935",
+    textShadow: "0 2px 5px rgba(229, 57, 53, 0.3)",
+  },
+  originalPriceValue: {
+    fontSize: "2.2rem",
+    fontWeight: "600",
+    textDecoration: "line-through",
+    color: "#999", // Default color
+    marginRight: "10px",
+    opacity: 0.7,
   },
   priceUnit: {
-    fontSize: "1.1rem",
+    fontSize: "1rem",
     marginLeft: "5px",
-    color: "#546e7a",
+    color: "#546e7a", // Default color
   },
   yearlyPrice: {
-    fontSize: "1rem",
-    color: "#546e7a",
+    fontSize: "0.95rem",
     fontWeight: "500",
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    color: "#546e7a", // Default color
   },
   yearlyPriceValue: {
     fontWeight: "700",
-    color: "#1c315e",
+    color: "#1c315e", // Default color
+  },
+  saleYearlyPriceValue: {
+    fontWeight: "700",
+    color: "#e53935",
+    fontSize: "1.05rem",
+  },
+  originalYearlyPriceValue: {
+    fontWeight: "500",
+    textDecoration: "line-through",
+    color: "#999", // Default color
+    opacity: 0.7,
   },
   discountText: {
-    fontSize: "0.9rem",
-    color: "#2e7d32",
+    fontSize: "0.85rem",
     fontWeight: "600",
     marginTop: "5px",
+    color: "#2e7d32", // Default color
   },
   featureList: {
     listStyle: "none",
@@ -398,14 +620,15 @@ const styles = {
     width: "100%",
   },
   featureItem: {
-    padding: "10px 20px",
-    color: "#37474f",
-    borderBottom: "1px solid #eceff1",
+    padding: "9px 20px",
+    borderBottom: "1px solid #eceff1", // Default border
     textAlign: "left",
     display: "flex",
     alignItems: "center",
     gap: "10px",
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
+    lineHeight: "1.5",
+    color: "#37474f", // Default color
   },
   "featureItem:last-child": {
     borderBottom: "none",
@@ -414,16 +637,16 @@ const styles = {
     background: "#64b5f6",
     color: "#fff",
     border: "none",
-    padding: "14px 35px",
+    padding: "13px 32px",
     borderRadius: "30px",
-    cursor: "pointer", // ตรวจสอบให้แน่ใจว่ามี cursor pointer
-    fontSize: "1.05rem",
+    cursor: "pointer",
+    fontSize: "1rem",
     fontWeight: "600",
     letterSpacing: "0.03em",
     boxShadow: "0 4px 10px rgba(100, 181, 246, 0.4)",
     transition: "all 0.3s ease",
     marginTop: "auto",
-    minWidth: "180px",
+    minWidth: "170px",
   },
   "selectButtonFilled:hover": {
     backgroundColor: "#42a5f5",
@@ -434,15 +657,15 @@ const styles = {
     background: "none",
     color: "#64b5f6",
     border: "2px solid #64b5f6",
-    padding: "12px 33px",
+    padding: "11px 30px",
     borderRadius: "30px",
-    cursor: "pointer", // ตรวจสอบให้แน่ใจว่ามี cursor pointer
-    fontSize: "1.05rem",
+    cursor: "pointer",
+    fontSize: "1rem",
     fontWeight: "600",
     letterSpacing: "0.03em",
     transition: "all 0.3s ease",
     marginTop: "auto",
-    minWidth: "180px",
+    minWidth: "170px",
   },
   "selectButtonOutline:hover": {
     background: "#64b5f6",
@@ -524,6 +747,9 @@ const styles = {
       padding: "25px",
     },
     priceValue: {
+      fontSize: "2.5rem",
+    },
+    salePriceValue: {
       fontSize: "2.8rem",
     },
     selectButtonFilled: {
@@ -552,7 +778,22 @@ const styles = {
       padding: "20px",
     },
     priceValue: {
+      fontSize: "2.2rem",
+    },
+    salePriceValue: {
       fontSize: "2.5rem",
+    },
+    saleBadge: {
+      padding: "8px 12px",
+      fontSize: "0.85rem",
+    },
+    packageBadge: {
+      padding: "7px 10px",
+      fontSize: "0.8rem",
+    },
+    premiumBadge: {
+      padding: "8px 12px",
+      fontSize: "0.85rem",
     },
   },
 };
