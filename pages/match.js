@@ -14,8 +14,16 @@ import {
 
 // รายการสนาม
 const courts = [
-  "สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนาม 5",
-  "สนาม 6", "สนาม 7", "สนาม 8", "สนาม 9", "สนาม 10",
+  "สนาม 1",
+  "สนาม 2",
+  "สนาม 3",
+  "สนาม 4",
+  "สนาม 5",
+  "สนาม 6",
+  "สนาม 7",
+  "สนาม 8",
+  "สนาม 9",
+  "สนาม 10",
 ];
 
 const RESULT_OPTIONS = [
@@ -26,27 +34,27 @@ const RESULT_OPTIONS = [
 ];
 
 const STATUS_COLORS = {
-  "เตรียมพร้อม": "#fff8d8", // Light yellow for "เตรียมพร้อม"
-  "playing": "#57e497", // Light green for "Playing"
-  "finished": "#f44336", // Red for "Finished"
+  เตรียมพร้อม: "#fff8d8", // Light yellow for "เตรียมพร้อม"
+  playing: "#57e497", // Light green for "Playing"
+  finished: "#f44336", // Red for "Finished"
 };
 
 // Colors for member levels - UPDATED WITH ALL YOUR LEVELS (Darker and cool to warm)
 const LEVEL_COLORS = {
   // Cool tones (lower levels)
-  C: "#6a3d9a",       // Darker Blue
-  "P-": "#6a3d9a",    // Lighter Blue (distinct from C)
-  P: "#6a3d9a",       // Darker Green
-  "N-": "#1f78b4",    // Lighter Green (distinct from P)
-  N: "#1f78b4",       // Darker Purple
+  C: "#6a3d9a", // Darker Blue
+  "P-": "#6a3d9a", // Lighter Blue (distinct from C)
+  P: "#6a3d9a", // Darker Green
+  "N-": "#1f78b4", // Lighter Green (distinct from P)
+  N: "#1f78b4", // Darker Purple
 
   // Warmer tones (higher levels)
-  "S-": "#f44336",    // Orange-Yellow
-  S: "#f44336",       // Darker Orange
-  "มือหน้าบ้าน": "#33a02c", // Darker Red
-  "มือหน้าบ้าน1": "#33a02c", // Lighter Red (distinct from มือหน้าบ้าน)
-  "มือหน้าบ้าน2": "#33a02c", // Lavender (distinct, but still warm-ish)
-  "มือหน้าบ้าน3": "#33a02c", // Darker Red/Maroon
+  "S-": "#f44336", // Orange-Yellow
+  S: "#f44336", // Darker Orange
+  มือหน้าบ้าน: "#33a02c", // Darker Red
+  มือหน้าบ้าน1: "#33a02c", // Lighter Red (distinct from มือหน้าบ้าน)
+  มือหน้าบ้าน2: "#33a02c", // Lavender (distinct, but still warm-ish)
+  มือหน้าบ้าน3: "#33a02c", // Darker Red/Maroon
 };
 
 // Define the order of levels EXACTLY as provided by the user (from high to low, or specific display order)
@@ -64,13 +72,11 @@ const LEVEL_ORDER = [
   "มือหน้าบ้าน3", // assuming these are the lowest based on provided order
 ];
 
-
 // Helper function to get the index of a level in the defined order
 const getLevelOrderIndex = (level) => {
   const index = LEVEL_ORDER.indexOf(level);
   return index === -1 ? Infinity : index; // Unknown levels go to the end
 };
-
 
 const ITEMS_PER_PAGE = 30;
 
@@ -89,7 +95,9 @@ const Match = () => {
     return now.toISOString().slice(0, 10);
   });
   const [topic, setTopic] = useState(() => {
-    return typeof window !== "undefined" ? localStorage.getItem("topic") || "" : "";
+    return typeof window !== "undefined"
+      ? localStorage.getItem("topic") || ""
+      : "";
   });
   const [isOpen, setIsOpen] = useState(false);
   const [matches, setMatches] = useState([]);
@@ -98,8 +106,11 @@ const Match = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showMenuId, setShowMenuId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
+  // เพิ่ม gamesPlayed ใน state ของสมาชิกแต่ละคน
   const [members, setMembers] = useState([]);
-  const [balls] = useState(Array.from({ length: 10 }, (_, i) => (i + 1).toString()));
+  const [balls] = useState(
+    Array.from({ length: 10 }, (_, i) => (i + 1).toString())
+  );
 
   // ดึงข้อมูลอีเมลผู้ใช้
   useEffect(() => {
@@ -122,7 +133,7 @@ const Match = () => {
 
         const membersRef = collection(db, `users/${userId}/Members`);
         const memSnap = await getDocs(membersRef);
-        let memberList = []; // Change to let for sorting
+        let memberList = [];
         memSnap.forEach((doc) => {
           const data = doc.data();
           if (data.status === "มา") {
@@ -132,6 +143,7 @@ const Match = () => {
               level: data.level,
               score: data.score || 0,
               wins: data.wins || 0,
+              gamesPlayed: 0, // Initialize gamesPlayed for current session
             });
           }
         });
@@ -164,6 +176,10 @@ const Match = () => {
     setIsOpen(false);
     setCurrentPage(1);
     clearInterval(timerRef.current);
+    // Reset gamesPlayed for all members when session resets
+    setMembers((prevMembers) =>
+      prevMembers.map((member) => ({ ...member, gamesPlayed: 0 }))
+    );
     if (isBrowser) {
       localStorage.removeItem("isOpen");
       localStorage.removeItem("matches");
@@ -176,12 +192,28 @@ const Match = () => {
 
     const savedIsOpen = localStorage.getItem("isOpen");
     const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
-    const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
+    const savedActivityTime =
+      parseInt(localStorage.getItem("activityTime")) || 0;
 
     if (savedIsOpen === "true") {
       setIsOpen(true);
       setMatches(savedMatches);
       setActivityTime(savedActivityTime);
+      // Recalculate gamesPlayed based on saved matches if session restored
+      const tempGamesPlayed = {};
+      savedMatches.forEach((match) => {
+        if (match.status === "finished") {
+          [match.A1, match.A2, match.B1, match.B2].filter(Boolean).forEach((playerName) => {
+            tempGamesPlayed[playerName] = (tempGamesPlayed[playerName] || 0) + 1;
+          });
+        }
+      });
+      setMembers((prevMembers) =>
+        prevMembers.map((member) => ({
+          ...member,
+          gamesPlayed: tempGamesPlayed[member.name] || 0,
+        }))
+      );
     }
 
     if (isOpen) {
@@ -231,36 +263,118 @@ const Match = () => {
   };
 
   const getAvailableMembers = (currentMatch, currentField) => {
-    const selectedPlayersInMatch = new Set(
+    // Players already selected in the CURRENT match being edited
+    const selectedPlayersInCurrentMatch = new Set(
       Object.entries(currentMatch)
-        .filter(([key, value]) => ["A1", "A2", "B1", "B2"].includes(key) && key !== currentField && value)
+        .filter(
+          ([key, value]) =>
+            ["A1", "A2", "B1", "B2"].includes(key) &&
+            key !== currentField && // Exclude the field being changed itself
+            value
+        )
         .map(([, value]) => value)
     );
 
-    // Filter available members based on already selected players in the current match
-    // Members are already sorted by level from the fetchMembers effect
-    return members.filter(mem => {
-      if (mem.name === currentMatch[currentField]) {
-        return true; // Keep the currently selected player in the dropdown
+    // Players currently in "playing" status in ANY OTHER match
+    const playersInPlayingMatches = new Set();
+    matches.forEach((match) => {
+      // Ensure we don't consider the current match itself for "playing" status exclusion
+      // if it's the one currently being edited and its status is being changed.
+      // This is primarily to prevent self-exclusion issues.
+      if (match.matchId !== currentMatch.matchId && match.status === "playing") {
+        [match.A1, match.A2, match.B1, match.B2].filter(Boolean).forEach((playerName) => {
+          playersInPlayingMatches.add(playerName);
+        });
       }
-      return !selectedPlayersInMatch.has(mem.name);
+    });
+
+    // Filter available members:
+    // 1. Must not be already selected in the current match (unless it's the current field's existing value).
+    // 2. Must not be playing in another match.
+    return members.filter((mem) => {
+      const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
+      const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
+      const isPlayingInAnotherMatch = playersInPlayingMatches.has(mem.name);
+
+      // A member is available if:
+      // - They are the player currently selected in this field (so they remain in the dropdown)
+      // OR
+      // - They are NOT selected in another field in the current match AND they are NOT playing in another match.
+      return isCurrentlySelectedInThisField || (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherMatch);
     });
   };
 
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
       const updated = [...prev];
+      const oldStatus = updated[idx].status;
       updated[idx][field] = value;
       if (field === "result") {
         updated[idx].score = getScoreByResult(value);
-      }
-      // If balls or result are changed, and status was finished,
-      // and now either is empty, revert status to empty.
-      if ((field === "balls" || field === "result") && updated[idx].status === "finished") {
-        if (!updated[idx].balls || !updated[idx].result) {
-          updated[idx].status = "";
+        // NEW LOGIC: If result is selected, automatically set status to 'finished'
+        if (value && updated[idx].status !== "finished") {
+          updated[idx].status = "finished";
+          // Increment gamesPlayed immediately if not already finished
+          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          setMembers((prevMembers) =>
+            prevMembers.map((member) =>
+              playersInMatch.includes(member.name)
+                ? { ...member, gamesPlayed: member.gamesPlayed + 1 }
+                : member
+            )
+          );
         }
       }
+
+      // Logic to update gamesPlayed when status changes to "finished" manually (if result was already there)
+      // or revert if status changes from "finished" to something else
+      // This is now also handled by the 'result' change, but keeping this for manual status changes
+      if (field === "status") {
+        if (value === "finished" && oldStatus !== "finished") {
+          // Match just finished, increment gamesPlayed for all players in this match
+          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          setMembers((prevMembers) =>
+            prevMembers.map((member) =>
+              playersInMatch.includes(member.name)
+                ? { ...member, gamesPlayed: member.gamesPlayed + 1 }
+                : member
+            )
+          );
+        } else if (value !== "finished" && oldStatus === "finished") {
+          // Match was finished, but now it's not (e.g., changed back to playing/ready), decrement gamesPlayed
+          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          setMembers((prevMembers) =>
+            prevMembers.map((member) =>
+              playersInMatch.includes(member.name)
+                ? { ...member, gamesPlayed: Math.max(0, member.gamesPlayed - 1) } // Ensure non-negative
+                : member
+            )
+          );
+        }
+      }
+
+      // If balls or result are changed, and status was finished,
+      // and now either is empty, revert status to empty.
+      // IMPORTANT: This logic needs to check if the status *was* finished and *now* is being unset
+      if (updated[idx].status === "finished" && (!updated[idx].balls || !updated[idx].result)) {
+          // Status was finished, but now either balls or result is missing. Revert status.
+          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          // Only decrement gamesPlayed if the previous status was finished due to this match being complete
+          // and we are now moving away from finished. This is to avoid double decrementing if 'result' was just
+          // set to empty and already decremented.
+          if (oldStatus === "finished") { // Check if it was truly finished before this change
+             setMembers((prevMembers) =>
+                prevMembers.map((member) =>
+                  playersInMatch.includes(member.name)
+                    ? { ...member, gamesPlayed: Math.max(0, member.gamesPlayed - 1) }
+                    : member
+                )
+             );
+          }
+          updated[idx].status = ""; // Set status back to empty
+      }
+
+
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(updated));
       }
@@ -270,16 +384,13 @@ const Match = () => {
 
   const renderMemberOptions = (currentMatch, fieldName) =>
     getAvailableMembers(currentMatch, fieldName).map((mem) => (
-      <option key={mem.memberId} value={mem.name} style={{ color: LEVEL_COLORS[mem.level] || 'black' }}>
-        {/*
-          NOTE: Styling parts of an <option> tag (like coloring only the level)
-          is not consistently supported across all browsers using standard HTML/CSS.
-          Most browsers will only apply the style to the entire option text.
-          If granular control over text within the option is required,
-          a custom dropdown component (e.g., using a React UI library) is needed.
-          For now, the entire option text will be colored based on the level.
-        */}
-        {mem.name} ({mem.level})
+      <option
+        key={mem.memberId}
+        value={mem.name}
+        style={{ color: LEVEL_COLORS[mem.level] || "black" }}
+      >
+        {mem.name} ({mem.level}) - Games: {mem.gamesPlayed}{" "}
+        {/* Display games played */}
       </option>
     ));
 
@@ -292,6 +403,10 @@ const Match = () => {
     setActivityTime(0);
     setMatches([]);
     setCurrentPage(1);
+    // Reset gamesPlayed for all members when starting a new group
+    setMembers((prevMembers) =>
+      prevMembers.map((member) => ({ ...member, gamesPlayed: 0 }))
+    );
 
     if (isBrowser) {
       localStorage.setItem("isOpen", "true");
@@ -303,7 +418,11 @@ const Match = () => {
   const handleEndGroup = async () => {
     const hasUnfinished = matches.some((m) => m.status !== "finished");
     if (hasUnfinished) {
-      Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
+      Swal.fire(
+        "มี Match ที่ยังไม่จบการแข่งขัน",
+        "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match",
+        "warning"
+      );
       return;
     }
 
@@ -335,7 +454,7 @@ const Match = () => {
 
       const membersToUpdate = {};
 
-      matches.forEach(match => {
+      matches.forEach((match) => {
         const { A1, A2, B1, B2, result } = match;
 
         let score = 0;
@@ -344,23 +463,32 @@ const Match = () => {
         if (result === "A") {
           score = 2;
           wins = 1;
-          [A1, A2].filter(Boolean).forEach(playerName => {
-            membersToUpdate[playerName] = membersToUpdate[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+          [A1, A2].filter(Boolean).forEach((playerName) => {
+            membersToUpdate[playerName] = membersToUpdate[playerName] || {
+              scoreToAdd: 0,
+              winsToAdd: 0,
+            };
             membersToUpdate[playerName].scoreToAdd += score;
             membersToUpdate[playerName].winsToAdd += wins;
           });
         } else if (result === "B") {
           score = 2;
           wins = 1;
-          [B1, B2].filter(Boolean).forEach(playerName => {
-            membersToUpdate[playerName] = membersToUpdate[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+          [B1, B2].filter(Boolean).forEach((playerName) => {
+            membersToUpdate[playerName] = membersToUpdate[playerName] || {
+              scoreToAdd: 0,
+              winsToAdd: 0,
+            };
             membersToUpdate[playerName].scoreToAdd += score;
             membersToUpdate[playerName].winsToAdd += wins;
           });
         } else if (result === "DRAW") {
           score = 1;
-          [A1, A2, B1, B2].filter(Boolean).forEach(playerName => {
-            membersToUpdate[playerName] = membersToUpdate[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+          [A1, A2, B1, B2].filter(Boolean).forEach((playerName) => {
+            membersToUpdate[playerName] = membersToUpdate[playerName] || {
+              scoreToAdd: 0,
+              winsToAdd: 0,
+            };
             membersToUpdate[playerName].scoreToAdd += score;
           });
         }
@@ -392,9 +520,12 @@ const Match = () => {
         matches,
         savedAt: serverTimestamp(),
       });
-      Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
+      Swal.fire(
+        "บันทึกสำเร็จ!",
+        "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว",
+        "success"
+      );
       resetSession();
-
     } catch (error) {
       console.error("Error ending group and saving matches:", error);
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
@@ -410,14 +541,27 @@ const Match = () => {
       confirmButtonColor: "#d33",
       cancelButtonColor: "#3085d6",
       confirmButtonText: "ลบ",
-      cancelButtonText: "ยกเลิก"
+      cancelButtonText: "ยกเลิก",
     }).then((result) => {
       if (result.isConfirmed) {
         setMatches((prevMatches) => {
-          const updatedMatches = prevMatches.filter((_, idx) => idx !== idxToDelete);
+          const updatedMatches = prevMatches.filter((_, idx) => {
+            // If the deleted match was finished, decrement gamesPlayed for its players
+            if (idx === idxToDelete && prevMatches[idx].status === 'finished') {
+              const playersInDeletedMatch = [prevMatches[idx].A1, prevMatches[idx].A2, prevMatches[idx].B1, prevMatches[idx].B2].filter(Boolean);
+              setMembers((prevMembers) =>
+                prevMembers.map((member) =>
+                  playersInDeletedMatch.includes(member.name)
+                    ? { ...member, gamesPlayed: Math.max(0, member.gamesPlayed - 1) }
+                    : member
+                )
+              );
+            }
+            return idx !== idxToDelete;
+          });
           const rePaddedMatches = updatedMatches.map((match, index) => ({
             ...match,
-            matchId: padId(index + 1, 4)
+            matchId: padId(index + 1, 4),
           }));
           if (isBrowser) {
             localStorage.setItem("matches", JSON.stringify(rePaddedMatches));
@@ -436,7 +580,9 @@ const Match = () => {
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
 
   const formatTime = (sec) => {
-    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const m = Math.floor(sec / 60)
+      .toString()
+      .padStart(2, "0");
     const s = (sec % 60).toString().padStart(2, "0");
     return `${m}:${s} นาที`;
   };
@@ -612,23 +758,64 @@ const Match = () => {
                   height: "20px",
                 }}
               >
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>Match ID</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>court</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>A1</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>A2</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>B1</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>B2</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>ลูกที่ใช้/เกม</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>ผลการแข่งขัน</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>score</th>
-                <th style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}>status</th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  Match ID
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  court
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  A1
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  A2
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  B1
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  B2
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  ลูกที่ใช้/เกม
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  ผลการแข่งขัน
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  score
+                </th>
+                <th
+                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                >
+                  status
+                </th>
                 <th style={{ padding: "11px 9px" }}></th>
               </tr>
             </thead>
             <tbody>
               {currentMatches.length === 0 && (
                 <tr>
-                  <td colSpan={11}
+                  <td
+                    colSpan={11}
                     style={{
                       padding: "34px 0",
                       color: "#999",
@@ -645,8 +832,17 @@ const Match = () => {
               {currentMatches.map((match, idx) => {
                 const globalIdx = indexOfFirst + idx;
 
-                const cannotFinish = !match.balls || !match.result || !match.A1 || !match.A2 || !match.B1 || !match.B2;
-                const isDisabled = !isOpen || match.status === "finished";
+                const cannotFinish =
+                  !match.balls ||
+                  !match.result ||
+                  !match.A1 ||
+                  !match.A2 ||
+                  !match.B1 ||
+                  !match.B2;
+                // status select should only be disabled if match is already 'finished'
+                // manual 'finished' selection can still be done if all fields are filled
+                const isDisabledManualStatus = !isOpen || cannotFinish;
+
 
                 return (
                   <tr
@@ -657,39 +853,68 @@ const Match = () => {
                       transition: "background 0.25s",
                     }}
                   >
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3", fontWeight: 500, fontSize: "12px" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                        fontWeight: 500,
+                        fontSize: "12px",
+                      }}
+                    >
                       {match.matchId}
                     </td>
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.court}
-                        onChange={(e) => handleChangeMatch(globalIdx, "court", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "court", e.target.value)
+                        }
+                        // Disable court selection if match is finished or group is not open
+                        disabled={!isOpen || match.status === "finished"}
                         style={{
                           width: "110px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.court ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.court
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
                         <option value="">เลือกสนาม</option>
                         {courts.map((court) => (
-                          <option key={court} value={court}>{court}</option>
+                          <option key={court} value={court}>
+                            {court}
+                          </option>
                         ))}
                       </select>
                     </td>
 
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.A1}
-                        onChange={(e) => handleChangeMatch(globalIdx, "A1", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "A1", e.target.value)
+                        }
+                        // Disable player selection if match is finished or group is not open
+                        disabled={!isOpen || match.status === "finished"}
                         style={{
                           width: "120px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.A1 ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.A1
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
@@ -698,16 +923,26 @@ const Match = () => {
                       </select>
                     </td>
 
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.A2}
-                        onChange={(e) => handleChangeMatch(globalIdx, "A2", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "A2", e.target.value)
+                        }
+                        // Disable player selection if match is finished or group is not open
+                        disabled={!isOpen || match.status === "finished"}
                         style={{
                           width: "120px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.A2 ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.A2
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
@@ -716,16 +951,26 @@ const Match = () => {
                       </select>
                     </td>
 
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.B1}
-                        onChange={(e) => handleChangeMatch(globalIdx, "B1", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "B1", e.target.value)
+                        }
+                        // Disable player selection if match is finished or group is not open
+                        disabled={!isOpen || match.status === "finished"}
                         style={{
                           width: "120px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.B1 ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.B1
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
@@ -734,16 +979,26 @@ const Match = () => {
                       </select>
                     </td>
 
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.B2}
-                        onChange={(e) => handleChangeMatch(globalIdx, "B2", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "B2", e.target.value)
+                        }
+                        // Disable player selection if match is finished or group is not open
+                        disabled={!isOpen || match.status === "finished"}
                         style={{
                           width: "120px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.B2 ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.B2
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
@@ -752,36 +1007,58 @@ const Match = () => {
                       </select>
                     </td>
 
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.balls}
-                        onChange={(e) => handleChangeMatch(globalIdx, "balls", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "balls", e.target.value)
+                        }
+                        // Disable balls selection if match is finished or group is not open
+                        disabled={!isOpen || match.status === "finished"}
                         style={{
                           width: "90px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.balls ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.balls
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
                         <option value="">เลือก</option>
                         {balls.map((n) => (
-                          <option key={n} value={n}>{n}</option>
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
                         ))}
                       </select>
                     </td>
 
-                    <td style={{ textAlign: "center", borderRight: "1px solid #e3e3e3" }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                      }}
+                    >
                       <select
                         value={match.result}
-                        onChange={(e) => handleChangeMatch(globalIdx, "result", e.target.value)}
-                        disabled={isDisabled}
+                        onChange={(e) =>
+                          handleChangeMatch(globalIdx, "result", e.target.value)
+                        }
+                        // Disable result selection if group is not open. If match is finished, it's already set.
+                        disabled={!isOpen}
                         style={{
                           width: "110px",
                           padding: "7px",
                           borderRadius: "5px",
-                          border: match.result ? "1px solid #bbb" : "1px solid #FFD700", // Conditional border
+                          border: match.result
+                            ? "1px solid #bbb"
+                            : "1px solid #FFD700", // Conditional border
                           fontSize: "12px",
                         }}
                       >
@@ -793,13 +1070,15 @@ const Match = () => {
                       </select>
                     </td>
 
-                    <td style={{
-                      textAlign: "center",
-                      borderRight: "1px solid #e3e3e3",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                      color: "#138c0f",
-                    }}>
+                    <td
+                      style={{
+                        textAlign: "center",
+                        borderRight: "1px solid #e3e3e3",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                        color: "#138c0f",
+                      }}
+                    >
                       {match.score}
                     </td>
 
@@ -809,7 +1088,8 @@ const Match = () => {
                         onChange={(e) =>
                           handleChangeMatch(globalIdx, "status", e.target.value)
                         }
-                        disabled={!isOpen}
+                        // Status can be manually changed if group is open and it's not finished via result auto-set
+                        disabled={!isOpen || match.status === "finished"} // If auto-set to finished, disable manual change.
                         className="status-select"
                         style={{
                           background: STATUS_COLORS[match.status] || "#fff8d8",
@@ -838,7 +1118,9 @@ const Match = () => {
                             tabIndex={-1}
                             onClick={() =>
                               setShowMenuId(
-                                showMenuId === match.matchId ? null : match.matchId
+                                showMenuId === match.matchId
+                                  ? null
+                                  : match.matchId
                               )
                             }
                             style={{
@@ -1137,11 +1419,11 @@ const Match = () => {
         .game-count-display {
           display: flex;
           justifyContent: "flex-end",
-            alignItems: "center",
-            marginBottom: "10px",
-            fontSize: "14px",
-            color: "#353535",
-            fontWeight: 500,
+          alignItems: "center",
+          marginBottom: "10px",
+          fontSize: "14px",
+          color: "#353535",
+          fontWeight: 500,
         }
 
         /* Table Styles */
@@ -1156,7 +1438,7 @@ const Match = () => {
           border-spacing: 0;
           background-color: #fff;
           border-radius: 13px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+          box-shadow: "0 4px 12px rgba(0,0,0,0.07)";
           font-size: 14px;
           min-width: 1250px;
         }
@@ -1301,16 +1583,16 @@ const Match = () => {
           border-radius: 50%;
           background-color: #40c2ec;
           border: none;
-          color: #fff;
-          font-size: 25px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-right: 7px;
-          cursor: pointer;
-          transition: all 0.15s;
-          box-shadow: 0 2px 7px rgba(50, 200, 250, 0.1);
-          user-select: none;
+          color: "#fff",
+          fontSize: "25px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginRight: "7px",
+          cursor: "pointer",
+          transition: "all 0.15s",
+          boxShadow: "0 2px 7px rgba(50,200,250,0.10)",
+          userSelect: "none",
         }
         .add-match-button:disabled {
           background-color: #bbb;
