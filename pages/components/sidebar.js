@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
-const menuList = [
+// ไม่ต้องแก้ menuList ตรงนี้ ให้ไปกรองตอน render แทน
+const allMenuList = [
   {
     label: "Members",
     path: "/home",
@@ -52,6 +53,7 @@ export default function Sidebar({
   birthDayCount = 0,
   isSidebarOpen,
   toggleSidebar,
+  packageType, // รับ packageType เข้ามา
 }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
@@ -96,6 +98,14 @@ export default function Sidebar({
     };
   }, [isDropdownOpen]);
 
+  // กรองเมนูตาม packageType
+  const filteredMenuList = allMenuList.filter((item) => {
+    if (packageType === "Basic") {
+      return item.label !== "Ranking" && item.label !== "BirthDay";
+    }
+    return true; // สำหรับ Pro และ Premium แสดงทุกเมนู
+  });
+
   return (
     <aside className={`sidebar ${isSidebarOpen ? "open" : "collapsed"}`}>
       <button className="sidebar-mobile-close-button" onClick={toggleSidebar}>
@@ -103,14 +113,14 @@ export default function Sidebar({
       </button>
       <div className="sidebar-logo" onClick={toggleSidebar}>
         {/* เปลี่ยนจาก div.logo-icon เป็น img แทรกเข้ามา */}
-        <img src="/images/Logo.png" alt="Company Logo" className="logo-image" />
+        <img src="/images/Logo-iconnew.png" alt="Company Logo" className="logo-image" />
         {isSidebarOpen && (
           <span className="logo-text">{groupName || "PlayMatch"}</span>
         )}
       </div>
       <hr className="sidebar-divider" />
       <nav className="sidebar-menu">
-        {menuList.map((item) => (
+        {filteredMenuList.map((item) => ( // ใช้ filteredMenuList แทน menuList
           <a
             key={item.path}
             href={item.path}
