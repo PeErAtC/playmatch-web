@@ -2,7 +2,7 @@
 import React from "react";
 import Sidebar from "./components/sidebar";
 import { useState, useEffect } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, doc } from "firebase/firestore"; // Import doc
 import { db } from "../lib/firebaseConfig";
 import { Menu } from "lucide-react";
 import { useRouter } from "next/router";
@@ -11,13 +11,22 @@ import Head from "next/head";
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
   const [userIdForSidebar, setUserIdForSidebar] = useState(null);
+  const [packageType, setPackageType] = useState(null); // เพิ่ม state สำหรับ packageType
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const router = useRouter();
   const { pathname } = router;
 
   // Define paths where the sidebar should NOT be displayed
-  const noSidebarPaths = ["/", "/login", "/MatchDetails"];
+  const noSidebarPaths = [
+    "/",
+    "/login",
+    "/MatchDetails",
+    "/packages",
+    "/about",
+    "/services",
+    "/loginDemo",
+  ];
 
   // Check if the current path is in the noSidebarPaths array
   const showSidebar = !noSidebarPaths.includes(pathname);
@@ -27,9 +36,9 @@ function MyApp({ Component, pageProps }) {
     setIsSidebarOpen((prev) => !prev);
   };
 
-  // Function to fetch user ID (can be reused)
+  // Function to fetch user ID and package type (can be reused)
   useEffect(() => {
-    const fetchUserId = async () => {
+    const fetchUserData = async () => {
       const email = localStorage.getItem("loggedInEmail");
       if (email) {
         try {
@@ -37,14 +46,16 @@ function MyApp({ Component, pageProps }) {
           const q = query(usersRef, where("email", "==", email));
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
+            const userData = querySnapshot.docs[0].data();
             setUserIdForSidebar(querySnapshot.docs[0].id);
+            setPackageType(userData.packageType || null); // ดึง packageType จากข้อมูลผู้ใช้
           }
         } catch (error) {
-          console.error("Error fetching user ID for sidebar:", error);
+          console.error("Error fetching user data for sidebar:", error);
         }
       }
     };
-    fetchUserId();
+    fetchUserData();
   }, []);
 
   // Function to fetch birthday count for sidebar
@@ -104,7 +115,7 @@ function MyApp({ Component, pageProps }) {
 
   return (
     <div className="app-layout">
-      {/* เพิ่มคอมโพเนนต์ Head ที่นี่สำหรับ Title และ Favicon */}
+
       <Head>
         <title>Playmatch</title>
         <link
@@ -135,6 +146,7 @@ function MyApp({ Component, pageProps }) {
           birthDayCount={birthDayCount}
           isSidebarOpen={isSidebarOpen}
           toggleSidebar={toggleSidebar}
+          packageType={packageType}
         />
       )}
 
