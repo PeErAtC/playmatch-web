@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Moon, Sun, Bell, BellOff, Languages } from "lucide-react";
-import { FaRegUserCircle } from "react-icons/fa"; 
+import React, { useState, useEffect, useMemo, useCallback } from "react"; // Added useCallback
+import { Moon, Sun, Bell, BellOff, Languages, Mail, Users, Briefcase, User, Calendar, Clock, Volume2, VolumeX, RefreshCcw } from "lucide-react"; // Added Calendar, Clock, Volume2, VolumeX, RefreshCcw for new options
+import { FaRegUserCircle } from "react-icons/fa";
 
-import { db } from "../lib/firebaseConfig";
+import { db } from "../lib/firebaseConfig"; // Assuming firebaseConfig is correctly set up
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 export default function SettingsPage() {
@@ -11,6 +11,8 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState("thai");
   const [theme, setTheme] = useState("light");
   const [birthdayNotifications, setBirthdayNotifications] = useState(true);
+  const [inAppSounds, setInAppSounds] = useState(true); // New state for in-app sounds
+  const [showSaveMessage, setShowSaveMessage] = useState(false); // State for save message
 
   // State สำหรับข้อมูลโปรไฟล์
   const [userProfile, setUserProfile] = useState(null);
@@ -19,7 +21,7 @@ export default function SettingsPage() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
 
-  const getText = (key) => {
+  const getText = useCallback((key) => { // Wrapped with useCallback
     const texts = {
       thai: {
         settingsTitle: "การตั้งค่า",
@@ -43,11 +45,18 @@ export default function SettingsPage() {
         expiresIn: "กำลังจะหมดอายุในอีก",
         days: "วัน",
         expired: "หมดอายุแล้ว",
-        expiresToday: "หมดอายุวันนี้", 
+        expiresToday: "หมดอายุวันนี้",
+        accountCreatedLabel: "สร้างบัญชีเมื่อ",
+        inAppSoundsLabel: "เสียงในแอป", // New text
+        soundsOn: "เปิด", // New text
+        soundsOff: "ปิด", // New text
+        settingsSaved: "บันทึกการตั้งค่าแล้ว!", // New text
+        resetSettings: "รีเซ็ตการตั้งค่า", // New text
+        resetConfirm: "คุณแน่ใจหรือไม่ที่จะรีเซ็ตการตั้งค่าทั้งหมด?", // New text
       },
       english: {
         settingsTitle: "Settings",
-        generalSettings: "General Settings",
+        generalSettings: "General Information", // Changed to Information as in prior user output.
         personalInfo: "Personal Information",
         languageLabel: "Language",
         themeLabel: "Theme",
@@ -68,13 +77,39 @@ export default function SettingsPage() {
         days: "days",
         expired: "Expired",
         expiresToday: "Expires today",
+        accountCreatedLabel: "Account Created",
+        inAppSoundsLabel: "In-App Sounds", // New text
+        soundsOn: "On", // New text
+        soundsOff: "Off", // New text
+        settingsSaved: "Settings saved!", // New text
+        resetSettings: "Reset Settings", // New text
+        resetConfirm: "Are you sure you want to reset all settings?", // New text
       },
     };
     return texts[language][key];
-  };
+  }, [language]); // Dependency array for useCallback
 
+  // Effect to load initial settings from localStorage on component mount
   useEffect(() => {
     if (isBrowser) {
+      const savedLanguage = localStorage.getItem("appLanguage");
+      const savedTheme = localStorage.getItem("appTheme");
+      const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
+      const savedInAppSounds = localStorage.getItem("inAppSounds"); // Load new setting
+
+      if (savedLanguage) setLanguage(savedLanguage);
+      if (savedTheme) {
+        setTheme(savedTheme);
+        document.documentElement.setAttribute("data-theme", savedTheme);
+      }
+      if (savedBirthdayNotifications !== null) {
+        setBirthdayNotifications(JSON.parse(savedBirthdayNotifications));
+      }
+      if (savedInAppSounds !== null) { // Set new state
+        setInAppSounds(JSON.parse(savedInAppSounds));
+      }
+
+      // Initial loggedInEmail fetch
       const email = localStorage.getItem("loggedInEmail");
       if (email) {
         setLoggedInEmail(email);
@@ -83,8 +118,48 @@ export default function SettingsPage() {
         setLoadingProfile(false);
       }
     }
-  }, [isBrowser, language]);
+  }, [isBrowser, getText]); // Added getText to dependency array for initial getText call
 
+  // Effects to save settings to localStorage whenever they change
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("appLanguage", language);
+      setShowSaveMessage(true);
+      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [language, isBrowser]);
+
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("appTheme", theme);
+      document.documentElement.setAttribute("data-theme", theme);
+      setShowSaveMessage(true);
+      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [theme, isBrowser]);
+
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("birthdayNotifications", JSON.stringify(birthdayNotifications));
+      setShowSaveMessage(true);
+      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [birthdayNotifications, isBrowser]);
+
+  useEffect(() => { // New effect for inAppSounds
+    if (isBrowser) {
+      localStorage.setItem("inAppSounds", JSON.stringify(inAppSounds));
+      setShowSaveMessage(true);
+      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [inAppSounds, isBrowser]);
+
+
+  // Firebase fetching effects (remain mostly the same)
   useEffect(() => {
     const fetchUserId = async () => {
       if (!loggedInEmail) return;
@@ -94,11 +169,11 @@ export default function SettingsPage() {
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", loggedInEmail));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           querySnapshot.forEach(doc => {
             setCurrentUserId(doc.id);
-            return; 
+            return;
           });
         } else {
           setProfileError(getText("noData"));
@@ -112,7 +187,7 @@ export default function SettingsPage() {
     };
 
     fetchUserId();
-  }, [loggedInEmail, language]);
+  }, [loggedInEmail, getText]); // Removed language as dependency since getText is memoized and accounts for it
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -132,8 +207,8 @@ export default function SettingsPage() {
             groupName: userData.groupName || "N/A",
             role: userData.role || "N/A",
             username: userData.username || "N/A",
-            createDate: userData.CreateDate || null, 
-            accountDurationDays: userData.AccountDurationDays !== undefined ? Number(userData.AccountDurationDays) : 30, // ดึงค่าและแปลงเป็น number, default 30
+            createDate: userData.CreateDate || null,
+            accountDurationDays: userData.AccountDurationDays !== undefined ? Number(userData.AccountDurationDays) : 30,
           });
         } else {
           setProfileError(getText("noData"));
@@ -147,7 +222,8 @@ export default function SettingsPage() {
     };
 
     fetchUserProfile();
-  }, [currentUserId, language]);
+  }, [currentUserId, getText]); // Removed language as dependency since getText is memoized and accounts for it
+
 
   const accountExpiryInfo = useMemo(() => {
     if (!userProfile || !userProfile.createDate || userProfile.accountDurationDays === undefined) {
@@ -155,109 +231,60 @@ export default function SettingsPage() {
     }
 
     let createDate;
-    // ตรวจสอบว่าเป็น Firebase Timestamp object หรือไม่
     if (typeof userProfile.createDate.toDate === 'function') {
-        createDate = userProfile.createDate.toDate(); // แปลง Timestamp เป็น Date object
+      createDate = userProfile.createDate.toDate();
     } else {
-        // Fallback หรือแจ้งเตือนถ้า CreateDate ไม่ใช่ Timestamp
-        console.warn("CreateDate is not a Firebase Timestamp. Falling back to string parsing if possible.");
-        if (typeof userProfile.createDate === 'string') {
-            const parts = userProfile.createDate.split('/');
-            // Date constructor ใช้ MM/DD/YYYY หรือ YYYY-MM-DD
-            if (parts.length === 3) {
-                createDate = new Date(`${parts[1]}/${parts[0]}/${parts[2]}`);
-            } else {
-                console.error("Invalid CreateDate string format:", userProfile.createDate);
-                return { status: "error", message: getText("error") + " Invalid CreateDate format" };
-            }
+      console.warn("CreateDate is not a Firebase Timestamp. Falling back to string parsing if possible.");
+      if (typeof userProfile.createDate === 'string') {
+        const parts = userProfile.createDate.split('/');
+        if (parts.length === 3) {
+          createDate = new Date(`${parts[1]}/${parts[0]}/${parts[2]}`);
         } else {
-            console.error("Unknown CreateDate type:", typeof userProfile.createDate);
-            return { status: "error", message: getText("error") + " Unknown CreateDate type" };
+          console.error("Invalid CreateDate string format:", userProfile.createDate);
+          return { status: "error", message: getText("error") + " Invalid CreateDate format" };
         }
+      } else {
+        console.error("Unknown CreateDate type:", typeof userProfile.createDate);
+        return { status: "error", message: getText("error") + " Unknown CreateDate type" };
+      }
     }
 
-    // ตรวจสอบว่า Date object ถูกต้องหรือไม่ (เช่น กรณี string format ผิด)
     if (isNaN(createDate.getTime())) {
-        console.error("Invalid Date object after parsing CreateDate:", userProfile.createDate);
-        return { status: "error", message: getText("error") + " Invalid date" };
+      console.error("Invalid Date object after parsing CreateDate:", userProfile.createDate);
+      return { status: "error", message: getText("error") + " Invalid date" };
     }
-    
-    // กำหนดวันหมดอายุ โดยบวกจำนวนวันที่กำหนดไว้ (AccountDurationDays)
+
     const expiryDate = new Date(createDate);
-    expiryDate.setDate(createDate.getDate() + userProfile.accountDurationDays); 
+    expiryDate.setDate(createDate.getDate() + userProfile.accountDurationDays);
 
     const now = new Date();
-    
-    // ตั้งค่าเวลาของ now และ expiryDate ให้เป็น 00:00:00 เพื่อคำนวณวันที่อย่างเดียว
     now.setHours(0, 0, 0, 0);
     expiryDate.setHours(0, 0, 0, 0);
 
     const diffTime = expiryDate.getTime() - now.getTime();
-    // ใช้ Math.ceil เพื่อให้ 0.x วันกลายเป็น 1 วัน
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays > 0) {
       return {
         status: "active",
         message: `${getText("expiresIn")} ${diffDays} ${getText("days")}`,
-        isExpiringSoon: diffDays <= 7 
+        isExpiringSoon: diffDays <= 7
       };
-    } else if (diffDays === 0) { // วันนี้เป็นวันหมดอายุ
+    } else if (diffDays === 0) {
       return {
         status: "expires_today",
         message: getText("expiresToday"),
         isExpiringSoon: true
       };
-    } else { // diffDays ติดลบ คือหมดอายุแล้ว
+    } else {
       return {
         status: "expired",
         message: getText("expired"),
-        isExpiringSoon: false 
+        isExpiringSoon: false
       };
     }
-  }, [userProfile, language, getText]);
+  }, [userProfile, getText]); // Removed language as dependency since getText is memoized and accounts for it
 
-  // Effects สำหรับ localStorage (เหมือนเดิม)
-  useEffect(() => {
-    if (isBrowser) {
-      const savedLanguage = localStorage.getItem("appLanguage");
-      const savedTheme = localStorage.getItem("appTheme");
-      const savedBirthdayNotifications = localStorage.getItem(
-        "birthdayNotifications"
-      );
-
-      if (savedLanguage) setLanguage(savedLanguage);
-      if (savedTheme) {
-        setTheme(savedTheme);
-        document.documentElement.setAttribute("data-theme", savedTheme);
-      }
-      if (savedBirthdayNotifications !== null) {
-        setBirthdayNotifications(JSON.parse(savedBirthdayNotifications));
-      }
-    }
-  }, [isBrowser]);
-
-  useEffect(() => {
-    if (isBrowser) {
-      localStorage.setItem("appLanguage", language);
-    }
-  }, [language, isBrowser]);
-
-  useEffect(() => {
-    if (isBrowser) {
-      localStorage.setItem("appTheme", theme);
-      document.documentElement.setAttribute("data-theme", theme);
-    }
-  }, [theme, isBrowser]);
-
-  useEffect(() => {
-    if (isBrowser) {
-      localStorage.setItem(
-        "birthdayNotifications",
-        JSON.stringify(birthdayNotifications)
-      );
-    }
-  }, [birthdayNotifications, isBrowser]);
 
   const handleLanguageChange = (e) => {
     setLanguage(e.target.value);
@@ -269,6 +296,56 @@ export default function SettingsPage() {
 
   const toggleBirthdayNotifications = () => {
     setBirthdayNotifications((prev) => !prev);
+  };
+
+  const toggleInAppSounds = () => { // New handler for in-app sounds
+    setInAppSounds((prev) => !prev);
+  };
+
+  const handleResetSettings = () => {
+    if (window.confirm(getText("resetConfirm"))) {
+      setLanguage("thai");
+      setTheme("light");
+      setBirthdayNotifications(true);
+      setInAppSounds(true); // Reset new setting
+      // Clear localStorage for these settings as well
+      if (isBrowser) {
+        localStorage.removeItem("appLanguage");
+        localStorage.removeItem("appTheme");
+        localStorage.removeItem("birthdayNotifications");
+        localStorage.removeItem("inAppSounds");
+        document.documentElement.setAttribute("data-theme", "light"); // Ensure theme is visually reset
+      }
+      setShowSaveMessage(true); // Show confirmation message
+      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  };
+
+
+  // Helper to format date for display
+  const formatDate = (date) => {
+    if (!date) return getText("noData");
+    let d;
+    if (typeof date.toDate === 'function') {
+      d = date.toDate();
+    } else if (date instanceof Date) {
+      d = date;
+    } else {
+      try {
+        d = new Date(date);
+        if (isNaN(d.getTime())) {
+          return getText("noData");
+        }
+      } catch (e) {
+        return getText("noData");
+      }
+    }
+    return d.toLocaleDateString(language === 'thai' ? 'th-TH' : 'en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
   };
 
   return (
@@ -285,29 +362,34 @@ export default function SettingsPage() {
           ) : profileError ? (
             <p className="error-message">{getText("error")} {profileError}</p>
           ) : userProfile ? (
-            <div className="profile-details-grid">
-              <div className="profile-avatar-wrapper">
-                {/* ใช้ FaRegUserCircle แทน */}
-                <FaRegUserCircle size={80} color="var(--text-color, #666)" />
-              </div>
-              <div className="profile-text-info">
-                <div className="info-item">
-                  <span className="info-label">{getText("usernameLabel")}:</span>
-                  <span className="info-value">{userProfile.username}</span>
+            <div className="profile-card">
+              <div className="profile-header">
+                <div className="profile-avatar-wrapper">
+                  <FaRegUserCircle size={80} color="var(--accent-color, #007bff)" />
                 </div>
+                <div className="profile-name-role">
+                  <h4>{userProfile.username}</h4>
+                  <p className="profile-role">{userProfile.role}</p>
+                </div>
+              </div>
+              <div className="profile-details-list">
                 <div className="info-item">
+                  <Mail size={18} className="info-icon" />
                   <span className="info-label">{getText("emailLabel")}:</span>
                   <span className="info-value">{userProfile.email}</span>
                 </div>
                 <div className="info-item">
+                  <Users size={18} className="info-icon" />
                   <span className="info-label">{getText("groupNameLabel")}:</span>
                   <span className="info-value">{userProfile.groupName}</span>
                 </div>
                 <div className="info-item">
-                  <span className="info-label">{getText("roleLabel")}:</span>
-                  <span className="info-value">{userProfile.role}</span>
+                  <Calendar size={18} className="info-icon" />
+                  <span className="info-label">{getText("accountCreatedLabel")}:</span>
+                  <span className="info-value">{formatDate(userProfile.createDate)}</span>
                 </div>
                 <div className="info-item">
+                  <Clock size={18} className="info-icon" />
                   <span className="info-label">{getText("accountStatusLabel")}:</span>
                   <span className={`info-value ${accountExpiryInfo.status === 'expired' ? 'status-expired' : accountExpiryInfo.isExpiringSoon ? 'status-expiring-soon' : ''}`}>
                     {accountExpiryInfo.message}
@@ -319,13 +401,18 @@ export default function SettingsPage() {
             <p>{getText("noData")}</p>
           )}
         </div>
-        
-        {/* ส่วนการตั้งค่าทั่วไป (เหมือนเดิม) */}
+
+        {/* ส่วนการตั้งค่าทั่วไป */}
         <div className="settings-section">
           <h3>{getText("generalSettings")}</h3>
+
+          {showSaveMessage && (
+            <p className="save-message">{getText("settingsSaved")}</p>
+          )}
+
           <div className="setting-item">
             <div className="setting-label">
-              <Languages size={20} />
+              <Languages size={20} className="setting-icon" />
               <span>{getText("languageLabel")}</span>
             </div>
             <select
@@ -340,7 +427,7 @@ export default function SettingsPage() {
 
           <div className="setting-item">
             <div className="setting-label">
-              {theme === "light" ? <Sun size={20} /> : <Moon size={20} />}
+              {theme === "light" ? <Sun size={20} className="setting-icon" /> : <Moon size={20} className="setting-icon" />}
               <span>{getText("themeLabel")}</span>
             </div>
             <div
@@ -359,9 +446,9 @@ export default function SettingsPage() {
           <div className="setting-item">
             <div className="setting-label">
               {birthdayNotifications ? (
-                <Bell size={20} />
+                <Bell size={20} className="setting-icon" />
               ) : (
-                <BellOff size={20} />
+                <BellOff size={20} className="setting-icon" />
               )}
               <span>{getText("notificationsLabel")}</span>
             </div>
@@ -383,6 +470,44 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
+
+          {/* New In-App Sounds setting */}
+          <div className="setting-item">
+            <div className="setting-label">
+              {inAppSounds ? (
+                <Volume2 size={20} className="setting-icon" />
+              ) : (
+                <VolumeX size={20} className="setting-icon" />
+              )}
+              <span>{getText("inAppSoundsLabel")}</span>
+            </div>
+            <div
+              className="setting-control toggle-switch"
+              onClick={toggleInAppSounds}
+            >
+              <div
+                className={`switch-track ${
+                  inAppSounds ? "on" : "off"
+                }`}
+              >
+                <div className="switch-thumb"></div>
+              </div>
+              <span className="toggle-label">
+                {inAppSounds
+                  ? getText("soundsOn")
+                  : getText("soundsOff")}
+              </span>
+            </div>
+          </div>
+
+          {/* New Reset Settings button */}
+          <div className="setting-item reset-button-container">
+            <button onClick={handleResetSettings} className="reset-button">
+              <RefreshCcw size={18} className="button-icon" />
+              {getText("resetSettings")}
+            </button>
+          </div>
+
         </div>
       </main>
 
@@ -401,6 +526,12 @@ export default function SettingsPage() {
           --toggle-off-background-light: #ccc;
           --status-expiring-soon-light: #ffc107; /* Amber for warning */
           --status-expired-light: #dc3545; /* Red for expired */
+          --accent-color-light: #007bff; /* Primary accent color */
+          --icon-color-light: #6c757d; /* Default icon color */
+          --reset-button-bg-light: #f44336; /* Red for reset */
+          --reset-button-text-light: white;
+          --save-message-bg-light: #d4edda; /* Greenish for success */
+          --save-message-text-light: #155724;
         }
 
         [data-theme="dark"] {
@@ -416,6 +547,12 @@ export default function SettingsPage() {
           --toggle-off-background: #555;
           --status-expiring-soon: #ffc107; /* Amber for warning */
           --status-expired: #dc3545; /* Red for expired */
+          --accent-color: #007bff; /* Primary accent color */
+          --icon-color: #bbbbbb; /* Default icon color */
+          --reset-button-bg: #c62828; /* Darker red for reset */
+          --reset-button-text: white;
+          --save-message-bg: #28a745; /* Darker green for success */
+          --save-message-text: #fff;
         }
 
         body {
@@ -436,9 +573,9 @@ export default function SettingsPage() {
           overflow-y: auto;
         }
         .main-content h2 {
-          font-size: 18px; /* Changed from 24px */
+          font-size: 18px;
           color: var(--text-color, var(--text-color-light));
-          margin-bottom: 10px; /* Adjusted margin for new font size */
+          margin-bottom: 10px;
         }
         .main-content h3 {
           color: var(--text-color, var(--text-color-light));
@@ -483,7 +620,7 @@ export default function SettingsPage() {
           border-bottom: 1px solid var(--border-color, #f0f0f0);
         }
 
-        .setting-item:last-child {
+        .setting-item:last-of-type:not(.reset-button-container) { /* Exclude reset button container from last border */
           border-bottom: none;
         }
 
@@ -494,6 +631,10 @@ export default function SettingsPage() {
           font-size: 15px;
           color: var(--text-color, #333);
           font-weight: 500;
+        }
+
+        .setting-icon { /* Added this for consistent icon coloring in general settings */
+            color: var(--icon-color, var(--icon-color-light));
         }
 
         .setting-control {
@@ -568,48 +709,85 @@ export default function SettingsPage() {
           padding: 20px;
         }
 
-        .profile-details-grid {
+        .profile-card {
+          background-color: var(--card-background, #ffffff);
+          border-radius: 10px;
+          padding: 20px;
           display: flex;
+          flex-direction: column;
           gap: 20px;
-          align-items: flex-start;
+        }
+
+        .profile-header {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          padding-bottom: 15px;
+          border-bottom: 1px solid var(--border-color, #e0e0e0);
         }
 
         .profile-avatar-wrapper {
           flex-shrink: 0;
-          width: 100px;
-          height: 100px;
+          width: 80px;
+          height: 80px;
           border-radius: 50%;
           overflow: hidden;
-          background-color: var(--card-background-light);
+          background-color: var(--card-background);
           display: flex;
           justify-content: center;
           align-items: center;
-          border: 1px solid var(--border-color, #ccc);
-          color: var(--text-color, #666); 
+          border: 2px solid var(--accent-color, #007bff);
+          color: var(--accent-color, #007bff);
         }
 
-        .profile-text-info {
-          flex-grow: 1;
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 8px 15px;
-          align-items: baseline;
+        .profile-name-role {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .profile-name-role h4 {
+          margin: 0;
+          font-size: 1.5em;
+          color: var(--text-color, #333);
+        }
+
+        .profile-role {
+          margin: 5px 0 0;
+          font-size: 0.95em;
+          color: var(--text-color, #666);
+          background-color: var(--border-color, #f0f0f0);
+          padding: 4px 10px;
+          border-radius: 5px;
+        }
+
+        .profile-details-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
         }
 
         .info-item {
-          display: contents;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 15px;
         }
-        
+
+        .info-icon {
+            color: var(--icon-color, var(--icon-color-light));
+        }
+
         .info-label {
           font-weight: 500;
           color: var(--text-color, #555);
-          text-align: right;
+          min-width: 120px;
         }
 
         .info-value {
           color: var(--text-color, #333);
           font-weight: 400;
-          text-align: left;
+          flex-grow: 1;
         }
 
         /* Style for expiry status */
@@ -627,18 +805,74 @@ export default function SettingsPage() {
           font-weight: bold;
         }
 
+        .save-message {
+            background-color: var(--save-message-bg, var(--save-message-bg-light));
+            color: var(--save-message-text, var(--save-message-text-light));
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            animation: fadeOut 2s forwards; /* Animation for fading out */
+            animation-delay: 1s; /* Delay before fading starts */
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; display: none; }
+        }
+
+        /* Reset Settings Button */
+        .reset-button-container {
+            border-top: 1px solid var(--border-color, #f0f0f0); /* Add top border if desired */
+            padding-top: 15px;
+            justify-content: center; /* Center the button */
+        }
+
+        .reset-button {
+            background-color: var(--reset-button-bg, var(--reset-button-bg-light));
+            color: var(--reset-button-text, var(--reset-button-text-light));
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.3s ease;
+        }
+
+        .reset-button:hover {
+            opacity: 0.9;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
-          .profile-details-grid {
+          .profile-card {
+            align-items: center; /* Center content on smaller screens */
+          }
+          .profile-header {
             flex-direction: column;
+            text-align: center;
+            border-bottom: none; /* Remove border for cleaner stack */
+            padding-bottom: 0;
+          }
+          .profile-name-role {
             align-items: center;
           }
-          .profile-text-info {
-            grid-template-columns: 1fr;
-            text-align: center;
+          .profile-details-list {
+            width: 100%; /* Take full width */
+            margin-top: 15px; /* Add space after header */
+          }
+          .info-item {
+            flex-direction: column; /* Stack label/value on small screens */
+            align-items: flex-start;
+            gap: 5px;
           }
           .info-label, .info-value {
-            text-align: center;
+            width: 100%; /* Make label and value take full width */
+            text-align: left; /* Align text to left */
           }
         }
 
@@ -667,6 +901,10 @@ export default function SettingsPage() {
           .toggle-switch {
             width: 100%;
             justify-content: flex-start;
+          }
+          .reset-button {
+            width: 100%; /* Full width for button on small screens */
+            justify-content: center;
           }
         }
       `}</style>
