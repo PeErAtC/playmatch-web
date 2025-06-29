@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
+  Lock, // Import the Lock icon
 } from "lucide-react";
 import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
@@ -36,11 +37,13 @@ const allMenuList = [
     label: "Ranking",
     path: "/ranking",
     icon: <Trophy size={20} strokeWidth={1.7} />,
+    access: ["Pro", "Premium"], // เพิ่ม property 'access'
   },
   {
     label: "BirthDay",
     path: "/Birthday",
     icon: <Gift size={20} strokeWidth={1.7} />,
+    access: ["Pro", "Premium"], // เพิ่ม property 'access'
   },
   {
     label: "Dashboard",
@@ -98,13 +101,13 @@ export default function Sidebar({
     };
   }, [isDropdownOpen]);
 
-  // กรองเมนูตาม packageType
-  const filteredMenuList = allMenuList.filter((item) => {
-    if (packageType === "Basic") {
-      return item.label !== "Ranking" && item.label !== "BirthDay";
-    }
-    return true; // สำหรับ Pro และ Premium แสดงทุกเมนู
-  });
+  // *** ลบส่วน filter นี้ออกไป เพราะเราต้องการแสดงทุกเมนูและใช้ logic การ disabled แทน ***
+  // const filteredMenuList = allMenuList.filter((item) => {
+  //   if (packageType === "Basic") {
+  //     return item.label !== "Ranking" && item.label !== "BirthDay";
+  //   }
+  //   return true;
+  // });
 
   return (
     <aside className={`sidebar ${isSidebarOpen ? "open" : "collapsed"}`}>
@@ -113,30 +116,49 @@ export default function Sidebar({
       </button>
       <div className="sidebar-logo" onClick={toggleSidebar}>
         {/* เปลี่ยนจาก div.logo-icon เป็น img แทรกเข้ามา */}
-        <img src="/images/Logo-iconnew.png" alt="Company Logo" className="logo-image" />
+        <img
+          src="/images/Logo-iconnew.png"
+          alt="Company Logo"
+          className="logo-image"
+        />
         {isSidebarOpen && (
           <span className="logo-text">{groupName || "PlayMatch"}</span>
         )}
       </div>
       <hr className="sidebar-divider" />
       <nav className="sidebar-menu">
-        {filteredMenuList.map((item) => ( // ใช้ filteredMenuList แทน menuList
-          <a
-            key={item.path}
-            href={item.path}
-            className={`sidebar-menu-item ${
-              activePath === item.path ? "active" : ""
-            }`}
-          >
-            <span className="menu-icon">{item.icon}</span>
-            {isSidebarOpen && <span className="menu-label">{item.label}</span>}
-            {item.label === "BirthDay" &&
-              birthDayCount > 0 &&
-              isSidebarOpen && (
-                <span className="birthday-badge">{birthDayCount}</span>
+        {allMenuList.map((item) => {
+          // ตรวจสอบว่าเมนูควรจะถูก disabled หรือไม่
+          const isDisabled = item.access && !item.access.includes(packageType);
+          return (
+            <a
+              key={item.path}
+              href={isDisabled ? "#" : item.path} // ถ้า disabled ให้ลิงก์ไปที่ '#'
+              className={`sidebar-menu-item ${
+                activePath === item.path ? "active" : ""
+              } ${isDisabled ? "disabled" : ""}`} // เพิ่ม class 'disabled'
+              onClick={(e) => {
+                if (isDisabled) {
+                  e.preventDefault(); // ป้องกันการเปลี่ยนหน้า
+                }
+              }}
+            >
+              <span className="menu-icon">{item.icon}</span>
+              {isSidebarOpen && (
+                <span className="menu-label">{item.label}</span>
               )}
-          </a>
-        ))}
+              {item.label === "BirthDay" &&
+                birthDayCount > 0 &&
+                isSidebarOpen &&
+                !isDisabled && ( // แสดง badge เมื่อไม่ disabled
+                  <span className="birthday-badge">{birthDayCount}</span>
+                )}
+              {isDisabled && isSidebarOpen && (
+                <Lock size={16} className="lock-icon" /> // แสดงไอคอนล็อค
+              )}
+            </a>
+          );
+        })}
       </nav>
 
       {/* ย้าย sidebar-user ออกมาด้านนอกของโครงสร้างก่อนหน้า sidebar-menu แต่ยังคงอยู่ใน aside */}
@@ -352,15 +374,15 @@ export default function Sidebar({
           flex-shrink: 0;
         }
         .sidebar-menu-item.active,
-        .sidebar-menu-item:hover {
+        .sidebar-menu-item:hover:not(.disabled) {
           background: #146cfa;
           color: #fff;
         }
         .sidebar-menu-item.active .menu-icon,
-        .sidebar-menu-item:hover .menu-icon {
+        .sidebar-menu-item:hover:not(.disabled) .menu-icon {
           color: #fff;
         }
-        .sidebar-menu-item:active {
+        .sidebar-menu-item:active:not(.disabled) {
           background: #19447b;
         }
         .sidebar-menu-item .menu-label {
@@ -372,6 +394,35 @@ export default function Sidebar({
           opacity: 0;
           width: 0;
           overflow: hidden;
+          pointer-events: none;
+        }
+
+        /* Disabled menu item styles */
+        .sidebar-menu-item.disabled {
+          color: #6c757d; /* สีเทาสำหรับ disabled */
+          cursor: not-allowed;
+          pointer-events: none; /* ป้องกันการคลิก */
+          background-color: transparent; /* ลบ background เมื่อ disabled */
+        }
+        .sidebar-menu-item.disabled .menu-icon {
+          color: #6c757d; /* สีไอคอนเป็นสีเทา */
+        }
+        .sidebar-menu-item.disabled:hover {
+          background: transparent; /* ป้องกัน hover effect */
+          color: #6c757d;
+        }
+
+        /* Lock icon style */
+        .lock-icon {
+          position: absolute;
+          right: 15px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #6c757d; /* สีของไอคอนล็อค */
+          transition: opacity 0.3s ease-in-out;
+        }
+        .sidebar.collapsed .lock-icon {
+          opacity: 0;
           pointer-events: none;
         }
 
