@@ -2,7 +2,7 @@
 import React from "react";
 import Sidebar from "./components/sidebar";
 import { useState, useEffect } from "react";
-import { collection, getDocs, query, where, doc } from "firebase/firestore"; // Import doc
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../lib/firebaseConfig";
 import { Menu } from "lucide-react";
 import { useRouter } from "next/router";
@@ -11,13 +11,13 @@ import Head from "next/head";
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
   const [userIdForSidebar, setUserIdForSidebar] = useState(null);
-  const [packageType, setPackageType] = useState(null); // เพิ่ม state สำหรับ packageType
+  const [packageType, setPackageType] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [loadingInitialData, setLoadingInitialData] = useState(true); // เพิ่ม state สำหรับการโหลดข้อมูลเริ่มต้น
 
   const router = useRouter();
   const { pathname } = router;
 
-  // Define paths where the sidebar should NOT be displayed
   const noSidebarPaths = [
     "/",
     "/login",
@@ -28,17 +28,16 @@ function MyApp({ Component, pageProps }) {
     "/loginDemo",
   ];
 
-  // Check if the current path is in the noSidebarPaths array
   const showSidebar = !noSidebarPaths.includes(pathname);
 
-  // Function to toggle sidebar visibility
   const toggleSidebar = () => {
     setIsSidebarOpen((prev) => !prev);
   };
 
-  // Function to fetch user ID and package type (can be reused)
+  // Function to fetch user ID and package type
   useEffect(() => {
-    const fetchUserData = async () => {
+    const checkUserAndFetchPackageType = async () => {
+      setLoadingInitialData(true); // ตั้งค่า loading เป็น true ทุกครั้งที่เริ่มดึงข้อมูล
       const email = localStorage.getItem("loggedInEmail");
       if (email) {
         try {
@@ -48,17 +47,26 @@ function MyApp({ Component, pageProps }) {
           if (!querySnapshot.empty) {
             const userData = querySnapshot.docs[0].data();
             setUserIdForSidebar(querySnapshot.docs[0].id);
-            setPackageType(userData.packageType || null); // ดึง packageType จากข้อมูลผู้ใช้
+            // ให้ packageType มีค่าเป็น "Basic" ถ้า userData.packageType เป็น undefined/null
+            setPackageType(userData.packageType || "Basic");
+          } else {
+            // Email มีอยู่ใน localStorage แต่ไม่พบผู้ใช้ใน DB, ถือว่าเป็น Basic
+            setPackageType("Basic");
           }
         } catch (error) {
           console.error("Error fetching user data for sidebar:", error);
+          setPackageType("Basic"); // กรณีเกิดข้อผิดพลาด, ตั้งค่าเป็น Basic
         }
+      } else {
+        // ไม่มี email ใน localStorage, ถือว่าเป็น Basic หรือยังไม่ได้ Login
+        setPackageType("Basic");
       }
+      setLoadingInitialData(false); // ตั้งค่า loading เป็น false เมื่อกระบวนการดึงข้อมูลเสร็จสิ้น
     };
-    fetchUserData();
-  }, []);
 
-  // Function to fetch birthday count for sidebar
+    checkUserAndFetchPackageType();
+  }, []); // ให้รันครั้งเดียวเมื่อ component mount
+
   useEffect(() => {
     const fetchSidebarBirthdayCount = async () => {
       if (!userIdForSidebar) {
@@ -93,29 +101,43 @@ function MyApp({ Component, pageProps }) {
     }
   }, [userIdForSidebar]);
 
-  // Set isSidebarOpen to true if on Desktop (screen wider than 768px)
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth > 768) {
-        // If sidebar is supposed to be shown, open it on desktop
         if (showSidebar) {
           setIsSidebarOpen(true);
         }
       } else {
-        setIsSidebarOpen(false); // Close sidebar on mobile
+        setIsSidebarOpen(false);
       }
     };
 
-    // Set initial state
     handleResize();
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [showSidebar]);
 
+  // แสดง loading หรือ fallback UI ถ้าข้อมูลยังโหลดไม่เสร็จ
+  if (loadingInitialData) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          backgroundColor: "#e8f0f7",
+          color: "#333",
+          fontSize: "1.2rem",
+        }}
+      >
+        Loading application...
+      </div>
+    );
+  }
+
   return (
     <div className="app-layout">
-
       <Head>
         <title>Playmatch</title>
         <link
@@ -140,7 +162,6 @@ function MyApp({ Component, pageProps }) {
         <link rel="shortcut icon" href="/images/Logo.png" type="image/png" />
       </Head>
 
-      {/* Conditionally render the Sidebar */}
       {showSidebar && (
         <Sidebar
           birthDayCount={birthDayCount}
@@ -151,7 +172,6 @@ function MyApp({ Component, pageProps }) {
       )}
 
       <main className={`app-main-content ${!showSidebar ? "full-width" : ""}`}>
-        {/* Conditionally render Hamburger button for mobile only when sidebar is shown */}
         {showSidebar && (
           <button className="sidebar-toggle-button" onClick={toggleSidebar}>
             <Menu size={24} />
@@ -182,16 +202,13 @@ function MyApp({ Component, pageProps }) {
           overflow-y: auto;
           background-color: #e8f0f7;
           position: relative;
-          /* ลบ padding: 20px; ออกจากที่นี่ */
         }
 
-        /* New style for full-width content when sidebar is not present */
         .app-main-content.full-width {
           margin-left: 0 !important;
           width: 100% !important;
         }
 
-        /* Sidebar toggle button (mobile only) */
         .sidebar-toggle-button {
           position: fixed;
           top: 15px;
@@ -203,7 +220,7 @@ function MyApp({ Component, pageProps }) {
           border-radius: 5px;
           cursor: pointer;
           z-index: 10;
-          display: none; /* Hidden on desktop by default */
+          display: none;
           box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
 
@@ -211,21 +228,18 @@ function MyApp({ Component, pageProps }) {
           background: #0056b3;
         }
 
-        /* Media query for mobile screens */
         @media (max-width: 768px) {
           .sidebar-toggle-button {
-            display: block; /* Show toggle button on mobile */
+            display: block;
           }
-          /* *** คง padding-top นี้ไว้ใน Media Query เท่านั้น *** */
           .app-main-content {
-            padding-top: 70px; /* เพิ่ม padding ด้านบน เพื่อเว้นที่ให้ปุ่มแฮมเบอร์เกอร์ */
+            padding-top: 70px;
             padding-left: 15px;
             padding-right: 15px;
             padding-bottom: 15px;
           }
         }
 
-        /* Global styles to reset default browser margins/paddings */
         * {
           box-sizing: border-box;
         }
