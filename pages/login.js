@@ -1,3 +1,4 @@
+// pages/login.js
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -41,9 +42,10 @@ export default function Login() {
       localStorage.setItem("loggedInEmail", user.email);
 
       setIsLoading(true);
+      // เปลี่ยนจาก router.push("/home") เป็น window.location.href = "/home";
       setTimeout(() => {
         setIsLoading(false);
-        router.push("/home");
+        window.location.href = "/home"; // นี่คือการสั่งให้บราวเซอร์รีเฟรชและโหลดหน้า /home ใหม่ทั้งหมด
       }, 1000);
     } catch (error) {
       setMsg({ type: "error", text: error.message || "Login failed" });
@@ -65,7 +67,7 @@ export default function Login() {
             priority
             style={{
               objectFit: "contain",
-              filter: "drop-shadow(0 8px 24px #2976d6cc)"
+              filter: "drop-shadow(0 8px 24px #2976d6cc)",
             }}
           />
         </div>
@@ -98,7 +100,9 @@ export default function Login() {
         </form>
 
         {msg && (
-          <p className={msg.type === "success" ? "login-success" : "login-error"}>
+          <p
+            className={msg.type === "success" ? "login-success" : "login-error"}
+          >
             {msg.text}
           </p>
         )}
@@ -130,13 +134,15 @@ export default function Login() {
         </div>
 
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.0.0
+          © 2025–2026 PlayMatch version 1.0.4
         </div>
       </div>
 
       {/* BG gradient and responsive */}
       <style jsx global>{`
-        html, body, #__next {
+        html,
+        body,
+        #__next {
           min-height: 100vh;
           background: linear-gradient(120deg, #1a2236 60%, #212529 100%);
           margin: 0;
@@ -158,8 +164,12 @@ export default function Login() {
         }
         .login-bg-overlay {
           position: fixed;
-          top: 0; left: 0; right: 0; bottom: 0;
-          width: 100vw; height: 100vh;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100vw;
+          height: 100vh;
           background: linear-gradient(120deg, #232d47d2 70%, #1a2236ee 100%);
           z-index: 0;
           pointer-events: none;
@@ -167,8 +177,8 @@ export default function Login() {
         .login-form-wrapper {
           position: relative;
           z-index: 2;
-          background: rgba(255,255,255,0.11);
-          box-shadow: 0 10px 40px 2px rgba(27,54,89,0.23);
+          background: rgba(255, 255, 255, 0.11);
+          box-shadow: 0 10px 40px 2px rgba(27, 54, 89, 0.23);
           border-radius: 1.6rem;
           padding: 44px 44px 26px 44px;
           width: 100%;
@@ -183,7 +193,7 @@ export default function Login() {
           margin-bottom: 22px;
         }
         .login-title {
-          font-size: 2.0rem;
+          font-size: 2rem;
           font-weight: 700;
           color: #ffffff;
           letter-spacing: 0.03em;
@@ -225,7 +235,8 @@ export default function Login() {
         }
         .remember-me input[type="checkbox"] {
           accent-color: #4fa3f7;
-          width: 16px; height: 16px;
+          width: 16px;
+          height: 16px;
         }
         .login-form button[type="submit"] {
           background: linear-gradient(90deg, #146cfa 70%, #4fa3f7 100%);
@@ -284,7 +295,8 @@ export default function Login() {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 46px; height: 46px;
+          width: 46px;
+          height: 46px;
           background: #eaf6fdde;
           border-radius: 50%;
           transition: box-shadow 0.19s, transform 0.13s;
@@ -296,7 +308,8 @@ export default function Login() {
           transform: scale(1.07);
         }
         .contact-icon img {
-          width: 29px; height: 29px;
+          width: 29px;
+          height: 29px;
           object-fit: contain;
         }
 
@@ -342,10 +355,12 @@ export default function Login() {
             margin-top: 18px;
           }
           .contact-icon {
-            width: 38px; height: 38px;
+            width: 38px;
+            height: 38px;
           }
           .contact-icon img {
-            width: 21px; height: 21px;
+            width: 21px;
+            height: 21px;
           }
         }
       `}</style>
