@@ -40,6 +40,23 @@ const Dashboard = ({ userId }) => {
   const [totalBallsUsedOverall, setTotalBallsUsedOverall] = useState(0); 
   const [totalGamesPlayedOverall, setTotalGamesPlayedOverall] = useState(0); 
 
+  // State สำหรับเก็บข้อมูลดิบที่ประมวลผลแล้ว เพื่อนำไปสร้างกราฟตาม Filter
+  const [processedMatchData, setProcessedMatchData] = useState({
+    dailyUniquePlayers: {},
+    monthlyUniquePlayers: {},
+    yearlyUniquePlayers: {},
+    dailyBalls: {},
+    dailyGames: {},
+  });
+
+  // State สำหรับตัวกรองกราฟผู้เข้าร่วม: 'daily', 'monthly', 'yearly'
+  const [visitorChartFilter, setVisitorChartFilter] = useState('monthly'); // Default to monthly
+
+  // State สำหรับตัวกรองสถิติสรุปหลัก: 'proportions' หรือ 'topPlayers'
+  const [mainStatsFilter, setMainStatsFilter] = useState('proportions'); // Default to proportions
+  const [topPlayersData, setTopPlayersData] = useState([]); // Stores [{name: 'Player A', games: 10}, ...]
+
+
   // ข้อมูลสำหรับกราฟ "สถิติผู้เข้าร่วม" (ผู้เล่นต่อเดือน)
   const [visitorChartData, setVisitorChartData] = useState({
     labels: [],
@@ -121,7 +138,7 @@ const Dashboard = ({ userId }) => {
           const userSnap = await getDocs(userQuery);
           let foundUserId = null;
           userSnap.forEach((doc) => {
-            foundUserId = doc.id;
+            foundUserId = doc.id; 
           });
 
           if (foundUserId) {
@@ -165,9 +182,13 @@ const Dashboard = ({ userId }) => {
         console.log("Fetched Matches Data:", matchesList);
 
         // ** Variables for processing data **
-        let monthlyUniquePlayers = {}; 
-        let dailyBalls = {}; 
-        let dailyGames = {}; 
+        let dailyUniquePlayersTemp = {}; 
+        let monthlyUniquePlayersTemp = {}; 
+        let yearlyUniquePlayersTemp = {}; 
+        let dailyBallsTemp = {}; 
+        let dailyGamesTemp = {}; 
+        let playerGameCounts = {}; // New: To count games per player
+
 
         let calculatedTotalPlayersThisMonth = new Set();
         let calculatedTotalBallsOverall = 0; 
@@ -182,10 +203,10 @@ const Dashboard = ({ userId }) => {
           const matchDateStr = matchDoc.matchDate; 
           let matchDate;
           if (matchDateStr) {
-             matchDate = new Date(matchDateStr);
+              matchDate = new Date(matchDateStr);
           } else {
-             console.warn(`Match document ${matchDoc.id} has no matchDate. Skipping.`);
-             return;
+              console.warn(`Match document ${matchDoc.id} has no matchDate. Skipping.`);
+              return;
           }
 
           if (isNaN(matchDate.getTime())) { 
@@ -198,6 +219,7 @@ const Dashboard = ({ userId }) => {
           const matchDay = matchDate.getDate();
           const matchYearMonthKey = `${matchYear}-${matchMonth.toString().padStart(2, '0')}`;
           const matchDateKey = `${matchYear}-${matchMonth.toString().padStart(2, '0')}-${matchDay.toString().padStart(2, '0')}`;
+          const matchYearKey = `${matchYear}`; 
 
           // Filter data for the last 6 months (including current month) for charts
           const diffMonths = (now.getFullYear() - matchDate.getFullYear()) * 12 + (now.getMonth() - matchDate.getMonth());
@@ -212,6 +234,13 @@ const Dashboard = ({ userId }) => {
               }
               calculatedTotalGamesOverall += 1;
 
+              // Count games for each player (for Top Players)
+              if (game.A1) playerGameCounts[game.A1] = (playerGameCounts[game.A1] || 0) + 1;
+              if (game.A2) playerGameCounts[game.A2] = (playerGameCounts[game.A2] || 0) + 1;
+              if (game.B1) playerGameCounts[game.B1] = (playerGameCounts[game.B1] || 0) + 1;
+              if (game.B2) playerGameCounts[game.B2] = (playerGameCounts[game.B2] || 0) + 1;
+
+
               // Only count for current month and monthly unique players if within the last 6 months
               if (isInLastSixMonths) {
                 // Total Players in Current Month
@@ -223,18 +252,36 @@ const Dashboard = ({ userId }) => {
                 }
 
                 // Chart: Unique Players per Month (for last 6 months)
-                if (!monthlyUniquePlayers[matchYearMonthKey]) {
-                  monthlyUniquePlayers[matchYearMonthKey] = new Set();
+                if (!monthlyUniquePlayersTemp[matchYearMonthKey]) {
+                  monthlyUniquePlayersTemp[matchYearMonthKey] = new Set();
                 }
-                if (game.A1) monthlyUniquePlayers[matchYearMonthKey].add(game.A1);
-                if (game.A2) monthlyUniquePlayers[matchYearMonthKey].add(game.A2);
-                if (game.B1) monthlyUniquePlayers[matchYearMonthKey].add(game.B1);
-                if (game.B2) monthlyUniquePlayers[matchYearMonthKey].add(game.B2);
+                if (game.A1) monthlyUniquePlayersTemp[matchYearMonthKey].add(game.A1);
+                if (game.A2) monthlyUniquePlayersTemp[matchYearMonthKey].add(game.A2);
+                if (game.B1) monthlyUniquePlayersTemp[matchYearMonthKey].add(game.B1);
+                if (game.B2) monthlyUniquePlayersTemp[matchYearMonthKey].add(game.B2);
+
+                // Chart: Unique Players per Day (for current month's daily chart)
+                if (!dailyUniquePlayersTemp[matchDateKey]) {
+                  dailyUniquePlayersTemp[matchDateKey] = new Set();
+                }
+                if (game.A1) dailyUniquePlayersTemp[matchDateKey].add(game.A1);
+                if (game.A2) dailyUniquePlayersTemp[matchDateKey].add(game.A2);
+                if (game.B1) dailyUniquePlayersTemp[matchDateKey].add(game.B1);
+                if (game.B2) dailyUniquePlayersTemp[matchDateKey].add(game.B2);
+
+                // Chart: Unique Players per Year (for all years)
+                if (!yearlyUniquePlayersTemp[matchYearKey]) {
+                  yearlyUniquePlayersTemp[matchYearKey] = new Set();
+                }
+                if (game.A1) yearlyUniquePlayersTemp[matchYearKey].add(game.A1);
+                if (game.A2) yearlyUniquePlayersTemp[matchYearKey].add(game.A2);
+                if (game.B1) yearlyUniquePlayersTemp[matchYearKey].add(game.B1);
+                if (game.B2) yearlyUniquePlayersTemp[matchYearKey].add(game.B2);
 
                 // Daily Balls Used & Games Played (for current month's daily chart)
                 if (matchYearMonthKey === currentYearMonthString) {
-                    dailyBalls[matchDateKey] = (dailyBalls[matchDateKey] || 0) + ballsUsedInGame;
-                    dailyGames[matchDateKey] = (dailyGames[matchDateKey] || 0) + 1;
+                    dailyBallsTemp[matchDateKey] = (dailyBallsTemp[matchDateKey] || 0) + ballsUsedInGame;
+                    dailyGamesTemp[matchDateKey] = (dailyGamesTemp[matchDateKey] || 0) + 1;
                 }
               }
             });
@@ -242,44 +289,39 @@ const Dashboard = ({ userId }) => {
               console.warn(`Match document ${matchDoc.id} has no 'matches' array or it's not an array. Skipping game data.`);
           }
         });
-
-        console.log("Processed Monthly Unique Players (for chart):", monthlyUniquePlayers);
-        console.log("Calculated Daily Balls Used (for chart):", dailyBalls);
-        console.log("Calculated Daily Games Played (for chart):", dailyGames);
-        console.log("Calculated Total Players This Month:", calculatedTotalPlayersThisMonth.size);
-        console.log("Calculated Total Balls Overall:", calculatedTotalBallsOverall);
-        console.log("Calculated Total Games Overall:", calculatedTotalGamesOverall);
         
         // ** Update state for main cards **
         setTotalPlayersThisMonth(calculatedTotalPlayersThisMonth.size);
         setTotalBallsUsedOverall(calculatedTotalBallsOverall); 
         setTotalGamesPlayedOverall(calculatedTotalGamesOverall); 
 
-        // ** Prepare data for "Visitor Statistics" chart (Players per month) **
-        const sortedMonthlyKeys = Object.keys(monthlyUniquePlayers).sort();
-        const monthlyPlayerCounts = sortedMonthlyKeys.map(monthKey => monthlyUniquePlayers[monthKey].size);
-        const monthlyLabels = sortedMonthlyKeys.map(monthKey => {
-          const [year, mon] = monthKey.split('-');
-          const date = new Date(parseInt(year), parseInt(mon) - 1, 1);
-          return date.toLocaleString('th-TH', { month: 'short', year: 'numeric' });
+        // Store all processed data for later use with filter
+        setProcessedMatchData({
+          dailyUniquePlayers: dailyUniquePlayersTemp,
+          monthlyUniquePlayers: monthlyUniquePlayersTemp,
+          yearlyUniquePlayers: yearlyUniquePlayersTemp,
+          dailyBalls: dailyBallsTemp,
+          dailyGames: dailyGamesTemp,
         });
 
-        setVisitorChartData(prev => ({
-          ...prev,
-          labels: monthlyLabels,
-          datasets: [{ ...prev.datasets[0], data: monthlyPlayerCounts }],
-        }));
+        // ** Process and set Top Players data **
+        const sortedPlayers = Object.entries(playerGameCounts)
+            .map(([name, games]) => ({ name, games }))
+            .sort((a, b) => b.games - a.games)
+            .slice(0, 5); // Get top 5 players
+        setTopPlayersData(sortedPlayers);
 
         // ** Prepare data for "Balls and Games Played (Daily)" chart **
-        const dailyKeysInCurrentMonth = Object.keys(dailyBalls)
-                                            .filter(dateKey => dateKey.startsWith(currentYearMonthString))
-                                            .sort();
+        // This chart remains daily for the current month
+        const dailyKeysInCurrentMonth = Object.keys(dailyBallsTemp)
+                                                .filter(dateKey => dateKey.startsWith(currentYearMonthString))
+                                                .sort();
         const dailyLabels = dailyKeysInCurrentMonth.map(dateKey => {
             const [, , day] = dateKey.split('-');
             return `${parseInt(day)}`;
         });
-        const dailyBallsData = dailyKeysInCurrentMonth.map(dateKey => dailyBalls[dateKey]);
-        const dailyGamesData = dailyKeysInCurrentMonth.map(dateKey => dailyGames[dateKey]);
+        const dailyBallsData = dailyKeysInCurrentMonth.map(dateKey => dailyBallsTemp[dateKey]);
+        const dailyGamesData = dailyKeysInCurrentMonth.map(dateKey => dailyGamesTemp[dateKey]);
 
         setBallsAndGamesChartData(prev => ({
             ...prev,
@@ -307,6 +349,53 @@ const Dashboard = ({ userId }) => {
 
     fetchData();
   }, [currentUserId]); 
+
+  // Effect to update Visitor Chart when filter or processed data changes
+  useEffect(() => {
+    const updateVisitorChart = () => {
+      let labels = [];
+      let data = [];
+      const { dailyUniquePlayers, monthlyUniquePlayers, yearlyUniquePlayers } = processedMatchData;
+
+      if (visitorChartFilter === 'daily') {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; 
+        const currentYearMonthString = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
+
+        const dailyKeysInCurrentMonth = Object.keys(dailyUniquePlayers)
+                                                .filter(dateKey => dateKey.startsWith(currentYearMonthString))
+                                                .sort();
+        labels = dailyKeysInCurrentMonth.map(dateKey => {
+            const [, , day] = dateKey.split('-');
+            return `${parseInt(day)}`;
+        });
+        data = dailyKeysInCurrentMonth.map(dateKey => dailyUniquePlayers[dateKey].size);
+
+      } else if (visitorChartFilter === 'monthly') {
+        const sortedMonthlyKeys = Object.keys(monthlyUniquePlayers).sort();
+        labels = sortedMonthlyKeys.map(monthKey => {
+          const [year, mon] = monthKey.split('-');
+          const date = new Date(parseInt(year), parseInt(mon) - 1, 1);
+          return date.toLocaleString('th-TH', { month: 'short', year: 'numeric' });
+        });
+        data = sortedMonthlyKeys.map(monthKey => monthlyUniquePlayers[monthKey].size);
+
+      } else if (visitorChartFilter === 'yearly') {
+        const sortedYearlyKeys = Object.keys(yearlyUniquePlayers).sort();
+        labels = sortedYearlyKeys.map(yearKey => `${yearKey}`);
+        data = sortedYearlyKeys.map(yearKey => yearlyUniquePlayers[yearKey].size);
+      }
+
+      setVisitorChartData(prev => ({
+        ...prev,
+        labels: labels,
+        datasets: [{ ...prev.datasets[0], data: data }],
+      }));
+    };
+
+    updateVisitorChart();
+  }, [visitorChartFilter, processedMatchData]); 
 
   const doughnutData = {
     labels: ['ผู้เล่น', 'ลูกที่ใช้', 'เกมที่เล่น'],
@@ -417,7 +506,18 @@ const Dashboard = ({ userId }) => {
       <div style={styles.chartsContainer}>
         {/* Visitor Statistics Chart (จำนวนผู้เล่นต่อเดือน) */}
         <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>สถิติผู้เข้าร่วม</h3>
+          <div style={styles.chartHeaderWithFilter}>
+            <h3 style={styles.chartTitle}>สถิติผู้เข้าร่วม</h3>
+            <select
+              value={visitorChartFilter}
+              onChange={(e) => setVisitorChartFilter(e.target.value)}
+              style={styles.selectFilter}
+            >
+              <option value="daily">รายวัน (เดือนปัจจุบัน)</option>
+              <option value="monthly">รายเดือน (6 เดือนล่าสุด)</option>
+              <option value="yearly">รายปี (ทั้งหมด)</option>
+            </select>
+          </div>
           <div style={styles.chartLegend}>
             <span style={{ color: 'rgb(54, 162, 235)', marginRight: '10px' }}>● จำนวนผู้เล่น (คน)</span>
           </div>
@@ -426,17 +526,48 @@ const Dashboard = ({ userId }) => {
           </div>
         </div>
 
-        {/* Tasks / Doughnut Chart (สัดส่วนข้อมูลหลัก) */}
+        {/* Tasks / Doughnut Chart / Top Players (สัดส่วนข้อมูลหลัก/ผู้เล่นยอดนิยม) */}
         <div style={styles.doughnutCard}>
-          <h3 style={styles.chartTitle}>สัดส่วนข้อมูลหลัก</h3>
-          <div style={styles.doughnutChartWrapper}>
-            <Doughnut data={doughnutData} options={doughnutOptions} />
+          <div style={styles.chartHeaderWithFilter}>
+            <h3 style={styles.chartTitle}>สถิติสรุป</h3> {/* เปลี่ยนชื่อให้เป็นกลางมากขึ้น */}
+            <select
+              value={mainStatsFilter}
+              onChange={(e) => setMainStatsFilter(e.target.value)}
+              style={styles.selectFilter}
+            >
+              <option value="proportions">สัดส่วนข้อมูลหลัก</option>
+              <option value="topPlayers">ผู้เล่นยอดนิยม</option>
+            </select>
           </div>
-          <div style={styles.doughnutLegend}>
-            <p><span style={{ color: '#66DA2A' }}>●</span> ผู้เล่น: {totalPlayersThisMonth} คน</p>
-            <p><span style={{ color: '#FFAB00' }}>●</span> ลูกที่ใช้: {totalBallsUsedOverall} ลูก</p>
-            <p><span style={{ color: '#007bff' }}>●</span> เกมที่เล่น: {totalGamesPlayedOverall} เกม</p>
-          </div>
+
+          {mainStatsFilter === 'proportions' ? (
+            <>
+              <div style={styles.doughnutChartWrapper}>
+                <Doughnut data={doughnutData} options={doughnutOptions} />
+              </div>
+              <div style={styles.doughnutLegend}>
+                <p><span style={{ color: '#66DA2A' }}>●</span> ผู้เล่น: {totalPlayersThisMonth} คน</p>
+                <p><span style={{ color: '#FFAB00' }}>●</span> ลูกที่ใช้: {totalBallsUsedOverall} ลูก</p>
+                <p><span style={{ color: '#007bff' }}>●</span> เกมที่เล่น: {totalGamesPlayedOverall} เกม</p>
+              </div>
+            </>
+          ) : (
+            <div style={styles.topPlayersListContainer}>
+              <h4 style={styles.topPlayersListTitle}>ผู้เล่นยอดนิยม (5 อันดับแรก)</h4>
+              <ul style={styles.topPlayersList}>
+                {topPlayersData.length > 0 ? (
+                  topPlayersData.map((player, index) => (
+                    <li key={index} style={styles.topPlayerListItem}>
+                      <span>{index + 1}. {player.name}</span>
+                      <span>{player.games} เกม</span>
+                    </li>
+                  ))
+                ) : (
+                  <p style={styles.noDataText}>ไม่มีข้อมูลผู้เล่น</p>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
@@ -449,7 +580,7 @@ const Dashboard = ({ userId }) => {
             <span style={{ color: 'rgb(255, 99, 132)' }}>● จำนวนเกมที่เล่น</span>
           </div>
           <div style={styles.lineChartWrapper}>
-             <Line data={ballsAndGamesChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+              <Line data={ballsAndGamesChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
           </div>
         </div>
       </div>
@@ -546,6 +677,8 @@ const styles = {
     padding: '15px',
     borderRadius: '10px',
     boxShadow: '0 3px 10px rgba(0, 123, 255, 0.2)',
+    backgroundColor: '#007bff', 
+    color: 'white',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
@@ -600,8 +733,6 @@ const styles = {
     boxShadow: '0 3px 10px rgba(0, 0, 0, 0.05)',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   chartTitle: {
     fontSize: '16px',
@@ -610,6 +741,22 @@ const styles = {
     color: '#323943',
     borderBottom: '1px solid #eee',
     paddingBottom: '6px',
+  },
+  chartHeaderWithFilter: { 
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px',
+    borderBottom: '1px solid #eee',
+    paddingBottom: '6px',
+  },
+  selectFilter: { 
+    padding: '5px 8px',
+    borderRadius: '5px',
+    border: '1px solid #ccc',
+    fontSize: '12px',
+    backgroundColor: 'white',
+    cursor: 'pointer',
   },
   chartLegend: {
     fontSize: '11px',
@@ -627,6 +774,7 @@ const styles = {
     height: '180px',
     position: 'relative',
     marginBottom: '12px',
+    alignSelf: 'center', 
   },
   doughnutLegend: {
     display: 'flex',
@@ -634,12 +782,42 @@ const styles = {
     gap: '4px',
     fontSize: '11px',
     color: '#555',
-    alignSelf: 'flex-start',
+    alignSelf: 'center', 
   },
   additionalChartContainer: {
     marginBottom: '20px',
   },
-  // Removed inviteCard and related styles
+  // New styles for Top Players List
+  topPlayersListContainer: {
+    width: '100%',
+    padding: '10px 0',
+  },
+  topPlayersListTitle: {
+    fontSize: '14px',
+    fontWeight: '600',
+    marginBottom: '10px',
+    color: '#323943',
+    textAlign: 'center',
+  },
+  topPlayersList: {
+    listStyle: 'none',
+    padding: 0,
+    margin: 0,
+  },
+  topPlayerListItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '8px 5px',
+    borderBottom: '1px solid #eee',
+    fontSize: '13px',
+    color: '#555',
+  },
+  noDataText: {
+    textAlign: 'center',
+    color: '#888',
+    fontSize: '13px',
+    marginTop: '15px',
+  }
 };
 
 export default Dashboard;
