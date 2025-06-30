@@ -8,12 +8,22 @@ import { Menu } from "lucide-react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 
+// --- Import สำหรับ Lottie Animations (Option 3 - นี่คือตัว "ลูกเล่น" ที่คุณต้องการ) ---
+import Lottie from "lottie-react";
+// **นี่คือการ import ไฟล์ Lottie Animation ของคุณ**
+import loadingAnimation from "./lottie/Animation - 1751286565693.json"; //
+
+
+// --- Import สำหรับ Option 2: react-spinners (คอมเมนต์ไว้ ถ้าคุณจะใช้ Lottie) ---
+// import { ClipLoader } from "react-spinners";
+
+
 function MyApp({ Component, pageProps }) {
   const [birthDayCount, setBirthDayCount] = useState(0);
   const [userIdForSidebar, setUserIdForSidebar] = useState(null);
   const [packageType, setPackageType] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [loadingInitialData, setLoadingInitialData] = useState(true); // เพิ่ม state สำหรับการโหลดข้อมูลเริ่มต้น
+  const [loadingInitialData, setLoadingInitialData] = useState(true); //
 
   const router = useRouter();
   const { pathname } = router;
@@ -28,7 +38,7 @@ function MyApp({ Component, pageProps }) {
     "/loginDemo",
   ];
 
-  const showSidebar = !noSidebarPaths.includes(pathname);
+  const showSidebar = !noSidebarPaths.includes(pathname); //
 
   const toggleSidebar = () => {
     setIsSidebarOpen((prev) => !prev);
@@ -37,7 +47,7 @@ function MyApp({ Component, pageProps }) {
   // Function to fetch user ID and package type
   useEffect(() => {
     const checkUserAndFetchPackageType = async () => {
-      setLoadingInitialData(true); // ตั้งค่า loading เป็น true ทุกครั้งที่เริ่มดึงข้อมูล
+      setLoadingInitialData(true); //
       const email = localStorage.getItem("loggedInEmail");
       if (email) {
         try {
@@ -47,25 +57,22 @@ function MyApp({ Component, pageProps }) {
           if (!querySnapshot.empty) {
             const userData = querySnapshot.docs[0].data();
             setUserIdForSidebar(querySnapshot.docs[0].id);
-            // ให้ packageType มีค่าเป็น "Basic" ถ้า userData.packageType เป็น undefined/null
-            setPackageType(userData.packageType || "Basic");
+            setPackageType(userData.packageType || "Basic"); //
           } else {
-            // Email มีอยู่ใน localStorage แต่ไม่พบผู้ใช้ใน DB, ถือว่าเป็น Basic
-            setPackageType("Basic");
+            setPackageType("Basic"); //
           }
         } catch (error) {
           console.error("Error fetching user data for sidebar:", error);
-          setPackageType("Basic"); // กรณีเกิดข้อผิดพลาด, ตั้งค่าเป็น Basic
+          setPackageType("Basic"); //
         }
       } else {
-        // ไม่มี email ใน localStorage, ถือว่าเป็น Basic หรือยังไม่ได้ Login
-        setPackageType("Basic");
+        setPackageType("Basic"); //
       }
-      setLoadingInitialData(false); // ตั้งค่า loading เป็น false เมื่อกระบวนการดึงข้อมูลเสร็จสิ้น
+      setLoadingInitialData(false); //
     };
 
     checkUserAndFetchPackageType();
-  }, []); // ให้รันครั้งเดียวเมื่อ component mount
+  }, []); //
 
   useEffect(() => {
     const fetchSidebarBirthdayCount = async () => {
@@ -99,13 +106,13 @@ function MyApp({ Component, pageProps }) {
     if (userIdForSidebar) {
       fetchSidebarBirthdayCount();
     }
-  }, [userIdForSidebar]);
+  }, [userIdForSidebar]); //
 
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth > 768) {
         if (showSidebar) {
-          setIsSidebarOpen(true);
+          setIsSidebarOpen(false);
         }
       } else {
         setIsSidebarOpen(false);
@@ -115,7 +122,7 @@ function MyApp({ Component, pageProps }) {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [showSidebar]);
+  }, [showSidebar]); //
 
   // แสดง loading หรือ fallback UI ถ้าข้อมูลยังโหลดไม่เสร็จ
   if (loadingInitialData) {
@@ -126,12 +133,46 @@ function MyApp({ Component, pageProps }) {
           justifyContent: "center",
           alignItems: "center",
           height: "100vh",
-          backgroundColor: "#e8f0f7",
-          color: "#333",
-          fontSize: "1.2rem",
+          backgroundColor: "#e8f0f7", // สีพื้นหลังที่ดูสบายตา
+          flexDirection: "column", // จัดเรียงให้อนิเมชันและข้อความอยู่แนวตั้ง
         }}
       >
-        Loading application...
+        {/*
+          *** คุณกำลังใช้ Option 3: Lottie Animations ซึ่งเป็นอนิเมชันที่มีลูกเล่น ***
+          *** ถ้าต้องการเปลี่ยนไปใช้แบบอื่น ให้ลบโค้ดส่วนนี้ออกแล้ว uncomment Option อื่นแทน ***
+        */}
+        <Lottie
+          animationData={loadingAnimation} // ไฟล์ Lottie ของคุณ
+          loop={true} // เล่นซ้ำ
+          autoplay={true} // เริ่มเล่นอัตโนมัติ
+          style={{ width: 220, height: 220 }} // ปรับขนาดอนิเมชันตามต้องการ
+        />
+        <p style={{ marginTop: '20px', color: '#333', fontSize: '1.4rem', fontWeight: 'bold' }}>
+          กำลังโหลด... เตรียมพบกับ Playmatch!
+        </p>
+
+
+        {/* --- Option 1: CSS Spinner แบบกำหนดเอง (คอมเมนต์ไว้) --- */}
+        {/*
+        <div className="custom-spinner"></div>
+        <p className="loading-text" style={{ marginTop: '20px', color: '#333', fontSize: '1.4rem', fontWeight: 'bold' }}>
+          กำลังโหลดแอปพลิเคชัน...
+        </p>
+        */}
+
+        {/* --- Option 2: react-spinners (คอมเมนต์ไว้) --- */}
+        {/*
+        <ClipLoader
+          color={"#007bff"}
+          loading={loadingInitialData}
+          size={70}
+          aria-label="Loading Spinner"
+          data-testid="loader"
+        />
+        <p style={{ marginTop: '20px', color: '#333', fontSize: '1.4rem', fontWeight: 'bold' }}>
+          กำลังเตรียมข้อมูลให้คุณ...
+        </p>
+        */}
       </div>
     );
   }
@@ -238,6 +279,32 @@ function MyApp({ Component, pageProps }) {
             padding-right: 15px;
             padding-bottom: 15px;
           }
+        }
+
+        /* --- CSS สำหรับ Custom Spinner (Option 1) --- */
+        .custom-spinner {
+          border: 5px solid rgba(255, 255, 255, 0.3);
+          border-top: 5px solid #007bff;
+          border-radius: 50%;
+          width: 60px;
+          height: 60px;
+          animation: spin 1s linear infinite;
+          box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        /* เอฟเฟกต์จางเข้า-ออก สำหรับข้อความ Option 1 */
+        .loading-text {
+            animation: fadeInOut 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
 
         * {
