@@ -9,7 +9,7 @@ const LINE_OA_URL = "https://page.line.me/136rjkgt";
 
 const packageData = [
   {
-    name: "ก๊วนเล็ก",
+    name: "ก๊วนเล็ก/Basic",
     description: "เหมาะสำหรับก๊วนเพื่อน, ก๊วนครอบครัว",
     features: [
       "สมาชิกก๊วนสูงสุด 60 คน",
@@ -19,10 +19,11 @@ const packageData = [
       "บันทึกผลการแข่งขัน",
       "คำนวณค่าใช้จ่ายของสมาชิก",
       "สถิติและกราฟวิเคราะห์",
+      "เทรนการใช้งานโปรแกรม",
     ],
-    monthlyPrice: "259",
-    yearlyPrice: "2,590",
-    yearlyDiscountText: "ประหยัดกว่า 518 บาท/ปี",
+    monthlyPrice: "159",
+    yearlyPrice: "1,590",
+    yearlyDiscountText: "ประหยัดกว่า 318 บาท/ปี",
     buttonText: "เริ่มต้นเลย",
     isPopular: false,
     buttonVariant: "primary-outline",
@@ -31,7 +32,7 @@ const packageData = [
     cardType: "standard", // กำหนดประเภทของการ์ด
   },
   {
-    name: "ก๊วนมาตรฐาน",
+    name: "ก๊วนมาตรฐาน/Pro",
     description: "เหมาะสำหรับก๊วนประจำ, ชมรมขนาดกลาง",
     features: [
       "สมาชิกก๊วนสูงสุด 200 คน",
@@ -40,15 +41,15 @@ const packageData = [
       "สร้าง Matches ประจำวัน",
       "บันทึกผลการแข่งขันขั้นสูง",
       "คำนวณค่าใช้จ่ายของสมาชิกขั้นสูง",
-      "ระบบแจ้งเตือนวันเกิดสมาชิก",
       "สถิติและกราฟวิเคราะห์",
       "ระบบจัดอันดับสมาชิก (Ranking)",
+      "เทรนการใช้งานโปรแกรม",
     ],
-    monthlyPrice: "299", // ราคาลดแล้ว
-    originalMonthlyPrice: "399", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
-    yearlyPrice: "2,990", // ราคาใหม่รายปีที่ลดแล้ว
-    originalYearlyPrice: "3,990", // ราคาเดิมรายปีสำหรับขีดฆ่า
-    yearlyDiscountText: "ประหยัดกว่า 1,798 บาท/ปี",
+    monthlyPrice: "259", // ราคาลดแล้ว
+    originalMonthlyPrice: "359", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
+    yearlyPrice: "2,590", // ราคาใหม่รายปีที่ลดแล้ว
+    originalYearlyPrice: "3,590", // ราคาเดิมรายปีสำหรับขีดฆ่า
+    yearlyDiscountText: "ประหยัดกว่า 718 บาท/ปี",
     buttonText: "เลือกแพ็กเกจนี้!",
     isPopular: true,
     buttonVariant: "primary-filled",
@@ -57,19 +58,24 @@ const packageData = [
     cardType: "standard", // กำหนดประเภทของการ์ด
   },
   {
-    name: "ก๊วนใหญ่/พรีเมียม",
+    name: "ก๊วนใหญ่/Premium",
     description: "เหมาะสำหรับชมรมขนาดใหญ่, ผู้จัดประจำ",
     features: [
-      "สมาชิกก๊วนไม่จำกัด",
-      "จัด Match ไม่จำกัด (ฟีเจอร์ทั้งหมด)",
-      "ผู้ช่วยส่วนตัวสำหรับการตั้งค่า",
+      "สมาชิกก๊วน (ไม่จำกัด)",
+      "จัด Match (ไม่จำกัด)",
+      "ใช้งานได้ครบทุกฟีเจอร์",
+      "จัดเก็บรูปภาพสมากชิกก๊วน",
       "ปรับแต่งแอปตามแบรนด์ของคุณ",
-      "รองรับการเชื่อมต่อ API (Custom Integration)",
-      "สิทธิพิเศษเข้าร่วมงาน PlayMatch Exclusive",
+      "รองรับการ Custom API",
+      "การสนับสนุนลูกค้าแบบพรีเมียม",
+      "การวิเคราะห์ข้อมูลเชิงลึก",
+      "เทรนการใช้งานโปรแกรม",
+      "ทีมงาน Support พร้อมให้บริการ 24 ชั่วโมง",
+
     ],
-    monthlyPrice: "699",
-    yearlyPrice: "6,990",
-    yearlyDiscountText: "ประหยัดกว่า 1,398 บาท/ปี",
+    monthlyPrice: "459",
+    yearlyPrice: "4,590",
+    yearlyDiscountText: "ประหยัดกว่า 918 บาท/ปี",
     buttonText: "ติดต่อทีมงาน",
     isPopular: false,
     buttonVariant: "primary-outline",
