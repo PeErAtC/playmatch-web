@@ -203,9 +203,12 @@ const Match = () => {
       const tempGamesPlayed = {};
       savedMatches.forEach((match) => {
         if (match.status === "finished") {
-          [match.A1, match.A2, match.B1, match.B2].filter(Boolean).forEach((playerName) => {
-            tempGamesPlayed[playerName] = (tempGamesPlayed[playerName] || 0) + 1;
-          });
+          [match.A1, match.A2, match.B1, match.B2]
+            .filter(Boolean)
+            .forEach((playerName) => {
+              tempGamesPlayed[playerName] =
+                (tempGamesPlayed[playerName] || 0) + 1;
+            });
         }
       });
       setMembers((prevMembers) =>
@@ -281,10 +284,15 @@ const Match = () => {
       // Ensure we don't consider the current match itself for "playing" status exclusion
       // if it's the one currently being edited and its status is being changed.
       // This is primarily to prevent self-exclusion issues.
-      if (match.matchId !== currentMatch.matchId && match.status === "playing") {
-        [match.A1, match.A2, match.B1, match.B2].filter(Boolean).forEach((playerName) => {
-          playersInPlayingMatches.add(playerName);
-        });
+      if (
+        match.matchId !== currentMatch.matchId &&
+        match.status === "playing"
+      ) {
+        [match.A1, match.A2, match.B1, match.B2]
+          .filter(Boolean)
+          .forEach((playerName) => {
+            playersInPlayingMatches.add(playerName);
+          });
       }
     });
 
@@ -292,15 +300,20 @@ const Match = () => {
     // 1. Must not be already selected in the current match (unless it's the current field's existing value).
     // 2. Must not be playing in another match.
     return members.filter((mem) => {
-      const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
-      const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
+      const isCurrentlySelectedInThisField =
+        mem.name === currentMatch[currentField];
+      const isSelectedInOtherFieldInCurrentMatch =
+        selectedPlayersInCurrentMatch.has(mem.name);
       const isPlayingInAnotherMatch = playersInPlayingMatches.has(mem.name);
 
       // A member is available if:
       // - They are the player currently selected in this field (so they remain in the dropdown)
       // OR
       // - They are NOT selected in another field in the current match AND they are NOT playing in another match.
-      return isCurrentlySelectedInThisField || (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherMatch);
+      return (
+        isCurrentlySelectedInThisField ||
+        (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherMatch)
+      );
     });
   };
 
@@ -315,7 +328,12 @@ const Match = () => {
         if (value && updated[idx].status !== "finished") {
           updated[idx].status = "finished";
           // Increment gamesPlayed immediately if not already finished
-          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          const playersInMatch = [
+            updated[idx].A1,
+            updated[idx].A2,
+            updated[idx].B1,
+            updated[idx].B2,
+          ].filter(Boolean);
           setMembers((prevMembers) =>
             prevMembers.map((member) =>
               playersInMatch.includes(member.name)
@@ -332,7 +350,12 @@ const Match = () => {
       if (field === "status") {
         if (value === "finished" && oldStatus !== "finished") {
           // Match just finished, increment gamesPlayed for all players in this match
-          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          const playersInMatch = [
+            updated[idx].A1,
+            updated[idx].A2,
+            updated[idx].B1,
+            updated[idx].B2,
+          ].filter(Boolean);
           setMembers((prevMembers) =>
             prevMembers.map((member) =>
               playersInMatch.includes(member.name)
@@ -342,11 +365,19 @@ const Match = () => {
           );
         } else if (value !== "finished" && oldStatus === "finished") {
           // Match was finished, but now it's not (e.g., changed back to playing/ready), decrement gamesPlayed
-          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
+          const playersInMatch = [
+            updated[idx].A1,
+            updated[idx].A2,
+            updated[idx].B1,
+            updated[idx].B2,
+          ].filter(Boolean);
           setMembers((prevMembers) =>
             prevMembers.map((member) =>
               playersInMatch.includes(member.name)
-                ? { ...member, gamesPlayed: Math.max(0, member.gamesPlayed - 1) } // Ensure non-negative
+                ? {
+                    ...member,
+                    gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                  } // Ensure non-negative
                 : member
             )
           );
@@ -356,24 +387,35 @@ const Match = () => {
       // If balls or result are changed, and status was finished,
       // and now either is empty, revert status to empty.
       // IMPORTANT: This logic needs to check if the status *was* finished and *now* is being unset
-      if (updated[idx].status === "finished" && (!updated[idx].balls || !updated[idx].result)) {
-          // Status was finished, but now either balls or result is missing. Revert status.
-          const playersInMatch = [updated[idx].A1, updated[idx].A2, updated[idx].B1, updated[idx].B2].filter(Boolean);
-          // Only decrement gamesPlayed if the previous status was finished due to this match being complete
-          // and we are now moving away from finished. This is to avoid double decrementing if 'result' was just
-          // set to empty and already decremented.
-          if (oldStatus === "finished") { // Check if it was truly finished before this change
-             setMembers((prevMembers) =>
-                prevMembers.map((member) =>
-                  playersInMatch.includes(member.name)
-                    ? { ...member, gamesPlayed: Math.max(0, member.gamesPlayed - 1) }
-                    : member
-                )
-             );
-          }
-          updated[idx].status = ""; // Set status back to empty
+      if (
+        updated[idx].status === "finished" &&
+        (!updated[idx].balls || !updated[idx].result)
+      ) {
+        // Status was finished, but now either balls or result is missing. Revert status.
+        const playersInMatch = [
+          updated[idx].A1,
+          updated[idx].A2,
+          updated[idx].B1,
+          updated[idx].B2,
+        ].filter(Boolean);
+        // Only decrement gamesPlayed if the previous status was finished due to this match being complete
+        // and we are now moving away from finished. This is to avoid double decrementing if 'result' was just
+        // set to empty and already decremented.
+        if (oldStatus === "finished") {
+          // Check if it was truly finished before this change
+          setMembers((prevMembers) =>
+            prevMembers.map((member) =>
+              playersInMatch.includes(member.name)
+                ? {
+                    ...member,
+                    gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                  }
+                : member
+            )
+          );
+        }
+        updated[idx].status = ""; // Set status back to empty
       }
-
 
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(updated));
@@ -389,19 +431,14 @@ const Match = () => {
         value={mem.name}
         style={{ color: LEVEL_COLORS[mem.level] || "black" }}
       >
-        {mem.name} ({mem.level}) - Games: {mem.gamesPlayed}{" "}
+        {mem.name} ({mem.level}) ({mem.gamesPlayed})เกม{" "}
         {/* Display games played */}
       </option>
     ));
 
   const handleStartGroup = () => {
     if (!topic) {
-      Swal.fire({
-        title :"กรุณากรอกหัวเรื่อง",
-        text: "หัวเรื่องเป็นสิ่งสำคัญในการระบุวัตถุประสงค์ของก๊วน",
-        icon: "warning",
-        confirmButtonText: "ตกลง",
-      });
+      Swal.fire("กรุณาระบุหัวเรื่อง", "", "warning");
       return;
     }
     setIsOpen(true);
@@ -423,18 +460,16 @@ const Match = () => {
   const handleEndGroup = async () => {
     const hasUnfinished = matches.some((m) => m.status !== "finished");
     if (hasUnfinished) {
-      Swal.fire({
-        title :"มี Match ที่ยังไม่จบการแข่งขัน",
-        text: "กรุณาจบการแข่งขัน Match ทั้งหมดก่อนที่จะบันทึกและปิดก๊วน",
-        icon: "warning",
-        confirmButtonText: "ตกลง",
-      });
+      Swal.fire(
+        "มี Match ที่ยังไม่จบการแข่งขัน",
+        "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match",
+        "warning"
+      );
       return;
     }
 
     const result = await Swal.fire({
       title: "คุณต้องการบันทึกและปิดก๊วนหรือไม่?",
-      text: "ประวัติที่บันทึกจะถูกอัปเดตใน Hostory",
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "ยืนยัน",
@@ -444,14 +479,7 @@ const Match = () => {
     if (!result.isConfirmed) return;
 
     if (matches.length === 0) {
-      Swal.fire({
-      title: "ไม่มี Match ที่ต้องบันทึก?",
-      text: "โปรดสร้าง Match",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "ยืนยัน",
-      cancelButtonText: "ยกเลิก",
-    });
+      Swal.fire("ไม่มี match ที่จะบันทึก", "", "info");
       resetSession();
       return;
     }
@@ -561,12 +589,20 @@ const Match = () => {
         setMatches((prevMatches) => {
           const updatedMatches = prevMatches.filter((_, idx) => {
             // If the deleted match was finished, decrement gamesPlayed for its players
-            if (idx === idxToDelete && prevMatches[idx].status === 'finished') {
-              const playersInDeletedMatch = [prevMatches[idx].A1, prevMatches[idx].A2, prevMatches[idx].B1, prevMatches[idx].B2].filter(Boolean);
+            if (idx === idxToDelete && prevMatches[idx].status === "finished") {
+              const playersInDeletedMatch = [
+                prevMatches[idx].A1,
+                prevMatches[idx].A2,
+                prevMatches[idx].B1,
+                prevMatches[idx].B2,
+              ].filter(Boolean);
               setMembers((prevMembers) =>
                 prevMembers.map((member) =>
                   playersInDeletedMatch.includes(member.name)
-                    ? { ...member, gamesPlayed: Math.max(0, member.gamesPlayed - 1) }
+                    ? {
+                        ...member,
+                        gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                      }
                     : member
                 )
               );
@@ -679,45 +715,18 @@ const Match = () => {
             </div>
           </div>
           <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-              justifyContent: "flex-end",
-            }}
+            className="action-time-group" // Apply class for responsive control
           >
             <button
               onClick={isOpen ? handleEndGroup : handleStartGroup}
-              style={{
-                backgroundColor: isOpen ? "#f44336" : "#4bf196",
-                color: "black",
-                padding: "10px 32px",
-                fontSize: "14px",
-                borderRadius: "7px",
-                border: "none",
-                marginRight: "4px",
-                cursor: "pointer",
-                boxShadow: isOpen
-                  ? "0 2px 8px rgba(244,67,54,0.07)"
-                  : "0 2px 8px rgba(55,229,77,0.09)",
-                transition: "all 0.22s",
-              }}
+              className={`action-button ${
+                isOpen ? "end-group" : "start-group"
+              }`}
             >
               {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
             </button>
             <div
-              style={{
-                background: "#fff",
-                border: "1px solid #3ec5e0",
-                borderRadius: "7px",
-                padding: "8px 20px",
-                fontSize: "14px",
-                color: "#0a6179",
-                minWidth: "180px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
+              className="activity-time-display" // Apply class for responsive control
             >
               <span style={{ color: "#2196f3", fontWeight: 600 }}>
                 Total Activity Time
@@ -856,7 +865,6 @@ const Match = () => {
                 // status select should only be disabled if match is already 'finished'
                 // manual 'finished' selection can still be done if all fields are filled
                 const isDisabledManualStatus = !isOpen || cannotFinish;
-
 
                 return (
                   <tr
@@ -1389,6 +1397,7 @@ const Match = () => {
           cursor: pointer;
           transition: all 0.22s;
           color: black; /* Ensure text is visible on colored backgrounds */
+          margin-right: 4px; /* Added from inline style */
         }
 
         .action-button.end-group {
@@ -1396,7 +1405,7 @@ const Match = () => {
           box-shadow: 0 2px 8px rgba(244, 67, 54, 0.07);
         }
         .action-button.start-group {
-          background-color: #3fc57b;
+          background-color: #4bf196; /* Corrected to original color */
           box-shadow: 0 2px 8px rgba(55, 229, 77, 0.09);
         }
 
@@ -1411,8 +1420,8 @@ const Match = () => {
           padding: 8px 20px;
           font-size: 14px;
           color: #0a6179;
-          min-width: 150px; /* Adjusted to be shorter */
-          max-width: 280px; /* Added max-width to control overall length */
+          min-width: 180px; /* Kept for large screens */
+          max-width: 280px; /* Kept for large screens */
           display: flex;
           align-items: center;
           gap: 6px;
@@ -1601,7 +1610,7 @@ const Match = () => {
           fontSize: "25px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
+          justify-content: "center",
           marginRight: "7px",
           cursor: "pointer",
           transition: "all 0.15s",
@@ -1680,23 +1689,29 @@ const Match = () => {
           .date-topic-group,
           .action-time-group {
             flex-direction: column;
-            align-items: flex-start;
+            align-items: flex-start; /* Keep as is */
             width: 100%;
             gap: 10px;
           }
           .input-group,
-          .control-input,
-          .action-button,
-          .activity-time-display {
+          .control-input {
             width: 100%;
             min-width: unset;
             max-width: unset;
           }
-          .activity-time-display {
-            justify-content: center;
-          }
           .input-group .control-input {
             min-width: unset;
+          }
+
+          /* Specific styles for responsive elements */
+          .action-button,
+          .activity-time-display {
+            width: 100%;
+            min-width: unset; /* Override fixed min-width for small screens */
+            max-width: unset; /* Override fixed max-width for small screens */
+          }
+          .activity-time-display {
+            justify-content: center; /* Center content horizontally when it takes full width */
           }
         }
 
