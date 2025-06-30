@@ -52,6 +52,7 @@ export default function SettingsPage() {
         soundsOff: "ปิด", // New text
         settingsSaved: "บันทึกการตั้งค่าแล้ว!", // New text
         resetSettings: "รีเซ็ตการตั้งค่า", // New text
+        packageLabel: "แพ็คเกจ", // New text for package
         resetConfirm: "คุณแน่ใจหรือไม่ที่จะรีเซ็ตการตั้งค่าทั้งหมด?", // New text
       },
       english: {
@@ -83,6 +84,7 @@ export default function SettingsPage() {
         soundsOff: "Off", // New text
         settingsSaved: "Settings saved!", // New text
         resetSettings: "Reset Settings", // New text
+        packageLabel: "Package", // New text for package
         resetConfirm: "Are you sure you want to reset all settings?", // New text
       },
     };
@@ -209,6 +211,7 @@ export default function SettingsPage() {
             username: userData.username || "N/A",
             createDate: userData.CreateDate || null,
             accountDurationDays: userData.AccountDurationDays !== undefined ? Number(userData.AccountDurationDays) : 30,
+            packageType: userData.packageType || "N/A", // Added packageType
           });
         } else {
           setProfileError(getText("noData"));
@@ -348,6 +351,20 @@ export default function SettingsPage() {
     });
   };
 
+  // Function to get class name based on package type
+  const getPackageTypeClassName = (type) => {
+    switch (type.toLowerCase()) { // Ensure case-insensitivity
+      case "basic":
+        return "package-type basic";
+      case "pro":
+        return "package-type pro";
+      case "premium":
+        return "package-type premium";
+      default:
+        return "package-type"; // Default class if type is not recognized
+    }
+  };
+
   return (
     <div className="overall-layout">
       <main className="main-content">
@@ -382,6 +399,15 @@ export default function SettingsPage() {
                   <Users size={18} className="info-icon" />
                   <span className="info-label">{getText("groupNameLabel")}:</span>
                   <span className="info-value">{userProfile.groupName}</span>
+                </div>
+                {/* New Package Info Item */}
+                <div className="info-item">
+                  <Briefcase size={18} className="info-icon" /> {/* Using Briefcase icon */}
+                  <span className="info-label">{getText("packageLabel")}:</span>
+                  {/* Apply conditional styling here */}
+                  <span className={`info-value ${getPackageTypeClassName(userProfile.packageType)}`}>
+                    {userProfile.packageType}
+                  </span>
                 </div>
                 <div className="info-item">
                   <Calendar size={18} className="info-icon" />
@@ -789,6 +815,38 @@ export default function SettingsPage() {
           font-weight: 400;
           flex-grow: 1;
         }
+
+        /* Package Type Styles for info-value */
+        .info-value.package-type {
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 5px;
+            display: inline-block;
+            line-height: 1.2;
+            flex-grow: 0; /* Important: Override flex-grow to prevent stretching */
+            width: fit-content; /* Ensure it only takes content width */
+            white-space: nowrap; /* Prevent text from wrapping */
+            color: #fff; /* กำหนดสีตัวอักษรเป็นสีขาวที่นี่ */
+        }
+
+        .info-value.package-type.basic {
+            background-color: #388E3C; /* Green */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Softer shadow */
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); /* เพิ่ม text-shadow */
+        }
+
+        .info-value.package-type.pro {
+            background-color: #0056b3; /* Dark Blue */
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); /* Medium shadow */
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); /* เพิ่ม text-shadow */
+        }
+
+        .info-value.package-type.premium {
+            background-color: #6A0DAD; /* Deep Purple */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); /* Pronounced shadow */
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); /* เพิ่ม text-shadow */
+        }
+
 
         /* Style for expiry status */
         .info-value.status-expiring-soon {
