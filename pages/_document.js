@@ -6,7 +6,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         {/* Favicon ของคุณอยู่ที่นี่ ชี้ไปที่ public/images/Logo.png */}
-        <link rel="icon" href="/images/Logo.png" type="image/png" />
+        <link rel="icon" href="/images/Logo-iconnew.png" type="image/png" />
 
         {/* Optional: ถ้าคุณต้องการกำหนดขนาดไอคอนสำหรับบางอุปกรณ์ */}
         {/* <link rel="apple-touch-icon" href="/images/Logo.png" /> */}
