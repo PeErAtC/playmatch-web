@@ -37,7 +37,7 @@ const Navbar = () => {
             if (e.key === "Enter") scrollToTop();
           }}
         >
-          <img src="/images/Logo-icon.png" alt="PlayMatch Logo" />
+          <img src="/images/Logo-iconnew.png" alt="PlayMatch Logo" />
           <span>PlayMatch</span>
         </div>
 
@@ -52,16 +52,14 @@ const Navbar = () => {
               </Link>
             </li>
             <li>
-              <Link href="/about" legacyBehavior>
-                <a className={router.pathname === "/about" ? "active" : ""}>
-                  เกี่ยวกับ
-                </a>
-              </Link>
-            </li>
-            <li>
-              <Link href="/services" legacyBehavior>
-                <a className={router.pathname === "/services" ? "active" : ""}>
-                  บริการ
+              {/* เปลี่ยน "เกี่ยวกับ" เป็น "ทดลองใช้งาน" และลิงก์ไปที่ /login พร้อมเพิ่มคลาสสำหรับสี */}
+              <Link href="/loginDemo" legacyBehavior>
+                <a
+                  className={`${
+                    router.pathname === "/loginDemo" ? "active" : ""
+                  } try-it-out-link`}
+                >
+                  ทดลองใช้งาน
                 </a>
               </Link>
             </li>
@@ -133,7 +131,7 @@ const Navbar = () => {
         }
         .navbar-logo img {
           height: 54px;
-          width: 44px;
+          width: 54px;
           object-fit: contain;
           margin-right: 10px;
           border-radius: 9px;
@@ -175,6 +173,18 @@ const Navbar = () => {
         .navbar-menu ul li a.active {
           color: #4fa3f7;
           background: rgba(77, 164, 247, 0.11);
+        }
+
+        /* NEW: Style for "ทดลองใช้งาน" button */
+        .navbar-menu ul li a.try-it-out-link {
+          color: #ffd700; /* Golden yellow */
+          font-weight: 700; /* Make it bolder */
+        }
+
+        .navbar-menu ul li a.try-it-out-link:hover,
+        .navbar-menu ul li a.try-it-out-link.active {
+          color: #daa520; /* Darker golden yellow on hover/active */
+          background: rgba(255, 215, 0, 0.1); /* Slight yellow background on hover */
         }
 
         .get-started {
@@ -238,7 +248,7 @@ const Navbar = () => {
           }
           .navbar-logo img {
             height: 48px;
-            width: 38px;
+            width: 48px;
             margin-right: 6px;
           }
           .navbar-logo span {
@@ -297,6 +307,15 @@ const Navbar = () => {
             color: #4fa3f7;
             background: rgba(77, 164, 247, 0.13);
           }
+          /* Ensure try-it-out-link also applies on mobile */
+          .navbar-menu ul li a.try-it-out-link {
+            color: #ffd700; /* Golden yellow */
+          }
+          .navbar-menu ul li a.try-it-out-link:hover,
+          .navbar-menu ul li a.try-it-out-link.active {
+            color: #daa520; /* Darker golden yellow on hover/active */
+            background: rgba(255, 215, 0, 0.1); /* Slight yellow background on hover */
+          }
           .get-started {
             display: none;
           }
@@ -315,6 +334,7 @@ const Navbar = () => {
           .navbar-logo img {
             height: 35px;
             width: 28px;
+            object-fit: contain;
             margin-right: 3px;
           }
           .navbar-logo span {
