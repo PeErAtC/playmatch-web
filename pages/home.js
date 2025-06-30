@@ -715,7 +715,7 @@ useEffect(() => {
       lineId,
       handed,
       phone,
-      birthDate, // Store birthDate as YYYY-MM-DD string
+      birthDate, 
       experience,
       status,
       createBy: loggedInUsername,
@@ -856,7 +856,6 @@ useEffect(() => {
     }
   };
 
-
   const clearForm = () => {
     setName("");
     setLevel("");
@@ -981,11 +980,11 @@ useEffect(() => {
                   />
                 </div>
                 <div>
-                  <label className="form-label">Line ID</label>
+                  <label className="form-label">Line</label>
                   <input
                     className="modern-input"
                     type="text"
-                    placeholder="Line ID"
+                    placeholder="Line"
                     value={lineId}
                     onChange={(e) => setLineId(e.target.value)}
                   />
@@ -1032,6 +1031,7 @@ useEffect(() => {
                     onChange={(e) => setExperience(e.target.value)}
                   >
                     <option value="">ประสบการณ์</option>
+                    <option value="ไม่ระบุ">ไม่ระบุ</option>
                     <option value="น้อยกว่า 1 ปี">น้อยกว่า 1 ปี</option>
                     {[...Array(10)].map((_, i) => (
                       <option key={i + 1} value={`${i + 1} ปี`}>
@@ -1132,7 +1132,7 @@ useEffect(() => {
                 <th onClick={() => requestSort('level')} className="sortable-header"> {/* Clickable header for sorting */}
                     ระดับ {getSortIcon('level')}
                 </th>
-                <th>Line ID</th>
+                <th>Line</th>
                 <th>มือ</th>
                 <th>เบอร์โทร</th>
                 <th onClick={() => requestSort('birthDate')} className="sortable-header">
@@ -1175,7 +1175,7 @@ useEffect(() => {
                   </td>
                   <td data-label="ชื่อ">{user.name}</td>
                   <td data-label="ระดับ">{user.level}</td>
-                  <td data-label="Line ID">{user.lineId}</td>
+                  <td data-label="Line">{user.lineId}</td>
                   <td data-label="มือ">{user.handed}</td>
                   <td data-label="เบอร์โทร">{user.phone}</td>
                   <td data-label="อายุ">{calculateAge(user.birthDate)}</td>
