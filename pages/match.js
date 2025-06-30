@@ -396,7 +396,12 @@ const Match = () => {
 
   const handleStartGroup = () => {
     if (!topic) {
-      Swal.fire("กรุณาระบุหัวเรื่อง", "", "warning");
+      Swal.fire({
+        title :"กรุณากรอกหัวเรื่อง",
+        text: "หัวเรื่องเป็นสิ่งสำคัญในการระบุวัตถุประสงค์ของก๊วน",
+        icon: "warning",
+        confirmButtonText: "ตกลง",
+      });
       return;
     }
     setIsOpen(true);
@@ -418,16 +423,18 @@ const Match = () => {
   const handleEndGroup = async () => {
     const hasUnfinished = matches.some((m) => m.status !== "finished");
     if (hasUnfinished) {
-      Swal.fire(
-        "มี Match ที่ยังไม่จบการแข่งขัน",
-        "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match",
-        "warning"
-      );
+      Swal.fire({
+        title :"มี Match ที่ยังไม่จบการแข่งขัน",
+        text: "กรุณาจบการแข่งขัน Match ทั้งหมดก่อนที่จะบันทึกและปิดก๊วน",
+        icon: "warning",
+        confirmButtonText: "ตกลง",
+      });
       return;
     }
 
     const result = await Swal.fire({
       title: "คุณต้องการบันทึกและปิดก๊วนหรือไม่?",
+      text: "ประวัติที่บันทึกจะถูกอัปเดตใน Hostory",
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "ยืนยัน",
@@ -437,7 +444,14 @@ const Match = () => {
     if (!result.isConfirmed) return;
 
     if (matches.length === 0) {
-      Swal.fire("ไม่มี match ที่จะบันทึก", "", "info");
+      Swal.fire({
+      title: "ไม่มี Match ที่ต้องบันทึก?",
+      text: "โปรดสร้าง Match",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "ยืนยัน",
+      cancelButtonText: "ยกเลิก",
+    });
       resetSession();
       return;
     }
