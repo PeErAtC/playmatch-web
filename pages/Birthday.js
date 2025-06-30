@@ -57,7 +57,15 @@ const Birthday = () => {
 
   // Helper function to get day name (Thai)
   const getDayName = (dayIndex, full = false) => {
-    const fullNames = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+    const fullNames = [
+      "อาทิตย์",
+      "จันทร์",
+      "อังคาร",
+      "พุธ",
+      "พฤหัสบดี",
+      "ศุกร์",
+      "เสาร์",
+    ];
     const shortNames = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
     return full ? fullNames[dayIndex] : shortNames[dayIndex];
   };
@@ -94,7 +102,9 @@ const Birthday = () => {
         const q = query(usersRef, where("email", "==", email));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-          const docSnapshot = querySnapshot.docs ? querySnapshot.docs.at(0) : null;
+          const docSnapshot = querySnapshot.docs
+            ? querySnapshot.docs.at(0)
+            : null;
           if (docSnapshot) {
             setLoggedInUsername(docSnapshot.data().username);
             setCurrentUserId(docSnapshot.id);
@@ -158,8 +168,12 @@ const Birthday = () => {
       });
 
       filtered.sort((a, b) => {
-        const dayA = a.birthDate ? parseInt(a.birthDate.split("-")?.[2], 10) : 0;
-        const dayB = b.birthDate ? parseInt(b.birthDate.split("-")?.[2], 10) : 0;
+        const dayA = a.birthDate
+          ? parseInt(a.birthDate.split("-")?.[2], 10)
+          : 0;
+        const dayB = b.birthDate
+          ? parseInt(b.birthDate.split("-")?.[2], 10)
+          : 0;
         return dayA - dayB;
       });
 
@@ -168,7 +182,11 @@ const Birthday = () => {
       setBirthdayMembers(filtered);
     } catch (error) {
       console.error("Error fetching birthday members:", error);
-      Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถดึงข้อมูลวันเกิดสมาชิกได้", "error");
+      Swal.fire(
+        "เกิดข้อผิดพลาด",
+        "ไม่สามารถดึงข้อมูลวันเกิดสมาชิกได้",
+        "error"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +203,8 @@ const Birthday = () => {
   }, [currentUserId, fetchBirthdayMembers]);
 
   // --- Calendar Logic ---
-  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getDaysInMonth = (year, month) =>
+    new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
   const totalDays = getDaysInMonth(currentYear, currentMonthIndex);
@@ -251,7 +270,9 @@ const Birthday = () => {
     const days = [];
     // Fill in leading empty cells (for days from previous month)
     for (let i = 0; i < firstDayOfWeek; i++) {
-      days.push(<div key={`empty-prev-${i}`} className="calendar-day empty"></div>);
+      days.push(
+        <div key={`empty-prev-${i}`} className="calendar-day empty"></div>
+      );
     }
 
     // Fill in days of the current month
@@ -277,11 +298,7 @@ const Birthday = () => {
         >
           {day}
           {/* Reverted to Gift Box Emoji */}
-          {hasBirthday && (
-            <span className="birthday-gift-icon">
-              🎁
-            </span>
-          )}
+          {hasBirthday && <span className="birthday-gift-icon">🎁</span>}
         </div>
       );
     }
@@ -290,7 +307,9 @@ const Birthday = () => {
     const totalCellsRendered = days.length;
     const remainingCells = 42 - totalCellsRendered;
     for (let i = 0; i < remainingCells; i++) {
-      days.push(<div key={`empty-next-${i}`} className="calendar-day empty"></div>);
+      days.push(
+        <div key={`empty-next-${i}`} className="calendar-day empty"></div>
+      );
     }
 
     return days;
@@ -378,6 +397,15 @@ const Birthday = () => {
                           currentMonthIndex ===
                             new Date(member.birthDate).getMonth();
 
+                        // Logic for upcoming birthday message
+                        let birthdayMessage = "";
+                        if (birthDayOfMonth !== null) {
+                          const daysUntilBirthday = birthDayOfMonth - currentDay;
+                          if (daysUntilBirthday > 0 && daysUntilBirthday <= 3) {
+                            birthdayMessage = `อีก ${daysUntilBirthday} วันจะถึงวันเกิด! `;
+                          }
+                        }
+
                         return (
                           <tr
                             key={member.id}
@@ -386,7 +414,10 @@ const Birthday = () => {
                             }`}
                           >
                             <td>{index + 1}</td>
-                            <td className="member-name-cell">{member.name}</td>
+                            <td className="member-name-cell">
+                              {birthdayMessage}
+                              {member.name}
+                            </td>
                             <td>
                               {member.birthDate
                                 ? new Date(member.birthDate).toLocaleDateString(
@@ -647,7 +678,8 @@ const Birthday = () => {
           font-weight: 500;
           color: #333;
           border-radius: 50%;
-          transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+          transition: background-color 0.2s ease, color 0.2s ease,
+            transform 0.2s ease;
           cursor: default;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
           position: relative;
@@ -1014,7 +1046,7 @@ const Birthday = () => {
 
         /* SweetAlert2 Custom Styles for Birthday Theme */
         .birthday-swal2-popup {
-          font-family: 'Kanit', sans-serif !important;
+          font-family: "Kanit", sans-serif !important;
           border-radius: 15px !important;
           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
           background: linear-gradient(135deg, #a7f3d0, #f0fdf4) !important;
