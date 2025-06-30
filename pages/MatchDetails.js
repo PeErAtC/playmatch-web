@@ -1086,7 +1086,7 @@ const MatchDetails = () => {
             <button
               onClick={handleExportToExcel}
               style={{
-                backgroundColor: "#007bff",
+                backgroundColor: "#4bf196",
                 color: "#fff",
                 padding: "10px 20px",
                 borderRadius: "5px",
@@ -1103,7 +1103,7 @@ const MatchDetails = () => {
               onClick={handleSaveToRanking}
               disabled={isSavingRanking}
               style={{
-                backgroundColor: "#28a745",
+                backgroundColor: "#d33",
                 color: "#fff",
                 padding: "10px 20px",
                 borderRadius: "5px",
