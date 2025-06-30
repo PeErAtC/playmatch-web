@@ -41,6 +41,8 @@ const MatchDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [courtFee, setCourtFee] = useState("");
+  // NEW: State for court fee per game
+  const [courtFeePerGame, setCourtFeePerGame] = useState("");
   const [ballPrice, setBallPrice] = useState("");
   const [organizeFee, setOrganizeFee] = useState("");
   const [memberCalculations, setMemberCalculations] = useState({});
@@ -85,21 +87,21 @@ const MatchDetails = () => {
       currentMatchData,
       currentCourtFee,
       currentBallPrice,
-      currentOrganizeFee
+      currentOrganizeFee,
+      currentCourtFeePerGame // NEW: Pass courtFeePerGame
     ) => {
       console.log("Starting calculateMemberStats...");
       console.log("Current Match Data:", currentMatchData);
 
       if (
         !currentMatchData ||
-        !currentCourtFee ||
         !currentBallPrice ||
         !currentOrganizeFee ||
         !currentMatchData.matches ||
         currentMatchData.matches.length === 0
       ) {
         console.log(
-          "Insufficient data for calculation. Resetting calculations."
+          "Insufficient data for calculation (missing ball price, organize fee, or matches). Resetting calculations."
         );
         setMemberCalculations({});
         setIsDataCalculated(false);
@@ -107,18 +109,28 @@ const MatchDetails = () => {
       }
 
       const parsedCourtFee = parseFloat(currentCourtFee);
+      const parsedCourtFeePerGame = parseFloat(currentCourtFeePerGame); // NEW
       const parsedBallPrice = parseFloat(currentBallPrice);
       const parsedOrganizeFee = parseFloat(currentOrganizeFee);
 
+      // NEW: Validate at least one court fee input is provided
       if (
-        isNaN(parsedCourtFee) ||
+        (isNaN(parsedCourtFee) || parsedCourtFee < 0) &&
+        (isNaN(parsedCourtFeePerGame) || parsedCourtFeePerGame < 0)
+      ) {
+        console.log("Invalid or missing court fee inputs. Resetting calculations.");
+        setMemberCalculations({});
+        setIsDataCalculated(false);
+        return;
+      }
+
+      if (
         isNaN(parsedBallPrice) ||
         isNaN(parsedOrganizeFee) ||
-        parsedCourtFee < 0 ||
         parsedBallPrice < 0 ||
         parsedOrganizeFee < 0
       ) {
-        console.log("Invalid fee inputs. Resetting calculations.");
+        console.log("Invalid ball price or organize fee inputs. Resetting calculations.");
         setMemberCalculations({});
         setIsDataCalculated(false);
         return;
@@ -212,11 +224,27 @@ const MatchDetails = () => {
         }
       });
 
-      const totalPlayersForCourtFee = playersInMatch.size;
-      const courtCostPerPerson =
-        totalPlayersForCourtFee > 0
-          ? Math.ceil(parsedCourtFee / totalPlayersForCourtFee)
-          : 0;
+      // NEW: Calculate court cost based on input preference
+      let courtCostPerPersonCalculated = 0;
+      if (!isNaN(parsedCourtFeePerGame) && parsedCourtFeePerGame >= 0) {
+        // Calculate based on court fee per game
+        playersInMatch.forEach((player) => {
+          const gamesPlayed = memberGamesPlayed[player] || 0;
+          tempMemberCalculations[player].courtCostPerPerson = Math.ceil(
+            gamesPlayed * parsedCourtFeePerGame
+          );
+        });
+      } else if (!isNaN(parsedCourtFee) && parsedCourtFee >= 0) {
+        // Calculate based on total court fee (existing logic)
+        const totalPlayersForCourtFee = playersInMatch.size;
+        courtCostPerPersonCalculated =
+          totalPlayersForCourtFee > 0
+            ? Math.ceil(parsedCourtFee / totalPlayersForCourtFee)
+            : 0;
+        playersInMatch.forEach((player) => {
+          tempMemberCalculations[player].courtCostPerPerson = courtCostPerPersonCalculated;
+        });
+      }
 
       playersInMatch.forEach((player) => {
         const ballsUsed = memberBallsUsed[player] || 0;
@@ -230,8 +258,11 @@ const MatchDetails = () => {
         const roundedBallCost = Math.ceil(ballCost); // Round up ball cost for consistency with total
         const roundedOrganizeFee = Math.ceil(parsedOrganizeFee); // Round up organize fee
 
+        // Use the already calculated courtCostPerPerson from the conditional block above
+        const playerCourtCost = tempMemberCalculations[player].courtCostPerPerson;
+
         let totalMemberCost =
-          roundedBallCost + courtCostPerPerson + roundedOrganizeFee;
+          roundedBallCost + playerCourtCost + roundedOrganizeFee;
 
         tempMemberCalculations[player] = {
           name: player,
@@ -241,7 +272,7 @@ const MatchDetails = () => {
           wins: calculatedWins,
           score: calculatedScore,
           ballCost: roundedBallCost, // Use rounded ball cost
-          courtCostPerPerson: courtCostPerPerson,
+          courtCostPerPerson: playerCourtCost, // Use the calculated player court cost
           organizeFeePerPerson: roundedOrganizeFee, // Use rounded organize fee
           total: totalMemberCost, // Use the new calculated total
           calculatedWins: calculatedWins,
@@ -299,7 +330,9 @@ const MatchDetails = () => {
       const data = matchSnap.data();
       console.log("Fetched Match Data:", data);
       setMatchData(data);
+      // Initialize both court fee fields from fetched data or keep them empty
       setCourtFee(data.courtFee ? String(data.courtFee) : "");
+      setCourtFeePerGame(data.courtFeePerGame ? String(data.courtFeePerGame) : ""); // NEW
       setBallPrice(data.ballPrice ? String(data.ballPrice) : "");
       setOrganizeFee(data.organizeFee ? String(data.organizeFee) : "");
 
@@ -310,7 +343,8 @@ const MatchDetails = () => {
           data,
           data.courtFee || "",
           data.ballPrice || "",
-          data.organizeFee || ""
+          data.organizeFee || "",
+          data.courtFeePerGame || "" // NEW
         );
       } else {
         console.log("No matches found in match data. Resetting calculations.");
@@ -334,13 +368,56 @@ const MatchDetails = () => {
     fetchMatchAndMemberDetails();
   }, [fetchMatchAndMemberDetails]);
 
+  // Handler for courtFee change
+  const handleCourtFeeChange = (e) => {
+    setCourtFee(e.target.value);
+    // Clear courtFeePerGame if courtFee is being entered
+    if (e.target.value !== "") {
+      setCourtFeePerGame("");
+    }
+  };
+
+  // Handler for courtFeePerGame change
+  const handleCourtFeePerGameChange = (e) => {
+    setCourtFeePerGame(e.target.value);
+    // Clear courtFee if courtFeePerGame is being entered
+    if (e.target.value !== "") {
+      setCourtFee("");
+    }
+  };
+
+
   // Function to calculate expenses (called when button is clicked)
   const handleCalculateClick = () => {
     if (!matchData) {
       Swal.fire("Error", "No match data found for calculation", "error");
       return;
     }
-    calculateMemberStats(matchData, courtFee, ballPrice, organizeFee);
+
+    // NEW: Check if at least one court fee input has a value
+    if (
+      (courtFee === "" || parseFloat(courtFee) < 0) &&
+      (courtFeePerGame === "" || parseFloat(courtFeePerGame) < 0)
+    ) {
+      Swal.fire(
+        "Invalid Input",
+        "กรุณากรอกค่าสนาม หรือ ค่าสนาม/เกม อย่างใดอย่างหนึ่ง และต้องไม่เป็นค่าติดลบ",
+        "warning"
+      );
+      return;
+    }
+
+    if (ballPrice === "" || parseFloat(ballPrice) < 0) {
+      Swal.fire("Invalid Input", "กรุณากรอกราคาลูกละ และต้องไม่เป็นค่าติดลบ", "warning");
+      return;
+    }
+
+    if (organizeFee === "" || parseFloat(organizeFee) < 0) {
+      Swal.fire("Invalid Input", "กรุณากรอกค่าจัดก๊วน และต้องไม่เป็นค่าติดลบ", "warning");
+      return;
+    }
+
+    calculateMemberStats(matchData, courtFee, ballPrice, organizeFee, courtFeePerGame);
     Swal.fire("Calculation Successful", "Expense data calculated", "success");
   };
 
@@ -740,19 +817,49 @@ const MatchDetails = () => {
                 color: "#333",
               }}
             >
-              ค่าสนาม:
+              ค่าสนาม (รวม):
             </label>
             <input
               type="number"
               value={courtFee}
-              onChange={(e) => setCourtFee(e.target.value)}
+              onChange={handleCourtFeeChange}
               placeholder="ค่าสนาม"
+              disabled={courtFeePerGame !== ""} // Disable if courtFeePerGame has value
               style={{
                 padding: "8px 12px",
                 borderRadius: "5px",
                 border: "1px solid #ccc",
                 fontSize: "15px",
                 width: "120px",
+                backgroundColor: courtFeePerGame !== "" ? "#e9e9e9" : "#fff", // Gray out if disabled
+              }}
+            />
+          </div>
+          {/* NEW: Input for Court Fee per Game */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontSize: "14px",
+                color: "#333",
+              }}
+            >
+              ค่าสนาม/เกม:
+            </label>
+            <input
+              type="number"
+              value={courtFeePerGame}
+              onChange={handleCourtFeePerGameChange}
+              placeholder="ค่าสนาม/เกม"
+              disabled={courtFee !== ""} // Disable if courtFee has value
+              style={{
+                padding: "8px 12px",
+                borderRadius: "5px",
+                border: "1px solid #ccc",
+                fontSize: "15px",
+                width: "120px",
+                backgroundColor: courtFee !== "" ? "#e9e9e9" : "#fff", // Gray out if disabled
               }}
             />
           </div>
@@ -1359,22 +1466,6 @@ const MatchDetails = () => {
             )}
           </tbody>
         </table>
-      </div>
-      <div style={{ textAlign: "right", marginTop: "20px" }}>
-        <button
-          onClick={() => router.back()}
-          style={{
-            backgroundColor: "#6c757d",
-            color: "#fff",
-            padding: "10px 20px",
-            borderRadius: "5px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "15px",
-          }}
-        >
-          กลับ
-        </button>
       </div>
 
       <style jsx>{`
