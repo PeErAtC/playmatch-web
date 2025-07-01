@@ -21,9 +21,9 @@ const packageData = [
       "สถิติและกราฟวิเคราะห์",
       "เทรนการใช้งานโปรแกรม",
     ],
-    monthlyPrice: "159",
-    yearlyPrice: "1,590",
-    yearlyDiscountText: "ประหยัดกว่า 318 บาท/ปี",
+    monthlyPrice: "139",
+    yearlyPrice: "1,390",
+    yearlyDiscountText: "ประหยัดกว่า 278 บาท/ปี",
     buttonText: "เริ่มต้นเลย",
     isPopular: false,
     buttonVariant: "primary-outline",
@@ -45,11 +45,11 @@ const packageData = [
       "ระบบจัดอันดับสมาชิก (Ranking)",
       "เทรนการใช้งานโปรแกรม",
     ],
-    monthlyPrice: "259", // ราคาลดแล้ว
-    originalMonthlyPrice: "359", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
-    yearlyPrice: "2,590", // ราคาใหม่รายปีที่ลดแล้ว
-    originalYearlyPrice: "3,590", // ราคาเดิมรายปีสำหรับขีดฆ่า
-    yearlyDiscountText: "ประหยัดกว่า 718 บาท/ปี",
+    monthlyPrice: "199", // ราคาลดแล้ว
+    originalMonthlyPrice: "259", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
+    yearlyPrice: "1,990", // ราคาใหม่รายปีที่ลดแล้ว
+    originalYearlyPrice: "2,590", // ราคาเดิมรายปีสำหรับขีดฆ่า
+    yearlyDiscountText: "ประหยัดกว่า 518 บาท/ปี",
     buttonText: "เลือกแพ็กเกจนี้!",
     isPopular: true,
     buttonVariant: "primary-filled",
@@ -73,9 +73,9 @@ const packageData = [
       "ทีมงาน Support พร้อมให้บริการ 24 ชั่วโมง",
 
     ],
-    monthlyPrice: "459",
-    yearlyPrice: "4,590",
-    yearlyDiscountText: "ประหยัดกว่า 918 บาท/ปี",
+    monthlyPrice: "359",
+    yearlyPrice: "3,590",
+    yearlyDiscountText: "ประหยัดกว่า 718 บาท/ปี",
     buttonText: "ติดต่อทีมงาน",
     isPopular: false,
     buttonVariant: "primary-outline",
