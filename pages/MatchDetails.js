@@ -45,6 +45,7 @@ const MatchDetails = () => {
   const [courtFeePerGame, setCourtFeePerGame] = useState("");
   // NEW: State for fixed court fee per person
   const [fixedCourtFeePerPerson, setFixedCourtFeePerPerson] = useState("");
+  const [isRankingSaved, setIsRankingSaved] = useState(false); // เพิ่ม State นี้เข้ามา
   const [ballPrice, setBallPrice] = useState("");
   const [organizeFee, setOrganizeFee] = useState("");
   const [memberCalculations, setMemberCalculations] = useState({});
@@ -368,6 +369,7 @@ const MatchDetails = () => {
       setOrganizeFee(data.organizeFee ? String(data.organizeFee) : "");
 
       setMemberPaidStatus(data.paidStatus || {});
+      setIsRankingSaved(!!data.hasRankingSaved); // ตั้งค่าตามค่าใน Firebase (เป็น boolean)
 
       if (data.matches && data.matches.length > 0) {
         calculateMemberStats(
@@ -570,68 +572,76 @@ const MatchDetails = () => {
     }
 
     setIsSavingRanking(true);
-    try {
-      const usersRef = collection(db, "users");
-      const userQuery = query(usersRef, where("email", "==", loggedInEmail));
-      const userSnap = await getDocs(userQuery);
-      let userId = null;
-      userSnap.forEach((doc) => {
-        userId = doc.id;
-      });
+  try {
+    const usersRef = collection(db, "users");
+    const userQuery = query(usersRef, where("email", "==", loggedInEmail));
+    const userSnap = await getDocs(userQuery);
+    let userId = null;
+    userSnap.forEach((doc) => {
+      userId = doc.id;
+    });
 
-      if (!userId) {
-        throw new Error("User data not found. Please log in again.");
-      }
+    if (!userId) {
+      throw new Error("User data not found. Please log in again.");
+    }
 
-      const matchDateObj = new Date(matchData.matchDate);
-      if (isNaN(matchDateObj.getTime())) {
-        throw new Error("Invalid Match Date.");
-      }
-      const monthYearId = `${(matchDateObj.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}-${matchDateObj.getFullYear()}`;
+    const matchDateObj = new Date(matchData.matchDate);
+    if (isNaN(matchDateObj.getTime())) {
+      throw new Error("Invalid Match Date.");
+    }
+    const monthYearId = `${(matchDateObj.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}-${matchDateObj.getFullYear()}`;
 
-      const rankingDocRef = doc(db, `users/${userId}/Ranking`, monthYearId);
-      const rankingSnap = await getDoc(rankingDocRef);
-      const existingRankingData = rankingSnap.exists()
-        ? rankingSnap.data()
-        : {};
+    // Path สำหรับ Ranking collection
+    const rankingDocRef = doc(db, `users/${userId}/Ranking`, monthYearId);
+    const rankingSnap = await getDoc(rankingDocRef);
+    const existingRankingData = rankingSnap.exists()
+      ? rankingSnap.data()
+      : {};
 
-      const updatedRankingData = { ...existingRankingData };
+    const updatedRankingData = { ...existingRankingData };
 
-      Object.values(memberCalculations).forEach((member) => {
-        const playerName = member.name;
+    Object.values(memberCalculations).forEach((member) => {
+      const playerName = member.name;
 
-        // Retrieve previous values (or start new if not existing)
-        const prevData = existingRankingData[playerName] || {
-          wins: 0,
-          score: 0,
-          totalGames: 0,
-          totalBalls: 0,
-          level: "",
-        };
+      const prevData = existingRankingData[playerName] || {
+        wins: 0,
+        score: 0,
+        totalGames: 0,
+        totalBalls: 0,
+        level: "",
+      };
 
-        // Add the newly calculated values
-        updatedRankingData[playerName] = {
-          wins: prevData.wins + member.calculatedWins,
-          score: prevData.score + member.calculatedScore,
-          totalGames: prevData.totalGames + member.totalGames,
-          totalBalls: prevData.totalBalls + member.totalBalls,
-          level: member.level || prevData.level || "",
-          lastUpdated: serverTimestamp(),
-        };
-      });
+      updatedRankingData[playerName] = {
+        wins: prevData.wins + member.calculatedWins,
+        score: prevData.score + member.calculatedScore,
+        totalGames: prevData.totalGames + member.totalGames,
+        totalBalls: prevData.totalBalls + member.totalBalls,
+        level: member.level || prevData.level || "",
+        lastUpdated: serverTimestamp(),
+      };
+    });
 
-      updatedRankingData.lastUpdatedMonth = serverTimestamp();
+    updatedRankingData.lastUpdatedMonth = serverTimestamp();
 
-      // Use setDoc with merge: true to avoid overwriting the entire document
-      await setDoc(rankingDocRef, updatedRankingData, { merge: true });
+    // บันทึกข้อมูล Ranking
+    await setDoc(rankingDocRef, updatedRankingData, { merge: true });
+
+    // --- ส่วนที่เพิ่มใหม่: อัปเดตสถานะใน Match Collection ---
+    const matchDocRef = doc(db, `users/${userId}/Matches`, matchId); // อ้างอิงถึงเอกสาร Match ปัจจุบัน
+    await updateDoc(matchDocRef, {
+      hasRankingSaved: true, // เพิ่ม field นี้เข้าไป
+      lastRankingSavedAt: serverTimestamp(), // อาจเพิ่ม timestamp ด้วยก็ได้
+    });
+    // --- สิ้นสุดส่วนที่เพิ่มใหม่ ---
 
       Swal.fire(
         "Save Successful",
         `Ranking data for ${monthYearId} saved successfully!`,
         "success"
       );
+          setIsRankingSaved(true); // <--- เพิ่มบรรทัดนี้ด้วย (ถ้ายังไม่ได้เพิ่มจากคำแนะนำก่อนหน้า)
     } catch (err) {
       console.error("Error saving ranking data:", err);
       Swal.fire("Error", "Cannot save Ranking data: " + err.message, "error");
@@ -833,7 +843,19 @@ const MatchDetails = () => {
       }}
     >
       <h1 style={{ fontSize: "24px", marginBottom: "15px" }}>
-        รายละเอียด Match วันที่ {formatDate(matchData.matchDate)}
+        รายละเอียด Match วันที่ {formatDate(matchData.matchDate)}{" "}
+         {isRankingSaved && (
+        <span
+          style={{
+            fontSize: "16px",
+            color: "#28a745", // สีเขียว
+            marginLeft: "10px",
+            fontWeight: "normal",
+          }}
+        >
+          (บันทึก Ranking แล้ว)
+        </span>
+      )}
       </h1>
       <p style={{ fontSize: "16px", marginBottom: "20px", color: "#555" }}>
         หัวเรื่อง: {matchData.topic}
