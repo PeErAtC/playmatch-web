@@ -12,6 +12,7 @@ import {
   writeBatch,
   serverTimestamp,
   updateDoc,
+  setDoc, // เพิ่ม setDoc เข้ามาที่นี่
 } from "firebase/firestore";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx";
@@ -624,7 +625,7 @@ const MatchDetails = () => {
       updatedRankingData.lastUpdatedMonth = serverTimestamp();
 
       // Use setDoc with merge: true to avoid overwriting the entire document
-      await updateDoc(rankingDocRef, updatedRankingData);
+      await setDoc(rankingDocRef, updatedRankingData, { merge: true });
 
       Swal.fire(
         "Save Successful",
