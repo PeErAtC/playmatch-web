@@ -55,6 +55,19 @@ const MatchDetails = () => {
   const [memberPaidStatus, setMemberPaidStatus] = useState({});
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
 
+  // Define a Toast mixin for subtle notifications
+  const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+      toast.addEventListener('mouseenter', Swal.stopTimer);
+      toast.addEventListener('mouseleave', Swal.resumeTimer);
+    }
+  });
+
   // Fetch loggedInEmail and Admin email on component mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -117,9 +130,6 @@ const MatchDetails = () => {
       const parsedFixedCourtFeePerPerson = parseFloat(
         currentFixedCourtFeePerPerson
       );
-      const parsedBallPrice = parseFloat(currentBallPrice);
-      const parsedOrganizeFee = parseFloat(currentOrganizeFee);
-
       const isCourtFeeValid = !isNaN(parsedCourtFee) && parsedCourtFee >= 0;
       const isCourtFeePerGameValid =
         !isNaN(parsedCourtFeePerGame) && parsedCourtFeePerGame >= 0;
@@ -139,6 +149,9 @@ const MatchDetails = () => {
         setIsDataCalculated(false);
         return;
       }
+
+      const parsedBallPrice = parseFloat(currentBallPrice);
+      const parsedOrganizeFee = parseFloat(currentOrganizeFee);
 
       if (
         isNaN(parsedBallPrice) ||
@@ -176,7 +189,6 @@ const MatchDetails = () => {
           name: player,
           level: "",
           totalGames: 0,
-          totalBalls: 0,
           wins: 0,
           score: 0,
           ballCost: 0,
@@ -517,11 +529,11 @@ const MatchDetails = () => {
           [`paidStatus.${memberName}`]: isPaid,
           lastUpdatedPaidStatus: serverTimestamp(),
         });
-        Swal.fire(
-          "Status Saved",
-          `Payment status of ${memberName} updated!`,
-          "success"
-        );
+        // Changed Swal.fire to Toast.fire
+        Toast.fire({
+          icon: 'success',
+          title: `สถานะการชำระของ ${memberName} อัปเดตแล้ว!`
+        });
       } catch (err) {
         console.error("Error updating paid status:", err);
         Swal.fire(
@@ -543,8 +555,8 @@ const MatchDetails = () => {
         });
       }
     },
-    [isAdmin, loggedInEmail, matchId]
-  );
+    [isAdmin, loggedInEmail, matchId, Toast]
+  ); // Added Toast to dependency array
 
   // Function to save table data to Ranking collection
   const handleSaveToRanking = async () => {
