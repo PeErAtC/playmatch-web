@@ -52,8 +52,8 @@ const allMenuList = [
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
   },
   {
-    label: "PlaymentHistory",
-    path: "/PlaymentHistory",
+    label: "Payment",
+    path: "/PaymentHistory",
     icon: <CreditCard  size={20} strokeWidth={1.7} />,
   },
 ];
