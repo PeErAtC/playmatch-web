@@ -916,6 +916,26 @@ const Match = () => {
     });
   };
 
+  // NEW: Function to clear early exit selection and result
+  const handleClearEarlyExitSelection = () => {
+    setSelectedMemberForEarlyExit("");
+    setEarlyExitCalculationResult(null);
+    // Clear cost parameters
+    setBallPrice(0);
+    setCourtFee(0);
+    setCourtFeePerGame(0);
+    setFixedCourtFeePerPerson(0);
+    setOrganizeFee(0);
+    // Also clear from localStorage immediately
+    if (isBrowser) {
+        localStorage.removeItem("ballPrice");
+        localStorage.removeItem("courtFee");
+        localStorage.removeItem("courtFeePerGame");
+        localStorage.removeItem("fixedCourtFeePerPerson");
+        localStorage.removeItem("organizeFee");
+    }
+  };
+
   // Determine which court fee input is currently active/filled for display purposes
   const isCourtFeeActive = courtFee > 0;
   const isCourtFeePerGameActive = courtFeePerGame > 0;
@@ -952,7 +972,7 @@ const Match = () => {
   return (
     <div
       style={{
-        padding: "30px",
+        padding: "15px",
         backgroundColor: "#f7f7f7",
         minHeight: "100vh",
         fontFamily: "'Kanit', sans-serif",
@@ -1273,6 +1293,26 @@ const Match = () => {
                   disabled={!isOpen || !selectedMemberForEarlyExit} // Disable if group not open or no member selected
                 >
                   คำนวณยอด
+                </button>
+                {/* NEW: ปุ่มล้างตัวเลือกสำหรับ Early Exit */}
+                <button
+                  onClick={handleClearEarlyExitSelection}
+                  className="action-button"
+                  style={{
+                    backgroundColor: "#6c757d", // Gray color for clear button
+                    color: "white",
+                    padding: "8px 15px",
+                    borderRadius: "5px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "15px",
+                    // Disable if no member selected and no result to clear
+                    opacity: (!selectedMemberForEarlyExit && !earlyExitCalculationResult && ballPrice === 0 && courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0 && organizeFee === 0) ? 0.6 : 1,
+                    pointerEvents: (!selectedMemberForEarlyExit && !earlyExitCalculationResult && ballPrice === 0 && courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0 && organizeFee === 0) ? "none" : "auto",
+                  }}
+                  disabled={!selectedMemberForEarlyExit && !earlyExitCalculationResult && ballPrice === 0 && courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0 && organizeFee === 0} // Disable if no member selected and no result and all cost parameters are 0
+                >
+                  ล้างตัวเลือก
                 </button>
               </div>
             </div>
