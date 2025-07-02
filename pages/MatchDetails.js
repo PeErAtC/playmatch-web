@@ -55,6 +55,19 @@ const MatchDetails = () => {
   const [memberPaidStatus, setMemberPaidStatus] = useState({});
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
 
+  // Define a Toast mixin for subtle notifications
+  const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+      toast.addEventListener('mouseenter', Swal.stopTimer);
+      toast.addEventListener('mouseleave', Swal.resumeTimer);
+    }
+  });
+
   // Fetch loggedInEmail and Admin email on component mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -485,7 +498,7 @@ const MatchDetails = () => {
   // Handler for paid status change
   const handlePaidStatusChange = useCallback(
     async (memberName, isPaid) => {
-      // Removed: if (!isAdmin) return;
+      // Removed: if (!isAdmin) return; // This line was removed to allow all users to change status
 
       setMemberPaidStatus((prevStatus) => {
         const newStatus = { ...prevStatus, [memberName]: isPaid };
@@ -517,11 +530,11 @@ const MatchDetails = () => {
           [`paidStatus.${memberName}`]: isPaid,
           lastUpdatedPaidStatus: serverTimestamp(),
         });
-        Swal.fire(
-          "Status Saved",
-          `Payment status of ${memberName} updated!`,
-          "success"
-        );
+        // Changed Swal.fire to Toast.fire as requested
+        Toast.fire({
+          icon: 'success',
+          title: `สถานะการชำระของ ${memberName} อัปเดตแล้ว!`
+        });
       } catch (err) {
         console.error("Error updating paid status:", err);
         Swal.fire(
@@ -543,7 +556,7 @@ const MatchDetails = () => {
         });
       }
     },
-    [loggedInEmail, matchId] // Removed isAdmin from dependency array
+    [loggedInEmail, matchId, Toast] // Added Toast to dependency array
   );
 
   // Function to save table data to Ranking collection
@@ -1075,10 +1088,6 @@ const MatchDetails = () => {
                   border: "1px solid #ccc",
                   fontSize: "15px",
                   width: "120px",
-                  backgroundColor:
-                    isCourtFeeActive || isCourtFeePerGameActive
-                      ? "#e9e9e9"
-                      : "#fff",
                 }}
               />
             </div>
@@ -1360,7 +1369,7 @@ const MatchDetails = () => {
               >
                 Total (บาท)
               </th>
-              {/* Removed isAdmin condition here */}
+              {/* Removed isAdmin condition here to make it visible to everyone */}
                 <th
                   style={{
                     padding: "12px 10px",
@@ -1503,7 +1512,7 @@ const MatchDetails = () => {
                   >
                     {member.total}
                   </td>
-                  {/* Removed isAdmin condition here */}
+                  {/* Removed isAdmin condition here to make it editable by everyone */}
                     <td
                       style={{
                         padding: "10px",
