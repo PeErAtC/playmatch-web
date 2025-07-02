@@ -196,12 +196,12 @@ const Home = () => {
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [level, setLevel] = useState("");
-  const [lineId, setLineId] = useState("");
-  const [handed, setHanded] = useState("");
-  const [phone, setPhone] = useState("");
-  const [birthDate, setBirthDate] = useState(""); // Changed from birthYear to birthDate
-  const [experience, setExperience] = useState("");
-  const [status, setStatus] = useState("");
+  const [lineId, setLineId] = useState(""); // Optional
+  const [handed, setHanded] = useState("Right"); // Default to Right
+  const [phone, setPhone] = useState(""); // Optional
+  const [birthDate, setBirthDate] = useState(new Date().toISOString().split('T')[0]); // Default to current date
+  const [experience, setExperience] = useState(""); // Optional
+  const [status, setStatus] = useState("ไม่มา"); // Default to ไม่มา
   const [members, setMembers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -223,20 +223,19 @@ const Home = () => {
   // State for sorting
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
-  // Custom order for levels (from lowest to highest based on typical badminton ranking)
-  const levelOrder = useMemo(() => [
-    "C",
-    "P-",
-    "P",
-    "N-",
-    "N",
-    "S-",
-    "S",
-    "มือหน้าบ้าน",
-    "มือหน้าบ้าน1",
-    "มือหน้าบ้าน2",
-    "มือหน้าบ้าน3",
-  ], []);
+  // State for region selection
+  const [selectedRegion, setSelectedRegion] = useState('northeast'); // 'northeast' or 'central'
+
+  // Custom order for levels based on selected region
+  const levelOrder = useMemo(() => {
+    const northeastOrder = [
+      "มือหน้าบ้าน", "มือหน้าบ้าน1", "มือหน้าบ้าน2", "มือหน้าบ้าน3","BG", "S-", "S", "N-", "N", "P-", "P","C"
+    ];
+    const centralOrder = [
+      "Rookie", "BG-", "BG", "N-", "N", "S", "S+", "P-", "P", "P+", "C",
+    ];
+    return selectedRegion === 'northeast' ? northeastOrder : centralOrder;
+  }, [selectedRegion]);
 
 
   // Helper function to calculate age from birth date (YYYY-MM-DD format)
@@ -379,10 +378,11 @@ const Home = () => {
 
             const nameTrimmed = (member.name || "").toString().trim();
             const levelTrimmed = (member.level || "").toString().trim();
+            // Optional fields, use empty string if null
             const lineIdTrimmed = (member.lineId || "").toString().trim();
-            const handedTrimmed = (member.handed || "").toString().trim();
+            const handedTrimmed = (member.handed || "Right").toString().trim(); // Default to Right
             const phoneTrimmed = (member.phone || "").toString().trim();
-            let birthDateValue = null;
+            let birthDateValue = new Date().toISOString().split('T')[0]; // Default to current date if not provided in Excel
 
             // Handle birthDate from Excel
             if (member.birthDate) {
@@ -401,7 +401,7 @@ const Home = () => {
             const experienceTrimmed = (member.experience || "")
               .toString()
               .trim();
-            const statusTrimmed = (member.status || "").toString().trim();
+            const statusTrimmed = (member.status || "ไม่มา").toString().trim(); // Default to ไม่มา
 
             const newUser = {
               name: nameTrimmed,
@@ -418,12 +418,7 @@ const Home = () => {
             let rowErrors = [];
             if (!newUser.name) rowErrors.push("ชื่อ");
             if (!newUser.level) rowErrors.push("ระดับ");
-            if (!newUser.lineId) rowErrors.push("Line ID");
-            if (!newUser.handed) rowErrors.push("ถนัด");
-            if (!newUser.phone) rowErrors.push("เบอร์โทร");
-            if (!newUser.birthDate) rowErrors.push("วันเดือนปีเกิด"); // Validate birthDate
-            if (!newUser.experience) rowErrors.push("ประสบการณ์");
-            if (!newUser.status) rowErrors.push("สถานะ");
+            // Removed validation for optional fields: lineId, handed, phone, birthDate, experience, status
 
             if (rowErrors.length > 0) {
               validationErrors.push(
@@ -642,15 +637,14 @@ useEffect(() => {
     fetchUserData(); // Fetch username and userId on first component load
 }, []);
 
-// Call fetchMembers when currentUserId, sortConfig, or search changes
+// Call fetchMembers when currentUserId, sortConfig, search, or selectedRegion changes
 useEffect(() => {
     if (currentUserId) {
-        // When currentUserId, sortConfig, or search changes, reset pagination and fetch first page
-        setCurrentPage(1); // Always go to page 1 for new sort/search
+        // When currentUserId, sortConfig, search, or selectedRegion changes, reset pagination and fetch first page
+        setCurrentPage(1); // Always go to page 1 for new sort/search/region
         fetchMembers('current', null);
     }
-}, [currentUserId, fetchMembers, sortConfig, search]);
-
+}, [currentUserId, fetchMembers, sortConfig, search, selectedRegion]); // Add selectedRegion here
 
   const handleSelectUser = (user) => {
     if (selectedUser && selectedUser.memberId === user.memberId) {
@@ -661,12 +655,12 @@ useEffect(() => {
       setSelectedUser(user);
       setName(user.name);
       setLevel(user.level);
-      setLineId(user.lineId);
-      setHanded(user.handed);
-      setPhone(user.phone);
-      setBirthDate(user.birthDate || ""); // Set birthDate from user
-      setExperience(user.experience);
-      setStatus(user.status);
+      setLineId(user.lineId || ""); // Ensure lineId is string for optional field
+      setHanded(user.handed || "Right"); // Default to Right if null/undefined
+      setPhone(user.phone || ""); // Ensure phone is string for optional field
+      setBirthDate(user.birthDate || new Date().toISOString().split('T')[0]); // Default to current date if null
+      setExperience(user.experience || ""); // Ensure experience is string for optional field
+      setStatus(user.status || "ไม่มา"); // Default to ไม่มา if null/undefined
       setIsEditing(true);
       setIsFormExpanded(true); // Expand form when selecting a user
     }
@@ -675,21 +669,16 @@ useEffect(() => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Only 'name' and 'level' are required now
     if (
       !name ||
-      !level ||
-      !lineId ||
-      !handed ||
-      !phone ||
-      !birthDate || // Validate birthDate
-      !experience ||
-      !status
+      !level
     ) {
-      Swal.fire("กรุณากรอกข้อมูลให้ครบทุกช่อง", "", "warning");
+      Swal.fire("กรุณากรอกข้อมูล 'ชื่อ' และ 'ระดับ' ให้ครบถ้วน", "", "warning");
       return;
     }
 
-    // Validate birthDate format (YYYY-MM-DD)
+    // Validate birthDate format (YYYY-MM-DD) only if a value exists (it will always exist now due to default)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(birthDate)) {
       Swal.fire(
@@ -712,12 +701,12 @@ useEffect(() => {
     const newUser = {
       name,
       level,
-      lineId,
-      handed,
-      phone,
-      birthDate, 
-      experience,
-      status,
+      lineId: lineId || "", // Save as empty string if not provided
+      handed: handed || "Right", // Save with default if user clears it somehow
+      phone: phone || "", // Save as empty string if not provided
+      birthDate: birthDate || new Date().toISOString().split('T')[0], // Use default if for some reason it's cleared
+      experience: experience || "", // Save as empty string if not provided
+      status: status || "ไม่มา", // Use default if user clears it somehow
       createBy: loggedInUsername,
     };
 
@@ -860,10 +849,10 @@ useEffect(() => {
     setName("");
     setLevel("");
     setLineId("");
-    setHanded("");
+    setHanded("Right"); // Set default
     setPhone("");
-    setBirthDate(""); // Clear birthDate
-    setStatus("ไม่มา"); // Default status for new members
+    setBirthDate(new Date().toISOString().split('T')[0]); // Set default
+    setStatus("ไม่มา"); // Set default
     setExperience("");
     setSelectedUser(null);
     setIsEditing(false);
@@ -967,10 +956,13 @@ useEffect(() => {
               isFormExpanded ? "expanded" : "collapsed"
             }`}
           >
+            {/* Note for required fields */}
+            <p className="form-required-note">ช่องที่มีเครื่องหมาย <span className="required-asterisk">*</span> จำเป็นต้องกรอก</p>
+
             <form onSubmit={handleSubmit} className="form-box" noValidate>
               <div className="form-grid-container">
                 <div>
-                  <label className="form-label">ชื่อ</label>
+                  <label className="form-label">ชื่อ<span className="required-asterisk">*</span></label>
                   <input
                     className="modern-input"
                     type="text"
@@ -1002,7 +994,6 @@ useEffect(() => {
                 </div>
                 <div>
                   <label className="form-label">วันเดือนปีเกิด</label>{" "}
-                  {/* Change Label */}
                   <input
                     className="modern-input"
                     type="date" // Use type="date"
@@ -1011,7 +1002,7 @@ useEffect(() => {
                   />
                 </div>
                 <div>
-                  <label className="form-label">ระดับ</label>
+                  <label className="form-label">ระดับ<span className="required-asterisk">*</span></label>
                   <select
                     className="modern-input"
                     value={level}
@@ -1048,7 +1039,7 @@ useEffect(() => {
                     value={handed}
                     onChange={(e) => setHanded(e.target.value)}
                   >
-                    <option value="">ถนัดมือ</option>
+                    {/* Default value is "Right" now */}
                     <option value="Right">ขวา</option>
                     <option value="Left">ซ้าย</option>
                   </select>
@@ -1060,7 +1051,7 @@ useEffect(() => {
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
                   >
-                    <option value="">โปรดเลือกสถานะ</option>
+                    {/* Default value is "ไม่มา" now */}
                     <option value="มา">มา</option>
                     <option value="ไม่มา">ไม่มา</option>
                   </select>
@@ -1090,6 +1081,19 @@ useEffect(() => {
 
         <hr className="divider-line" />
 
+        {/* Region Selection */}
+        <div className="region-selection-container">
+          <label className="form-label">ลำดับระดับมือ:</label>
+          <select
+            className="modern-input"
+            value={selectedRegion}
+            onChange={(e) => setSelectedRegion(e.target.value)}
+          >
+            <option value="northeast">ภาคอีสาน</option>
+            <option value="central">ภาคกลาง</option>
+          </select>
+        </div>
+        
         <div className="search-box">
           <input
             type="text"
@@ -1362,6 +1366,21 @@ useEffect(() => {
           padding-bottom: 0;
         }
 
+        /* Note for required fields */
+        .form-required-note {
+          font-size: 12px;
+          color: #666;
+          margin-bottom: 15px;
+          text-align: left;
+        }
+
+        .required-asterisk {
+          color: red;
+          margin-left: 5px;
+          font-weight: bold;
+        }
+
+
         /* Original Form Styles (from image_f08aa0.png) */
         .form-label {
           font-size: 12px; /* Adjusted font size */
@@ -1443,6 +1462,21 @@ useEffect(() => {
         .divider-line {
           margin: 20px 0;
           border-top: 1px solid var(--border-color, #aebdc9); /* Use theme variable */
+        }
+
+        /* Region Selection Container */
+        .region-selection-container {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .region-selection-container .form-label {
+            margin-bottom: 0; /* Override default label margin */
+            flex-shrink: 0; /* Prevent label from shrinking */
+        }
+        .region-selection-container .modern-input {
+            max-width: 200px; /* Limit width of the select box */
         }
 
         /* Search box style */
