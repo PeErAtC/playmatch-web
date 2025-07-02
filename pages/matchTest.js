@@ -557,7 +557,10 @@ const Match = () => {
   // โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
   const handleStartGroup = async () => { // Made async
     if (!topic) {
-      Swal.fire("กรุณาระบุหัวเรื่อง", "", "warning");
+      Swal.fire({
+        title: "กรุณาระบุหัวเรื่อง",
+        text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History",
+        icon:"warning"});
       return;
     }
     // Set localStorage items first, including clearing matches
