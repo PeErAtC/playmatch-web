@@ -1059,20 +1059,20 @@ const Match = () => {
         >
           <h3
             style={{
-              fontSize: "18px", // Slightly larger font for main heading
+              fontSize: "15px", // Slightly larger font for main heading
               margin: 0, // Remove default margin
-              color: "#333",
+              color: "#222",
             }}
           >
             ตั้งค่าค่าใช้จ่าย (จะบันทึกอัตโนมัติ)
           </h3>
           <span
             style={{
-              fontSize: "28px", // Larger plus sign
+              fontSize: "20px", // Larger plus sign
               fontWeight: "bold",
               transition: "transform 0.3s ease",
               transform: isCostSettingsOpen ? "rotate(45deg)" : "rotate(0deg)",
-              color: "#555",
+              color: "#222",
             }}
           >
             +
