@@ -550,7 +550,7 @@ const Home = () => {
         } else { // 'current' or initial load, or when sort/search changes
             q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection), limit(membersPerPage));
         }
-        
+
         const documentSnapshots = await getDocs(q);
         let fetchedMembers = documentSnapshots.docs.map(doc => ({
             id: doc.id,
@@ -561,7 +561,7 @@ const Home = () => {
         if (direction === 'prev') {
             fetchedMembers = fetchedMembers.reverse();
         }
-        
+
         // Client-side sorting for 'level' and 'birthDate' if they are the primary sort key
         // This is necessary because Firestore cannot directly sort by custom string order (e.g., C, P-, P)
         // or calculated values like age. We fetch the paginated batch and then sort it in memory.
@@ -727,7 +727,7 @@ useEffect(() => {
         // Use Firestore's auto-generated ID for new documents
         const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
         const memberId = newMemberRef.id;
-        
+
         await setDoc(newMemberRef, {
           ...newUser,
           memberId, // Store the auto-generated ID
@@ -792,7 +792,18 @@ useEffect(() => {
         `users/${currentUserId}/Members/${user.memberId}`
       );
       await updateDoc(memberRef, { status: newStatus });
-      fetchMembers('current', firstVisible); // Re-fetch current page to update status
+
+      // อัปเดต State 'members' โดยตรงเพื่อสะท้อนการเปลี่ยนแปลงสถานะ
+      setMembers(prevMembers =>
+        prevMembers.map(member =>
+          member.memberId === user.memberId
+            ? { ...member, status: newStatus } // อัปเดตสถานะของสมาชิกคนนี้
+            : member // สมาชิกคนอื่นยังคงเดิม
+        )
+      );
+
+      // ไม่จำเป็นต้องเรียก fetchMembers อีกครั้ง
+      // เพราะเราได้อัปเดตข้อมูลใน UI โดยตรงแล้ว
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาดในการอัปเดตสถานะ", error.message, "error");
     }
@@ -1093,7 +1104,7 @@ useEffect(() => {
             <option value="central">ภาคกลาง</option>
           </select>
         </div>
-        
+
         <div className="search-box">
           <input
             type="text"
