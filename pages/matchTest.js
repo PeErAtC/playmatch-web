@@ -151,6 +151,8 @@ const Match = () => {
 
   // ดึงสมาชิกที่สถานะเป็น "มา" และจัดเรียงตามระดับฝีมือ
   // This function is now standalone and can be called with a flag
+  // ส่วนที่ 1: ฟังก์ชัน fetchMembers
+// โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
   const fetchMembers = async (isNewSessionStart = false) => {
     try {
       if (!loggedInEmail) return;
@@ -175,8 +177,8 @@ const Match = () => {
             level: data.level,
             score: data.score || 0,
             wins: data.wins || 0,
-            gamesPlayed: 0, // Initialize gamesPlayed for current session
-            ballsUsed: 0,   // Initialize ballsUsed for current session
+            gamesPlayed: 0, // Initialize gamesPlayed for current session (จะถูก recalculate ด้านล่างหากไม่ใช่ new session)
+            ballsUsed: 0,   // Initialize ballsUsed for current session (จะถูก recalculate ด้านล่างหากไม่ใช่ new session)
             totalGamesPlayed: data.totalGamesPlayed || 0, // Load cumulative games from Firebase
             totalBallsUsed: data.totalBallsUsed || 0,     // Load cumulative balls from Firebase
           });
@@ -192,7 +194,6 @@ const Match = () => {
       // AND a session is currently marked as open in localStorage.
       if (!isNewSessionStart && isBrowser && localStorage.getItem("isOpen") === "true") {
         const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
-        // console.log("fetchMembers restoring from localStorage.matches:", savedMatches); // For debugging
         const tempGamesPlayed = {};
         const tempBallsUsed = {};
         savedMatches.forEach((match) => {
@@ -518,11 +519,13 @@ const Match = () => {
         value={mem.name}
         style={{ color: LEVEL_COLORS[mem.level] || "black" }}
       >
-        {mem.name} ({mem.level}) (เกม: {mem.gamesPlayed + mem.totalGamesPlayed}) (ลูก:{" "}
-        { (mem.ballsUsed || 0) + (mem.totalBallsUsed || 0)}) {/* Display combined games played and balls used */}
+        {mem.name} ({mem.level}) (เกม: {mem.gamesPlayed}) (ลูก:{" "}
+        { (mem.ballsUsed || 0)})
       </option>
     ));
 
+  // ส่วนที่ 2: ฟังก์ชัน handleStartGroup
+  // โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
   const handleStartGroup = async () => { // Made async
     if (!topic) {
       Swal.fire("กรุณาระบุหัวเรื่อง", "", "warning");
@@ -531,7 +534,7 @@ const Match = () => {
     // Set localStorage items first, including clearing matches
     if (isBrowser) {
       localStorage.setItem("isOpen", "true");
-      localStorage.setItem("matches", JSON.stringify([])); // Explicitly clear matches in localStorage
+      localStorage.setItem("matches", JSON.stringify([])); // Explicitly clear matches in localStorage <<< สำคัญมากสำหรับรีเซ็ต!
       localStorage.setItem("activityTime", "0");
       localStorage.removeItem("sessionMembers");
       localStorage.setItem("topic", topic); // Ensure topic is saved here
@@ -547,7 +550,7 @@ const Match = () => {
 
     // Then, fetch members. This *will* set `members` state, ensuring session games/balls are 0.
     // Await it to ensure state is set before the function completes.
-    await fetchMembers(true);
+    await fetchMembers(true); // <<< ถูกต้อง: เรียก fetchMembers พร้อม `true` เพื่อระบุว่าเป็นการเริ่มเซสชันใหม่
   };
 
   const handleEndGroup = async () => {
@@ -1175,22 +1178,23 @@ const Match = () => {
               </h4>
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 <select
-                  value={selectedMemberForEarlyExit}
-                  onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "5px",
-                    border: "1px solid #ccc",
-                    fontSize: "15px",
-                    flexGrow: 1,
-                    maxWidth: "200px",
-                  }}
-                  disabled={!isOpen || members.length === 0} // Only enable if group is open and members exist
+                  className="form-select custom-select"
+                  value={selectedMemberForEarlyExit} // Changed from selectedMemberIds[teamIndex][playerIndex]
+                  onChange={(e) =>
+                    setSelectedMemberForEarlyExit(e.target.value) // Changed from handleMemberSelect
+                  }
+                  // disabled={isGroupActive} // บรรทัดนี้อาจจะมีหรือไม่มีก็ได้ ขึ้นอยู่กับ logic ของคุณ
                 >
                   <option value="">เลือกสมาชิก</option>
-                  {members.map((member) => (
-                    <option key={member.memberId} value={member.name}>
-                      {member.name}
+                  {members.map((mem) => (
+                    <option key={mem.memberId} value={mem.name}> {/* Changed value to mem.name, assuming selectedMemberForEarlyExit stores the name */}
+                      {mem.name}{" "}
+                      {/* แก้ไขเฉพาะบรรทัด span นี้ */}
+                      {selectedMemberForEarlyExit === mem.name && ( // Corrected condition
+                        <span className="text-muted">
+                          (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed}) {/* <<< แก้ไข: แสดงค่า gamesPlayed และ ballsUsed ปัจจุบันในเซสชัน */}
+                        </span>
+                      )}
                     </option>
                   ))}
                 </select>
