@@ -176,7 +176,7 @@ const PaymentHistory = () => {
 
   // Helper function for the expanded details style
   const getExpandedDetailsStyle = (isExpanded) => ({
-    maxHeight: isExpanded ? '500px' : '0', // Adjust 500px as needed, ensure it's larger than max content height
+    maxHeight: isExpanded ? '9999px' : '0', // Adjusted to a much larger value
     opacity: isExpanded ? '1' : '0',
     overflow: 'hidden',
     transition: 'max-height 0.5s ease-in-out, opacity 0.4s ease-in-out', // Smooth transition
@@ -250,12 +250,12 @@ const PaymentHistory = () => {
             disabled={currentPage === 1 || loading}
             style={{
               backgroundColor: "#f8f9fa", /* Lighter background */
-              color: "#495057",       /* Darker text color */
+              color: "#495057",        /* Darker text color */
               padding: "6px 12px",    /* Smaller padding */
               borderRadius: "5px",
               border: "1px solid #ced4da", /* Added border */
               cursor: "pointer",
-              fontSize: "13px",       /* Smaller font size */
+              fontSize: "13px",        /* Smaller font size */
               opacity: currentPage === 1 || loading ? 0.7 : 1,
               transition: "background-color 0.2s, border-color 0.2s", // Smooth transition for hover
             }}
@@ -270,12 +270,12 @@ const PaymentHistory = () => {
             disabled={!hasMore || loading}
             style={{
               backgroundColor: "#f8f9fa", /* Lighter background */
-              color: "#495057",       /* Darker text color */
+              color: "#495057",        /* Darker text color */
               padding: "6px 12px",    /* Smaller padding */
               borderRadius: "5px",
               border: "1px solid #ced4da", /* Added border */
               cursor: "pointer",
-              fontSize: "13px",       /* Smaller font size */
+              fontSize: "13px",        /* Smaller font size */
               opacity: !hasMore || loading ? 0.7 : 1,
               transition: "background-color 0.2s, border-color 0.2s", // Smooth transition for hover
             }}
@@ -405,7 +405,7 @@ const PaymentHistory = () => {
                         style={{
                           padding: "10px",
                           borderRight: "1px solid #eee",
-                          textAlign: "center", 
+                          textAlign: "center",  
                           fontSize: "12px",
                         }}
                       >
