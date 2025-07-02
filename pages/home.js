@@ -1033,7 +1033,6 @@ useEffect(() => {
                     onChange={(e) => setExperience(e.target.value)}
                   >
                     <option value="">ประสบการณ์</option>
-                    <option value="ไม่ระบุ">ไม่ระบุ</option>
                     <option value="น้อยกว่า 1 ปี">น้อยกว่า 1 ปี</option>
                     {[...Array(10)].map((_, i) => (
                       <option key={i + 1} value={`${i + 1} ปี`}>
