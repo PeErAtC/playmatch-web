@@ -14,16 +14,16 @@ import {
 
 // รายการสนาม
 const courts = [
-  "สนาม 1",
-  "สนาม 2",
-  "สนาม 3",
-  "สนาม 4",
-  "สนาม 5",
-  "สนาม 6",
-  "สนาม 7",
-  "สนาม 8",
-  "สนาม 9",
-  "สนาม 10",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
 ];
 
 const RESULT_OPTIONS = [
@@ -47,10 +47,16 @@ const LEVEL_COLORS = {
   P: "#6a3d9a", // Darker Green
   "N-": "#1f78b4", // Lighter Green (distinct from P)
   N: "#1f78b4", // Darker Purple
+  "BG": "#1f78b4",
+  "BG-": "#1f78b4",
+  "Rookie": "#1f78b4",
 
   // Warmer tones (higher levels)
   "S-": "#f44336", // Orange-Yellow
   S: "#f44336", // Darker Orange
+  "S+": "#f44336",
+  "P+": "#6a3d9a",
+
   มือหน้าบ้าน: "#33a02c", // Darker Red
   มือหน้าบ้าน1: "#33a02c", // Lighter Red (distinct from มือหน้าบ้าน)
   มือหน้าบ้าน2: "#33a02c", // Lavender (distinct, but still warm-ish)
@@ -58,23 +64,38 @@ const LEVEL_COLORS = {
 };
 
 // Define the order of levels EXACTLY as provided by the user (from high to low, or specific display order)
-const LEVEL_ORDER = [
-  "C",
-  "P",
-  "P-",
-  "N",
-  "N-",
-  "S",
-  "S-",
+const LEVEL_ORDER_NORTHEAST = [
   "มือหน้าบ้าน",
   "มือหน้าบ้าน1",
   "มือหน้าบ้าน2",
-  "มือหน้าบ้าน3", // assuming these are the lowest based on provided order
+  "มือหน้าบ้าน3",
+  "BG",
+  "S-",
+  "S",
+  "N-",
+  "N",
+  "P-",
+  "P",
+  "C",
+];
+
+const LEVEL_ORDER_CENTRAL = [
+  "Rookie",
+  "BG-",
+  "BG",
+  "N-",
+  "N",
+  "S",
+  "S+",
+  "P-",
+  "P",
+  "P+",
+  "C",
 ];
 
 // Helper function to get the index of a level in the defined order
-const getLevelOrderIndex = (level) => {
-  const index = LEVEL_ORDER.indexOf(level);
+const getLevelOrderIndex = (level, currentLevelOrder) => {
+  const index = currentLevelOrder.indexOf(level);
   return index === -1 ? Infinity : index; // Unknown levels go to the end
 };
 
@@ -113,6 +134,8 @@ const Match = () => {
   const [balls] = useState(
     Array.from({ length: 10 }, (_, i) => (i + 1).toString())
   );
+  // NEW: State for match count
+  const [matchCount, setMatchCount] = useState(0);
 
   // NEW: States for cost parameters
   const isBrowser = typeof window !== "undefined"; //
@@ -143,6 +166,15 @@ const Match = () => {
   // NEW: State for cost settings collapse
   const [isCostSettingsOpen, setIsCostSettingsOpen] = useState(false);
   const contentRef = useRef(null); // Ref for the collapsible content
+
+  // NEW: State for regional level order
+  const [selectedRegion, setSelectedRegion] = useState(() =>
+    isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน"
+  );
+
+  const currentLevelOrder =
+    selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
+
 
   // ดึงข้อมูลอีเมลผู้ใช้
   useEffect(() => {
@@ -185,9 +217,9 @@ const Match = () => {
         }
       });
 
-      // Sort members by LEVEL_ORDER
+      // Sort members by currentLevelOrder
       memberList.sort((a, b) => {
-        return getLevelOrderIndex(a.level) - getLevelOrderIndex(b.level);
+        return getLevelOrderIndex(a.level, currentLevelOrder) - getLevelOrderIndex(b.level, currentLevelOrder);
       });
 
       // NEW LOGIC: Only restore session-specific games/balls if it's NOT a new session start
@@ -225,7 +257,7 @@ const Match = () => {
   // Initial fetch of members when component mounts or loggedInEmail changes
   useEffect(() => {
     fetchMembers(false); // Not a new session start on initial load
-  }, [loggedInEmail, isBrowser]); // isBrowser is still a dependency because it affects localStorage access
+  }, [loggedInEmail, isBrowser, selectedRegion]); // selectedRegion added as dependency
 
   // NEW: Save cost parameters to localStorage
   useEffect(() => {
@@ -252,7 +284,14 @@ const Match = () => {
     if (isBrowser) {
       localStorage.setItem("topic", topic);
     }
-  }, [topic, isBrowser]); //
+  }, [topic, isBrowser]);
+
+  // Save selected region to localStorage
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("selectedRegion", selectedRegion);
+    }
+  }, [selectedRegion, isBrowser]);
 
   const resetSession = () => {
     setMatches([]);
@@ -260,6 +299,7 @@ const Match = () => {
     setIsOpen(false);
     setCurrentPage(1);
     clearInterval(timerRef.current);
+    setMatchCount(0); // Reset match count
     // Reset gamesPlayed and ballsUsed for current session only in state
     setMembers((prevMembers) =>
       prevMembers.map((member) => ({ ...member, gamesPlayed: 0, ballsUsed: 0 }))
@@ -287,6 +327,7 @@ const Match = () => {
     setIsOpen(savedIsOpen);
     setMatches(savedMatches);
     setActivityTime(savedActivityTime);
+    setMatchCount(savedMatches.length); // Initialize match count from saved matches
 
   }, [isBrowser]);
 
@@ -330,6 +371,7 @@ const Match = () => {
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(newMatches));
       }
+      setMatchCount(newMatches.length); // Update match count
       return newMatches;
     });
     setShowMenuId(null);
@@ -534,6 +576,7 @@ const Match = () => {
     setCurrentPage(1);
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
+    setMatchCount(0); // Reset match count when starting new session
 
     // Then, fetch members. This *will* set `members` state, ensuring session games/balls are 0.
     // Await it to ensure state is set before the function completes.
@@ -541,6 +584,16 @@ const Match = () => {
   };
 
   const handleEndGroup = async () => {
+    if (matches.length === 0) {
+        Swal.fire(
+            "ไม่มี Match ให้บันทึก",
+            "กรุณาเพิ่ม Match ก่อนปิดก๊วน หรือกด 'ยกเลิก' เพื่อกลับไปจัดการ Match",
+            "info"
+        );
+        resetSession(); // Still reset the session state even if no matches to save
+        return;
+    }
+
     const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire(
@@ -587,8 +640,7 @@ const Match = () => {
                 match.A1,
                 match.A2,
                 match.B1,
-                match.B1,
-                match.B2,
+                match.B2, // Corrected: removed duplicate B1
               ].filter(Boolean);
               const ballsInGame = parseInt(match.balls) || 0; // Get balls for this specific match
 
@@ -743,6 +795,7 @@ const Match = () => {
           if (isBrowser) {
             localStorage.setItem("matches", JSON.stringify(reIndexedMatches));
           }
+          setMatchCount(reIndexedMatches.length); // Update match count after deletion
           Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
           return reIndexedMatches;
         });
@@ -1197,12 +1250,7 @@ const Match = () => {
                     <option key={mem.memberId} value={mem.name}>
                       {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
                     </option>
-                    ))}
-{members.map((mem) => (
-  <option key={mem.memberId} value={mem.name}>
-    {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
-  </option>
-))}
+                  ))}
                 </select>
                 <button
                   onClick={calculatePlayerSummary}
@@ -1230,6 +1278,44 @@ const Match = () => {
       </div>
       {/* Existing Match Table and other JSX below */}
       <div className="match-table-container">
+        {/* NEW: Display Match Count - Moved here */}
+        <div style={{
+            textAlign: "left",
+            marginBottom: "15px",
+            fontSize: "12px",
+            fontWeight: "600",
+            color: "#333",
+            padding: "10px 0",
+            display: "flex", /* Use flexbox for alignment */
+            justifyContent: "space-between", /* Space out content */
+            alignItems: "center" /* Vertically align items */
+        }}>
+            จำนวนทั้งหมด : {matchCount}
+            {/* NEW: Region Selector - Moved here into match-table-container */}
+            <div className="region-selector-inline">
+              <label htmlFor="region-select" style={{ margin: 0, fontSize: "14px", color: "#555" }}>
+                เลือกภาค:
+              </label>
+              <select
+                id="region-select"
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
+                style={{
+                  minWidth: "100px",
+                  padding: "6px 8px",
+                  border: "1px solid #ccc",
+                  borderRadius: "5px",
+                  fontSize: "13px",
+                  width: "auto",
+                  marginLeft: "8px"
+                }}
+                disabled={isOpen} // Disable if group is open
+              >
+                <option value="ภาคอีสาน">ภาคอีสาน</option>
+                <option value="ภาคกลาง">ภาคกลาง</option>
+              </select>
+            </div>
+        </div>
         {matches.length === 0 && isOpen && (
           <div
             style={{
@@ -1553,7 +1639,8 @@ const Match = () => {
           background-color: #d32f2f;
         }
 
-        .activity-time-display {
+        .activity-time-display,
+        .match-count-display { /* Added match-count-display */
           background-color: #e3f2fd; /* Light blue background */
           padding: 10px 15px;
           border-radius: 8px;
@@ -1828,6 +1915,11 @@ const Match = () => {
             left: 50%; /* Center dropdown horizontally */
             transform: translateX(-50%);
             min-width: 150px;
+          }
+
+          .region-selector-inline { /* Adjust for inline display on small screens */
+            width: 100%;
+            justify-content: flex-start;
           }
         }
         @media (max-width: 480px) {
