@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   Lock, // Import the Lock icon
+  CreditCard
 } from "lucide-react";
 import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
@@ -49,6 +50,11 @@ const allMenuList = [
     label: "Dashboard",
     path: "/Dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
+  },
+  {
+    label: "PlaymentHistory",
+    path: "/PlaymentHistory",
+    icon: <CreditCard  size={20} strokeWidth={1.7} />,
   },
 ];
 
