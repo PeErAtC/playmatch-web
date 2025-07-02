@@ -35,8 +35,8 @@ const RESULT_OPTIONS = [
 
 const STATUS_COLORS = {
   เตรียมพร้อม: "#fff8d8", // Light yellow for "เตรียมพร้อม"
-  playing: "#57e497", // Light green for "Playing"
-  finished: "#f44336", // Red for "Finished"
+  กำลังแข่งขัน: "#57e497", // Light green for "Playing"
+  จบการแข่งขัน: "#f44336", // Red for "Finished"
 };
 
 // Colors for member levels - UPDATED WITH ALL YOUR LEVELS (Darker and cool to warm)
@@ -878,7 +878,6 @@ const Match = () => {
         <div className="date-topic-group">
           <div className="input-group">
             <label htmlFor="matchDate" className="control-label">
-              วันที่:
             </label>
             <input
               type="date"
@@ -892,7 +891,6 @@ const Match = () => {
           </div>
           <div className="input-group">
             <label htmlFor="topic" className="control-label">
-              หัวเรื่อง:
             </label>
             <input
               type="text"
@@ -950,7 +948,7 @@ const Match = () => {
         >
           <h3
             style={{
-              fontSize: "18px",
+              fontSize: "15px",
               margin: 0, // Remove default margin
             }}
           >
@@ -1364,7 +1362,6 @@ const Match = () => {
                         color: match.status === "finished" ? "#fff" : "#333",
                       }}
                     >
-                      <option value="">เลือกสถานะ</option>
                       {Object.keys(STATUS_COLORS).map((status) => (
                         <option key={status} value={status}>
                           {status}
@@ -1463,30 +1460,30 @@ const Match = () => {
           padding: 10px 15px;
           border: 1px solid #ccc;
           border-radius: 6px;
-          font-size: 15px;
-          width: 220px;
+          font-size: 14px;
+          width: 200px;
           max-width: 100%;
           box-sizing: border-box;
         }
 
         .action-button {
-          padding: 12px 25px;
+          padding: 10px 25px;
           border: none;
           border-radius: 8px;
           color: white;
           font-weight: 600;
           cursor: pointer;
-          font-size: 16px;
+          font-size: 14px;
           transition: background-color 0.3s ease;
           min-width: 120px;
         }
 
         .action-button.start-group {
-          background-color: #4caf50; /* Green */
+          background-color: #4bf196; /* Green */
         }
 
         .action-button.start-group:hover {
-          background-color: #43a047;
+          background-color: #3fc57b;
         }
 
         .action-button.end-group {
@@ -1521,14 +1518,14 @@ const Match = () => {
           border: 1px solid #eee;
           padding: 12px 10px;
           text-align: center;
-          font-size: 14px;
+          font-size: 12px;
           white-space: nowrap; /* Prevent text wrapping in cells */
         }
 
         .match-table th {
-          background-color: #f2f2f2;
+          background-color: #323943;
           font-weight: 600;
-          color: #333;
+          color: #fff;
         }
 
         .match-table td select,
@@ -1537,7 +1534,7 @@ const Match = () => {
           padding: 8px 5px;
           border: 1px solid #ddd;
           border-radius: 4px;
-          font-size: 14px;
+          font-size: 12px;
           box-sizing: border-box;
         }
 
@@ -1623,7 +1620,7 @@ const Match = () => {
           padding: 8px 15px;
           border-radius: 5px;
           cursor: pointer;
-          font-size: 14px;
+          font-size: 12px;
           transition: background-color 0.3s ease;
         }
 
@@ -1653,7 +1650,7 @@ const Match = () => {
           border: none;
           border-radius: 8px;
           font-weight: 600;
-          font-size: 16px;
+          font-size: 13px;
           cursor: pointer;
           transition: background-color 0.3s ease;
         }
