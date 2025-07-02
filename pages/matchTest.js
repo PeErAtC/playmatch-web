@@ -1162,7 +1162,7 @@ const Match = () => {
             </div>
 
             {/* NEW: Early Exit Calculation Section */}
-            <div
+             <div
               style={{
                 marginTop: "20px",
                 padding: "15px",
@@ -1186,17 +1186,11 @@ const Match = () => {
                   // disabled={isGroupActive} // บรรทัดนี้อาจจะมีหรือไม่มีก็ได้ ขึ้นอยู่กับ logic ของคุณ
                 >
                   <option value="">เลือกสมาชิก</option>
-                  {members.map((mem) => (
-                    <option key={mem.memberId} value={mem.name}> {/* Changed value to mem.name, assuming selectedMemberForEarlyExit stores the name */}
-                      {mem.name}{" "}
-                      {/* แก้ไขเฉพาะบรรทัด span นี้ */}
-                      {selectedMemberForEarlyExit === mem.name && ( // Corrected condition
-                        <span className="text-muted">
-                          (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed}) {/* <<< แก้ไข: แสดงค่า gamesPlayed และ ballsUsed ปัจจุบันในเซสชัน */}
-                        </span>
-                      )}
-                    </option>
-                  ))}
+{members.map((mem) => (
+  <option key={mem.memberId} value={mem.name}>
+    {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
+  </option>
+))}
                 </select>
                 <button
                   onClick={calculatePlayerSummary}
