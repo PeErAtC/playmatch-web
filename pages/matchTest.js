@@ -276,50 +276,37 @@ const Match = () => {
     }
   };
 
-  // This useEffect primarily handles the timer and loading of general session state (isOpen, matches, activityTime)
+  // 1. useEffect for initial loading of state from localStorage (runs once on mount)
   useEffect(() => {
     if (!isBrowser) return;
 
-    const savedIsOpen = localStorage.getItem("isOpen");
+    const savedIsOpen = localStorage.getItem("isOpen") === "true";
     const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
-    const savedActivityTime =
-      parseInt(localStorage.getItem("activityTime")) || 0;
+    const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
 
-    // Load session if it was previously open and had matches (indicating a continuation after refresh)
-    if (savedIsOpen === "true" && savedMatches.length > 0) {
-      setIsOpen(true);
-      setMatches(savedMatches);
-      setActivityTime(savedActivityTime);
-    } else if (savedIsOpen === "true" && savedMatches.length === 0) {
-      // If isOpen is true but matches are empty, it means a session was just started
-      // and no matches are recorded yet (or it's a fresh start).
-      // Ensure the state reflects this.
-      setIsOpen(true);
-      setMatches([]);
-      setActivityTime(0);
-    }
-    else { // savedIsOpen is null or "false"
-      setIsOpen(false);
-      setMatches([]);
-      setActivityTime(0);
-    }
+    setIsOpen(savedIsOpen);
+    setMatches(savedMatches);
+    setActivityTime(savedActivityTime);
 
+  }, [isBrowser]);
 
-    if (isOpen) {
+  // 2. useEffect for managing the timer (runs when `isOpen` changes)
+  useEffect(() => {
+    if (!isBrowser) return;
+
+    clearInterval(timerRef.current); // Clear any previous timer
+
+    if (isOpen) { // This `isOpen` is the current, up-to-date state
       timerRef.current = setInterval(() => {
         setActivityTime((prev) => {
           const newTime = prev + 1;
-          if (isBrowser) {
-            localStorage.setItem("activityTime", newTime.toString());
-          }
+          localStorage.setItem("activityTime", newTime.toString());
           return newTime;
         });
       }, 1000);
-    } else {
-      clearInterval(timerRef.current);
     }
 
-    return () => clearInterval(timerRef.current);
+    return () => clearInterval(timerRef.current); // Cleanup function
   }, [isOpen, isBrowser]);
 
 
@@ -795,13 +782,13 @@ const Match = () => {
     }
 
     if (
-        (courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0) ||
-        ballPrice === 0 ||
+        (courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0) &&
+        ballPrice === 0 &&
         organizeFee === 0
       ) {
         Swal.fire(
           "ข้อมูลไม่ครบถ้วน",
-          "กรุณากรอกข้อมูลค่าลูก, ค่าจัดก๊วน และค่าสนาม (เลือกเพียง 1 แบบ) ให้ครบถ้วนก่อนคำนวณ",
+          "กรุณากรอกข้อมูลค่าลูก, ค่าจัดก๊วน หรือค่าสนาม ให้ครบถ้วนก่อนคำนวณ",
           "warning"
         );
         return;
@@ -819,7 +806,7 @@ const Match = () => {
     const parsedCourtFeePerGame = parseFloat(courtFeePerGame) || 0;
     const parsedFixedCourtFeePerPerson =
       parseFloat(fixedCourtFeePerPerson) || 0;
-    const parsedOrganizeFee = parseFloat(organizeFee) || 0;
+    const parsedOrganizeFee = parseFloat(organizeFee) || 0; // Can be 0
 
     // Use current session's gamesPlayed and ballsUsed for early exit calculation
     const gamesPlayed = player.gamesPlayed;
@@ -857,14 +844,15 @@ const Match = () => {
     Swal.fire({
       title: `ยอดรวมสำหรับ ${result.name}`,
       html: `
-        <div style="text-align: left; font-size: 16px;">
-          <p><strong>จำนวนเกมที่เล่นในก๊วนนี้:</strong> ${result.gamesPlayed} เกม</p>
-          <p><strong>จำนวนลูกขนไก่ที่ใช้ในก๊วนนี้:</strong> ${result.ballsUsed} ลูก</p>
-          <hr style="margin: 10px 0;">
-          <p><strong>ประมาณการค่าลูก:</strong> ${result.ballCost} บาท</p>
-          <p><strong>ประมาณการค่าสนาม:</strong> ${result.courtCost} บาท</p>
-          <p><strong>ประมาณการค่าจัดก๊วน:</strong> ${result.organizeFee} บาท</p>
-          <h3 style="color: #e63946; margin-top: 15px;"><strong>ยอดรวมโดยประมาณ:</strong> ${result.estimatedTotalCost} บาท</h3>
+        <div style="text-align: left; font-size: 16px; color: #333;">
+          <p style="margin-bottom: 8px;"><strong>จำนวนเกมที่เล่น:</strong> <span style="float: right;">${result.gamesPlayed} เกม</span></p>
+          <p style="margin-bottom: 8px;"><strong>จำนวนลูกขนไก่ที่ใช้:</strong> <span style="float: right;">${result.ballsUsed} ลูก</span></p>
+          <hr style="margin: 15px 0; border-top: 1px dashed #ccc;">
+          <p style="margin-bottom: 8px;"><strong>ค่าลูก:</strong> <span style="float: right; color: #007bff;">${result.ballCost} บาท</span></p>
+          <p style="margin-bottom: 8px;"><strong>ค่าสนาม:</strong> <span style="float: right; color: #007bff;">${result.courtCost} บาท</span></p>
+          <p style="margin-bottom: 8px;"><strong>ค่าจัดก๊วน:</strong> <span style="float: right; color: #007bff;">${result.organizeFee} บาท</span></p>
+          <hr style="margin: 15px 0; border-top: 2px solid #5cb85c;">
+          <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมโดยประมาณ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
         </div>
       `,
       icon: "info",
@@ -1053,12 +1041,15 @@ const Match = () => {
                       style={{
                         padding: "8px 12px",
                         borderRadius: "5px",
-                        border: isCourtFeeActive || (courtFee === 0 && !isCourtFeePerGameActive && !isFixedCourtFeePerPersonActive) ? "1px solid #ccc" : "1px solid #eee",
-                        backgroundColor: isCourtFeeActive ? '#fff' : '#f0f0f0',
+                        border: "1px solid #ccc",
+                        backgroundColor:
+                          isCourtFeePerGameActive || isFixedCourtFeePerPersonActive
+                            ? "#e9e9e9"
+                            : "#fff",
                         fontSize: "15px",
-                        width: "120px",
+                        width: "140px",
                       }}
-                      // เดิมมี disabled={isOpen} แต่ถูกลบออกเพื่อให้แก้ไขได้ตลอด
+                      disabled={isCourtFeePerGameActive || isFixedCourtFeePerPersonActive}
                     />
                   </div>
                   <div>
@@ -1073,12 +1064,15 @@ const Match = () => {
                       style={{
                         padding: "8px 12px",
                         borderRadius: "5px",
-                        border: isCourtFeePerGameActive ? "1px solid #ccc" : "1px solid #eee",
-                        backgroundColor: isCourtFeePerGameActive ? '#fff' : '#f0f0f0',
+                        border: "1px solid #ccc",
+                        backgroundColor:
+                          isCourtFeeActive || isFixedCourtFeePerPersonActive
+                            ? "#e9e9e9"
+                            : "#fff",
                         fontSize: "15px",
-                        width: "120px",
+                        width: "140px",
                       }}
-                      // เดิมมี disabled={isOpen} แต่ถูกลบออกเพื่อให้แก้ไขได้ตลอด
+                      disabled={isCourtFeeActive || isFixedCourtFeePerPersonActive}
                     />
                   </div>
                   <div>
@@ -1094,10 +1088,14 @@ const Match = () => {
                         padding: "8px 12px",
                         borderRadius: "5px",
                         border: "1px solid #ccc",
+                        backgroundColor:
+                          isCourtFeeActive || isCourtFeePerGameActive
+                            ? "#e9e9e9"
+                            : "#fff",
                         fontSize: "15px",
-                        width: "120px",
+                        width: "140px",
                       }}
-                      // เดิมมี disabled={isOpen} แต่ถูกลบออกเพื่อให้แก้ไขได้ตลอด
+                      disabled={isCourtFeeActive || isCourtFeePerGameActive}
                     />
                   </div>
                 </div>
@@ -1135,7 +1133,6 @@ const Match = () => {
                         fontSize: "15px",
                         width: "120px",
                       }}
-                      // เดิมมี disabled={isOpen} แต่ถูกลบออกเพื่อให้แก้ไขได้ตลอด
                     />
                   </div>
                   <div>
@@ -1154,7 +1151,6 @@ const Match = () => {
                         fontSize: "15px",
                         width: "120px",
                       }}
-                      // เดิมมี disabled={isOpen} แต่ถูกลบออกเพื่อให้แก้ไขได้ตลอด
                     />
                   </div>
                 </div>
@@ -1178,14 +1174,30 @@ const Match = () => {
               </h4>
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 <select
-                  className="form-select custom-select"
-                  value={selectedMemberForEarlyExit} // Changed from selectedMemberIds[teamIndex][playerIndex]
+                  value={selectedMemberForEarlyExit}
                   onChange={(e) =>
-                    setSelectedMemberForEarlyExit(e.target.value) // Changed from handleMemberSelect
+                    setSelectedMemberForEarlyExit(e.target.value)
                   }
-                  // disabled={isGroupActive} // บรรทัดนี้อาจจะมีหรือไม่มีก็ได้ ขึ้นอยู่กับ logic ของคุณ
+                  // --- ส่วนที่แก้ไข: เพิ่ม inline styles ตรงนี้ ---
+                  style={{
+                    width: '15%', // ให้เต็มความกว้างของ container
+                    padding: '10px 15px', // ปรับ padding
+                    border: '1px solid #ccc', // สีขอบ
+                    borderRadius: '6px', // ความโค้งของมุม
+                    fontSize: '14px', // ขนาดตัวอักษร
+                    boxSizing: 'border-box', // รวม padding และ border ในความกว้าง
+                    minWidth: '200px', // กำหนดความกว้างขั้นต่ำ
+                    backgroundColor: '#fff', // สีพื้นหลัง
+                    cursor: 'pointer',
+                  }}
+                  // ---------------------------------------------
                 >
                   <option value="">เลือกสมาชิก</option>
+                  {members.map((mem) => (
+                    <option key={mem.memberId} value={mem.name}>
+                      {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
+                    </option>
+                    ))}
 {members.map((mem) => (
   <option key={mem.memberId} value={mem.name}>
     {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
@@ -1263,6 +1275,8 @@ const Match = () => {
                           e.target.value
                         )
                       }
+                      style={{ border: match.court ? "1px solid #ddd" : "1px solid #FFD700" }}
+                      disabled={match.status === "จบการแข่งขัน"}
                     >
                       <option value="">เลือกสนาม</option>
                       {courts.map((court) => (
@@ -1282,6 +1296,8 @@ const Match = () => {
                           e.target.value
                         )
                       }
+                      style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                      disabled={match.status === "จบการแข่งขัน"}
                     >
                       <option value="">เลือกผู้เล่น A1</option>
                       {renderMemberOptions(match, "A1")}
@@ -1297,6 +1313,8 @@ const Match = () => {
                           e.target.value
                         )
                       }
+                      style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                      disabled={match.status === "จบการแข่งขัน"}
                     >
                       <option value="">เลือกผู้เล่น A2</option>
                       {renderMemberOptions(match, "A2")}
@@ -1312,6 +1330,8 @@ const Match = () => {
                           e.target.value
                         )
                       }
+                      style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                      disabled={match.status === "จบการแข่งขัน"}
                     >
                       <option value="">เลือกผู้เล่น B1</option>
                       {renderMemberOptions(match, "B1")}
@@ -1327,6 +1347,8 @@ const Match = () => {
                           e.target.value
                         )
                       }
+                      style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                      disabled={match.status === "จบการแข่งขัน"}
                     >
                       <option value="">เลือกผู้เล่น B2</option>
                       {renderMemberOptions(match, "B2")}
@@ -1345,7 +1367,9 @@ const Match = () => {
                       className="balls-select"
                       style={{
                         backgroundColor: match.balls ? "#e6f7ff" : "#fff",
+                        border: match.balls ? "1px solid #ddd" : "1px solid #FFD700", // Conditional border
                       }}
+                      disabled={match.status === "จบการแข่งขัน"}
                     >
                       <option value="">เลือกลูก</option>
                       {balls.map((ball) => (
@@ -1369,6 +1393,7 @@ const Match = () => {
                       style={{
                         backgroundColor: match.result ? "#e6f7ff" : "#fff",
                       }}
+                      disabled={match.status === "จบการแข่งขัน"} // Disable if finished
                     >
                       {RESULT_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -1547,6 +1572,11 @@ const Match = () => {
           overflow-x: auto; /* Enable horizontal scrolling for tables */
         }
 
+        .match-table {
+          width: 100%; /* เพิ่มตรงนี้เลยครับ */
+          border-collapse: collapse; /* เพื่อให้เส้นขอบรวมกันสวยงาม */
+        }
+
         .match-table th,
         .match-table td {
           border: 1px solid #eee;
@@ -1570,6 +1600,11 @@ const Match = () => {
           border-radius: 4px;
           font-size: 12px;
           box-sizing: border-box;
+        }
+
+        .match-table td select:disabled {
+          background-color: #f0f0f0;
+          cursor: not-allowed;
         }
 
         .match-table td select.status-select {
