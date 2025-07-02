@@ -107,6 +107,8 @@ const Match = () => {
   const [showMenuId, setShowMenuId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
   // เพิ่ม gamesPlayed และ ballsUsed ใน state ของสมาชิกแต่ละคน
+  // gamesPlayed and ballsUsed are for the CURRENT session
+  // totalGamesPlayed and totalBallsUsed will be fetched from Firebase and are cumulative
   const [members, setMembers] = useState([]);
   const [balls] = useState(
     Array.from({ length: 10 }, (_, i) => (i + 1).toString())
@@ -148,6 +150,7 @@ const Match = () => {
   }, []);
 
   // ดึงสมาชิกที่สถานะเป็น "มา" และจัดเรียงตามระดับฝีมือ
+  // This useEffect now also restores session-specific gamesPlayed/ballsUsed from localStorage.matches
   useEffect(() => {
     const fetchMembers = async () => {
       try {
@@ -173,8 +176,10 @@ const Match = () => {
               level: data.level,
               score: data.score || 0,
               wins: data.wins || 0,
-              gamesPlayed: 0, // Initialize gamesPlayed for current session
-              ballsUsed: 0, // Initialize ballsUsed for current session
+              gamesPlayed: 0, // Initialize gamesPlayed for current session (will be overridden if session open)
+              ballsUsed: 0, // Initialize ballsUsed for current session (will be overridden if session open)
+              totalGamesPlayed: data.totalGamesPlayed || 0, // Load cumulative games from Firebase
+              totalBallsUsed: data.totalBallsUsed || 0,     // Load cumulative balls from Firebase
             });
           }
         });
@@ -184,6 +189,30 @@ const Match = () => {
           return getLevelOrderIndex(a.level) - getLevelOrderIndex(b.level);
         });
 
+        // NEW LOGIC: After fetching members, if a session is open, restore session-specific games/balls
+        if (isBrowser && localStorage.getItem("isOpen") === "true") {
+          const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
+          const tempGamesPlayed = {};
+          const tempBallsUsed = {};
+          savedMatches.forEach((match) => {
+            if (match.status === "จบการแข่งขัน") {
+              const playersInMatch = [match.A1, match.A2, match.B1, match.B2]
+                .filter(Boolean);
+              const ballsInGame = parseInt(match.balls) || 0;
+              playersInMatch.forEach((playerName) => {
+                tempGamesPlayed[playerName] = (tempGamesPlayed[playerName] || 0) + 1;
+                tempBallsUsed[playerName] = (tempBallsUsed[playerName] || 0) + ballsInGame;
+              });
+            }
+          });
+          // Apply recalculated session data to the memberList
+          memberList = memberList.map(member => ({
+            ...member,
+            gamesPlayed: tempGamesPlayed[member.name] || 0,
+            ballsUsed: tempBallsUsed[member.name] || 0,
+          }));
+        }
+
         setMembers(memberList);
       } catch (err) {
         console.error("Error fetching members:", err);
@@ -191,7 +220,7 @@ const Match = () => {
       }
     };
     fetchMembers();
-  }, [loggedInEmail]);
+  }, [loggedInEmail, isBrowser]); // isBrowser is added as a dependency here
 
   // NEW: Save cost parameters to localStorage
   useEffect(() => {
@@ -226,7 +255,7 @@ const Match = () => {
     setIsOpen(false);
     setCurrentPage(1);
     clearInterval(timerRef.current);
-    // Reset gamesPlayed and ballsUsed for all members when session resets
+    // Reset gamesPlayed and ballsUsed for current session only
     setMembers((prevMembers) =>
       prevMembers.map((member) => ({ ...member, gamesPlayed: 0, ballsUsed: 0 }))
     );
@@ -238,9 +267,11 @@ const Match = () => {
       localStorage.removeItem("isOpen");
       localStorage.removeItem("matches");
       localStorage.removeItem("activityTime");
+      localStorage.removeItem("sessionMembers"); // NEW: Clear session members from localStorage
     }
   };
 
+  // This useEffect primarily handles the timer and loading of general session state (isOpen, matches, activityTime)
   useEffect(() => {
     if (!isBrowser) return;
 
@@ -253,29 +284,7 @@ const Match = () => {
       setIsOpen(true);
       setMatches(savedMatches);
       setActivityTime(savedActivityTime);
-      // Recalculate gamesPlayed and ballsUsed based on saved matches if session restored
-      const tempGamesPlayed = {};
-      const tempBallsUsed = {}; //
-      savedMatches.forEach((match) => {
-        if (match.status === "finished") {
-          const playersInMatch = [match.A1, match.A2, match.B1, match.B2]
-            .filter(Boolean);
-          const ballsInGame = parseInt(match.balls) || 0; //
-          playersInMatch.forEach((playerName) => {
-            tempGamesPlayed[playerName] =
-              (tempGamesPlayed[playerName] || 0) + 1;
-            tempBallsUsed[playerName] = //
-              (tempBallsUsed[playerName] || 0) + ballsInGame; //
-          });
-        }
-      });
-      setMembers((prevMembers) =>
-        prevMembers.map((member) => ({
-          ...member,
-          gamesPlayed: tempGamesPlayed[member.name] || 0,
-          ballsUsed: tempBallsUsed[member.name] || 0, //
-        }))
-      );
+      // member state restoration for gamesPlayed/ballsUsed is now handled in the fetchMembers useEffect
     }
 
     if (isOpen) {
@@ -294,6 +303,7 @@ const Match = () => {
 
     return () => clearInterval(timerRef.current);
   }, [isOpen, isBrowser]);
+
 
   const handleAddMatch = () => {
     setMatches((prev) => {
@@ -345,7 +355,7 @@ const Match = () => {
       // This is primarily to prevent self-exclusion issues.
       if (
         match.matchId !== currentMatch.matchId &&
-        match.status === "playing"
+        match.status === "กำลังแข่งขัน" // Use Thai for "playing"
       ) {
         [match.A1, match.A2, match.B1, match.B2]
           .filter(Boolean)
@@ -387,33 +397,62 @@ const Match = () => {
 
       if (field === "result") {
         updated[idx].score = getScoreByResult(value);
-        if (value && newStatus !== "finished") {
-          newStatus = "finished"; // Set status to 'finished' if result is selected
+        if (value && newStatus !== "จบการแข่งขัน") { // Use Thai for "finished"
+          newStatus = "จบการแข่งขัน"; // Set status to 'finished' if result is selected
           updated[idx].status = newStatus;
-        } else if (!value && newStatus === "finished") {
+        } else if (!value && newStatus === "จบการแข่งขัน") {
           newStatus = ""; // Revert status if result is cleared from a finished game
           updated[idx].status = newStatus;
         }
       }
 
-      // If balls field is changed, and match status is finished, update gamesPlayed/ballsUsed
-      // This handles cases where balls might be changed after result is set.
-      if (
+      // Logic to update gamesPlayed and ballsUsed for the *current session*
+      const playersInCurrentMatch = [
+        updated[idx].A1,
+        updated[idx].A2,
+        updated[idx].B1,
+        updated[idx].B2,
+      ].filter(Boolean);
+      const ballsInCurrentGame = parseInt(updated[idx].balls) || 0;
+
+      // Handle status change from non-finished to finished
+      if (newStatus === "จบการแข่งขัน" && oldStatus !== "จบการแข่งขัน") {
+        setMembers((prevMembers) =>
+          prevMembers.map((member) =>
+            playersInCurrentMatch.includes(member.name)
+              ? {
+                  ...member,
+                  gamesPlayed: member.gamesPlayed + 1,
+                  ballsUsed: member.ballsUsed + ballsInCurrentGame,
+                }
+              : member
+          )
+        );
+      }
+      // Handle status change from finished to non-finished
+      else if (newStatus !== "จบการแข่งขัน" && oldStatus === "จบการแข่งขัน") {
+        setMembers((prevMembers) =>
+          prevMembers.map((member) =>
+            playersInCurrentMatch.includes(member.name)
+              ? {
+                  ...member,
+                  gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                  ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
+                }
+              : member
+          )
+        );
+      }
+      // Handle balls change for an already finished match
+      else if (
         field === "balls" &&
-        updated[idx].status === "finished" &&
+        updated[idx].status === "จบการแข่งขัน" &&
         updated[idx].result
       ) {
         const newBalls = parseInt(value) || 0;
-        const playersInMatch = [
-          updated[idx].A1,
-          updated[idx].A2,
-          updated[idx].B1,
-          updated[idx].B2,
-        ].filter(Boolean);
-
         setMembers((prevMembers) =>
           prevMembers.map((member) => {
-            if (playersInMatch.includes(member.name)) {
+            if (playersInCurrentMatch.includes(member.name)) {
               return {
                 ...member,
                 ballsUsed: member.ballsUsed - oldBalls + newBalls, // Adjust ballsUsed
@@ -424,46 +463,8 @@ const Match = () => {
         );
       }
 
-      // Logic to update gamesPlayed and ballsUsed when status changes
-      const playersInCurrentMatch = [
-        updated[idx].A1,
-        updated[idx].A2,
-        updated[idx].B1,
-        updated[idx].B2,
-      ].filter(Boolean);
-      const ballsInCurrentGame = parseInt(updated[idx].balls) || 0;
-
-      if (newStatus === "finished" && oldStatus !== "finished") {
-        // Match just finished, increment gamesPlayed and ballsUsed for all players in this match
-        setMembers((prevMembers) =>
-          prevMembers.map((member) =>
-            playersInCurrentMatch.includes(member.name)
-              ? {
-                  ...member,
-                  gamesPlayed: member.gamesPlayed + 1,
-                  ballsUsed: member.ballsUsed + ballsInCurrentGame, //
-                }
-              : member
-          )
-        );
-      } else if (newStatus !== "finished" && oldStatus === "finished") {
-        // Match was finished, but now it's not, decrement gamesPlayed and ballsUsed
-        setMembers((prevMembers) =>
-          prevMembers.map((member) =>
-            playersInCurrentMatch.includes(member.name)
-              ? {
-                  ...member,
-                  gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                  ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame), //
-                }
-              : member
-          )
-        );
-      }
-
       // Ensure status is reset if balls or result are cleared from a previously finished game
-      // This is important if status was 'finished' but then result or balls are made empty
-      if (oldStatus === "finished" && newStatus === "finished" && // was finished, still finished (not changed by direct status dropdown)
+      if (oldStatus === "จบการแข่งขัน" && newStatus === "จบการแข่งขัน" && // was finished, still finished (not changed by direct status dropdown)
           (!updated[idx].balls || !updated[idx].result)) { // but content became empty
             updated[idx].status = ""; // Force status to be empty
             // Need to decrement gamesPlayed and ballsUsed here because the above "newStatus !== 'finished' && oldStatus === 'finished'" block
@@ -496,8 +497,8 @@ const Match = () => {
         value={mem.name}
         style={{ color: LEVEL_COLORS[mem.level] || "black" }}
       >
-        {mem.name} ({mem.level}) ({mem.gamesPlayed})เกม (ลูก:{" "}
-        {mem.ballsUsed || 0}) {/* Display games played and balls used */}
+        {mem.name} ({mem.level}) (เกม: {mem.gamesPlayed + mem.totalGamesPlayed}) (ลูก:{" "}
+        { (mem.ballsUsed || 0) + (mem.totalBallsUsed || 0)}) {/* Display combined games played and balls used */}
       </option>
     ));
 
@@ -510,7 +511,7 @@ const Match = () => {
     setActivityTime(0);
     setMatches([]);
     setCurrentPage(1);
-    // Reset gamesPlayed and ballsUsed for all members when starting a new group
+    // Reset gamesPlayed and ballsUsed for current session only when starting a new group
     setMembers((prevMembers) =>
       prevMembers.map((member) => ({ ...member, gamesPlayed: 0, ballsUsed: 0 }))
     );
@@ -522,11 +523,12 @@ const Match = () => {
       localStorage.setItem("isOpen", "true");
       localStorage.setItem("matches", JSON.stringify([]));
       localStorage.setItem("activityTime", "0");
+      localStorage.removeItem("sessionMembers"); // NEW: Ensure sessionMembers is cleared for a new group
     }
   };
 
   const handleEndGroup = async () => {
-    const hasUnfinished = matches.some((m) => m.status !== "finished");
+    const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน"); // Use Thai for "finished"
     if (hasUnfinished) {
       Swal.fire(
         "มี Match ที่ยังไม่จบการแข่งขัน",
@@ -577,15 +579,20 @@ const Match = () => {
           }
 
           // Aggregate scores and wins for members
-          const memberUpdates = {};
+          const memberUpdates = {}; // For score and wins
+          const memberSessionStats = {}; // For current session games and balls
+
           matches.forEach((match) => {
-            if (match.status === "finished") {
+            if (match.status === "จบการแข่งขัน") { // Use Thai for "finished"
               const playersInMatch = [
                 match.A1,
                 match.A2,
                 match.B1,
                 match.B2,
               ].filter(Boolean);
+              const ballsInGame = parseInt(match.balls) || 0; // Get balls for this specific match
+
+              // Aggregate scores and wins
               if (match.result === "A") {
                 playersInMatch.forEach((player) => {
                   if (!memberUpdates[player])
@@ -611,12 +618,23 @@ const Match = () => {
                   memberUpdates[player].scoreToAdd += 1;
                 });
               }
+
+              // Aggregate current session gamesPlayed and ballsUsed
+              playersInMatch.forEach(player => {
+                  if (!memberSessionStats[player]) {
+                      memberSessionStats[player] = { games: 0, balls: 0 };
+                  }
+                  memberSessionStats[player].games += 1;
+                  memberSessionStats[player].balls += ballsInGame;
+              });
             }
           });
 
-          // Update member scores and wins in Firebase
-          for (const playerName in memberUpdates) {
-            const data = memberUpdates[playerName];
+          // Update member scores, wins, totalGamesPlayed, and totalBallsUsed in Firebase
+          for (const playerName of members.map(m => m.name)) { // Iterate through all active members
+            const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+            const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
+
             const memberQuery = query(
               collection(db, `users/${userId}/Members`),
               where("name", "==", playerName)
@@ -627,11 +645,16 @@ const Match = () => {
               const currentData = memberDoc.data();
               const currentScore = currentData.score || 0;
               const currentWins = currentData.wins || 0;
+              const currentTotalGamesPlayed = currentData.totalGamesPlayed || 0;
+              const currentTotalBallsUsed = currentData.totalBallsUsed || 0;
+
               await updateDoc(
                 doc(db, `users/${userId}/Members`, memberDoc.id),
                 {
                   score: currentScore + data.scoreToAdd,
                   wins: currentWins + data.winsToAdd,
+                  totalGamesPlayed: currentTotalGamesPlayed + sessionStats.games, // Update cumulative
+                  totalBallsUsed: currentTotalBallsUsed + sessionStats.balls,     // Update cumulative
                 }
               );
             }
@@ -677,6 +700,7 @@ const Match = () => {
     }).then((result) => {
       if (result.isConfirmed) {
         setMatches((prevMatches) => {
+          const matchToDelete = prevMatches[idxToDelete];
           const updatedMatches = prevMatches.filter(
             (_, idx) => idx !== idxToDelete
           );
@@ -686,11 +710,12 @@ const Match = () => {
             matchId: padId(idx + 1, 4),
           }));
 
-          // Recalculate gamesPlayed and ballsUsed after deletion
+          // Recalculate gamesPlayed and ballsUsed for the *current session* after deletion
+          // This must re-evaluate all finished matches in the *remaining* list
           const tempGamesPlayed = {};
           const tempBallsUsed = {};
           reIndexedMatches.forEach((match) => {
-            if (match.status === "finished") {
+            if (match.status === "จบการแข่งขัน") { // Use Thai for "finished"
               const playersInMatch = [
                 match.A1,
                 match.A2,
@@ -709,8 +734,8 @@ const Match = () => {
           setMembers((prevMembers) =>
             prevMembers.map((member) => ({
               ...member,
-              gamesPlayed: tempGamesPlayed[member.name] || 0,
-              ballsUsed: tempBallsUsed[member.name] || 0,
+              gamesPlayed: tempGamesPlayed[member.name] || 0, // Update current session games
+              ballsUsed: tempBallsUsed[member.name] || 0,     // Update current session balls
             }))
           );
 
@@ -746,7 +771,7 @@ const Match = () => {
   );
 
   // Determine if there are unfinished matches for disabling "ปิดก๊วน"
-  const cannotFinish = matches.some((m) => m.status !== "finished");
+  const cannotFinish = matches.some((m) => m.status !== "จบการแข่งขัน");
 
   // NEW: Function to calculate summary for a specific player
   const calculatePlayerSummary = () => {
@@ -782,6 +807,7 @@ const Match = () => {
       parseFloat(fixedCourtFeePerPerson) || 0;
     const parsedOrganizeFee = parseFloat(organizeFee) || 0;
 
+    // Use current session's gamesPlayed and ballsUsed for early exit calculation
     const gamesPlayed = player.gamesPlayed;
     const ballsUsed = player.ballsUsed || 0;
 
@@ -794,7 +820,7 @@ const Match = () => {
     } else if (parsedCourtFeePerGame > 0) {
       courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
     } else if (parsedCourtFee > 0) {
-      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0).length; // Members who have played at least one game
+      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0).length; // Members who have played at least one game in this session
       courtCostPerPerson =
         totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
@@ -818,8 +844,8 @@ const Match = () => {
       title: `ยอดรวมสำหรับ ${result.name}`,
       html: `
         <div style="text-align: left; font-size: 16px;">
-          <p><strong>จำนวนเกมที่เล่น:</strong> ${result.gamesPlayed} เกม</p>
-          <p><strong>จำนวนลูกขนไก่ที่ใช้:</strong> ${result.ballsUsed} ลูก</p>
+          <p><strong>จำนวนเกมที่เล่นในก๊วนนี้:</strong> ${result.gamesPlayed} เกม</p>
+          <p><strong>จำนวนลูกขนไก่ที่ใช้ในก๊วนนี้:</strong> ${result.ballsUsed} ลูก</p>
           <hr style="margin: 10px 0;">
           <p><strong>ประมาณการค่าลูก:</strong> ${result.ballCost} บาท</p>
           <p><strong>ประมาณการค่าสนาม:</strong> ${result.courtCost} บาท</p>
@@ -1053,8 +1079,7 @@ const Match = () => {
                       style={{
                         padding: "8px 12px",
                         borderRadius: "5px",
-                        border: isFixedCourtFeePerPersonActive ? "1px solid #ccc" : "1px solid #eee",
-                        backgroundColor: isFixedCourtFeePerPersonActive ? '#fff' : '#f0f0f0',
+                        border: "1px solid #ccc",
                         fontSize: "15px",
                         width: "120px",
                       }}
@@ -1359,7 +1384,7 @@ const Match = () => {
                       className="status-select"
                       style={{
                         backgroundColor: STATUS_COLORS[match.status] || "#fff",
-                        color: match.status === "finished" ? "#fff" : "#333",
+                        color: match.status === "จบการแข่งขัน" ? "#fff" : "#333", // Use Thai for "finished"
                       }}
                     >
                       {Object.keys(STATUS_COLORS).map((status) => (
@@ -1738,7 +1763,7 @@ const Match = () => {
           .match-table td:nth-of-type(11):before { content: "Action"; }
 
           /* Ensure selects/inputs within mobile table cells take full width */
-          .match-table td select,
+          .match-table td select,\
           .match-table td input {
             width: 100%;
             max-width: unset; /* Remove any max-width */
