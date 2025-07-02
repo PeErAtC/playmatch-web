@@ -920,20 +920,6 @@ const Match = () => {
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
-    // Clear cost parameters
-    setBallPrice(0);
-    setCourtFee(0);
-    setCourtFeePerGame(0);
-    setFixedCourtFeePerPerson(0);
-    setOrganizeFee(0);
-    // Also clear from localStorage immediately
-    if (isBrowser) {
-        localStorage.removeItem("ballPrice");
-        localStorage.removeItem("courtFee");
-        localStorage.removeItem("courtFeePerGame");
-        localStorage.removeItem("fixedCourtFeePerPerson");
-        localStorage.removeItem("organizeFee");
-    }
   };
 
   // Determine which court fee input is currently active/filled for display purposes
@@ -969,75 +955,96 @@ const Match = () => {
     }
   };
 
+  // NEW: Function to clear all cost settings
+  const handleClearCostSettings = () => {
+    Swal.fire({
+      title: "คุณแน่ใจหรือไม่?",
+      text: "การดำเนินการนี้จะล้างค่าใช้จ่ายทั้งหมด (ค่าลูก, ค่าสนาม, ค่าจัดก๊วน) เป็น 0",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "ใช่, ล้างค่าทั้งหมด",
+      cancelButtonText: "ยกเลิก",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setBallPrice(0);
+        setCourtFee(0);
+        setCourtFeePerGame(0);
+        setFixedCourtFeePerPerson(0);
+        setOrganizeFee(0);
+        Swal.fire("ล้างค่าสำเร็จ!", "ค่าใช้จ่ายทั้งหมดถูกรีเซ็ตเป็น 0 แล้ว", "success");
+      }
+    });
+  };
+
+
   return (
     <div
       style={{
         padding: "15px",
-        backgroundColor: "#f7f7f7",
+        backgroundColor: "#f0f2f5", // Lighter background for the entire page
         minHeight: "100vh",
         fontFamily: "'Kanit', sans-serif",
       }}
     >
-      <div className="control-panel">
-        <div className="date-topic-group">
-          <div className="input-group">
-            <label htmlFor="matchDate" className="control-label">
-            </label>
-            <input
-              type="date"
-              id="matchDate"
-              value={matchDate}
-              onChange={(e) => setMatchDate(e.target.value)}
-              className="control-input"
-              style={{ minWidth: "160px" }}
-              disabled={isOpen} // Disable if group is open
-            />
+      {/* Control Panel Card */}
+      <div className="card control-panel-card">
+        <div className="control-panel">
+          <div className="date-topic-group">
+            <div className="input-group">
+              <label htmlFor="matchDate" className="control-label"></label>
+              <input
+                type="date"
+                id="matchDate"
+                value={matchDate}
+                onChange={(e) => setMatchDate(e.target.value)}
+                className="control-input"
+                style={{ minWidth: "160px" }}
+                disabled={isOpen} // Disable if group is open
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="topic" className="control-label"></label>
+              <input
+                type="text"
+                id="topic"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="เช่น ก๊วนตอนเย็น, ก๊วนพิเศษ"
+                className="control-input"
+                style={{
+                  border: topic ? "1px solid #ccc" : "1px solid #FFD700",
+                }} // Conditional border
+                disabled={isOpen} // Disable if group is open
+              />
+            </div>
           </div>
-          <div className="input-group">
-            <label htmlFor="topic" className="control-label">
-            </label>
-            <input
-              type="text"
-              id="topic"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="เช่น ก๊วนตอนเย็น, ก๊วนพิเศษ"
-              className="control-input"
-              style={{ border: topic ? "1px solid #ccc" : "1px solid #FFD700", }} // Conditional border
-              disabled={isOpen} // Disable if group is open
-            />
-          </div>
-        </div>
-        <div className="action-time-group">
-          <button
-            onClick={isOpen ? handleEndGroup : handleStartGroup}
-            className={`action-button ${isOpen ? "end-group" : "start-group"}`}
-          >
-            {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
-          </button>
-          <div className="activity-time-display">
-            <span style={{ color: "#2196f3", fontWeight: 600 }}>
-              {" "}
-              Total Activity Time{" "}
-            </span>
-            <span style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}>
-              {" "}
-              - {formatTime(activityTime)}{" "}
-            </span>
+          <div className="action-time-group">
+            <button
+              onClick={isOpen ? handleEndGroup : handleStartGroup}
+              className={`action-button ${isOpen ? "end-group" : "start-group"}`}
+            >
+              {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
+            </button>
+            <div className="activity-time-display">
+              <span style={{ color: "#2196f3", fontWeight: 600 }}>
+                {" "}
+                Total Activity Time{" "}
+              </span>
+              <span
+                style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}
+              >
+                {" "}
+                - {formatTime(activityTime)}{" "}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* NEW: Input Section for Cost Parameters - Collapsible */}
-      <div
-        style={{
-          marginBottom: "25px",
-          padding: "20px",
-          border: "1px solid #e0e0e0",
-          borderRadius: "8px",
-          backgroundColor: "#fff",
-        }}
-      >
+      {/* NEW: Input Section for Cost Parameters & Early Exit - Combined Card */}
+      <div className="card financial-summary-card">
         <div
           style={{
             display: "flex",
@@ -1052,31 +1059,37 @@ const Match = () => {
         >
           <h3
             style={{
-              fontSize: "15px",
+              fontSize: "18px", // Slightly larger font for main heading
               margin: 0, // Remove default margin
+              color: "#333",
             }}
           >
             ตั้งค่าค่าใช้จ่าย (จะบันทึกอัตโนมัติ)
           </h3>
           <span
             style={{
-              fontSize: "24px",
+              fontSize: "28px", // Larger plus sign
               fontWeight: "bold",
               transition: "transform 0.3s ease",
               transform: isCostSettingsOpen ? "rotate(45deg)" : "rotate(0deg)",
+              color: "#555",
             }}
           >
             +
           </span>
         </div>
 
-        {/* Collapsible content wrapper */}
+        {/* Collapsible content wrapper for cost settings */}
         <div
           ref={contentRef}
           style={{
-            maxHeight: isCostSettingsOpen ? (contentRef.current ? contentRef.current.scrollHeight : '500px') : '0', // Dynamic height for smooth transition
-            overflow: 'hidden',
-            transition: 'max-height 0.4s ease-in-out', // Smooth transition
+            maxHeight: isCostSettingsOpen
+              ? contentRef.current
+                ? contentRef.current.scrollHeight + "px"
+                : "500px" // Fallback large height
+              : "0", // Dynamic height for smooth transition
+            overflow: "hidden",
+            transition: "max-height 0.4s ease-in-out", // Smooth transition
           }}
         >
           <div>
@@ -1085,91 +1098,68 @@ const Match = () => {
                 display: "flex",
                 gap: "20px",
                 flexWrap: "wrap",
-                marginBottom: "15px",
+                marginBottom: "25px", // Increased margin for separation
               }}
             >
               {/* Court Fee Inputs */}
-              <div
-                style={{
-                  padding: "15px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "5px",
-                  backgroundColor: "#f9f9f9",
-                  flex: "1",
-                  minWidth: "250px",
-                }}
-              >
-                <h4
-                  style={{ fontSize: "16px", marginBottom: "10px", color: "#333" }}
-                >
+              <div className="cost-input-group">
+                <h4 className="cost-input-heading">
                   ค่าสนาม: (เลือกเพียง 1 รูปแบบ)
                 </h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#555" }}>
-                      ค่าสนามรวม (บาท):
-                    </label>
+                    <label className="cost-label">ค่าสนามรวม (บาท):</label>
                     <input
                       type="number"
                       value={courtFee === 0 ? "" : courtFee}
                       onChange={handleCourtFeeChange}
                       placeholder="ค่าสนามรวม"
+                      className="cost-input"
                       style={{
-                        padding: "8px 12px",
-                        borderRadius: "5px",
-                        border: "1px solid #ccc",
                         backgroundColor:
                           isCourtFeePerGameActive || isFixedCourtFeePerPersonActive
                             ? "#e9e9e9"
                             : "#fff",
-                        fontSize: "15px",
-                        width: "140px",
                       }}
                       disabled={isCourtFeePerGameActive || isFixedCourtFeePerPersonActive}
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#555" }}>
-                      ค่าสนามต่อเกม (บาท/เกม):
-                    </label>
+                    <label className="cost-label">ค่าสนามต่อเกม (บาท/เกม):</label>
                     <input
                       type="number"
                       value={courtFeePerGame === 0 ? "" : courtFeePerGame}
                       onChange={handleCourtFeePerGameChange}
                       placeholder="ค่าสนามต่อเกม"
+                      className="cost-input"
                       style={{
-                        padding: "8px 12px",
-                        borderRadius: "5px",
-                        border: "1px solid #ccc",
                         backgroundColor:
                           isCourtFeeActive || isFixedCourtFeePerPersonActive
                             ? "#e9e9e9"
                             : "#fff",
-                        fontSize: "15px",
-                        width: "140px",
                       }}
                       disabled={isCourtFeeActive || isFixedCourtFeePerPersonActive}
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#555" }}>
-                      ค่าสนามคงที่ต่อคน (บาท/คน):
-                    </label>
+                    <label className="cost-label">ค่าสนามคงที่ต่อคน (บาท/คน):</label>
                     <input
                       type="number"
                       value={fixedCourtFeePerPerson === 0 ? "" : fixedCourtFeePerPerson}
                       onChange={handleFixedCourtFeePerPersonChange}
                       placeholder="ค่าสนามคงที่ต่อคน"
+                      className="cost-input"
                       style={{
-                        padding: "8px 12px",
-                        borderRadius: "5px",
-                        border: "1px solid #ccc",
                         backgroundColor:
                           isCourtFeeActive || isCourtFeePerGameActive
                             ? "#e9e9e9"
                             : "#fff",
-                        fontSize: "15px",
-                        width: "140px",
                       }}
                       disabled={isCourtFeeActive || isCourtFeePerGameActive}
                     />
@@ -1177,409 +1167,348 @@ const Match = () => {
                 </div>
               </div>
               {/* Ball Price and Organize Fee Inputs */}
-              <div
-                style={{
-                  padding: "15px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "5px",
-                  backgroundColor: "#f9f9f9",
-                  flex: "1",
-                  minWidth: "250px",
-                }}
-              >
-                <h4
-                  style={{ fontSize: "16px", marginBottom: "10px", color: "#333" }}
+              <div className="cost-input-group">
+                <h4 className="cost-input-heading">ค่าลูกและค่าจัดก๊วน:</h4>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
                 >
-                  ค่าลูกและค่าจัดก๊วน:
-                </h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#555" }}>
-                      ราคาลูกละ (บาท):
-                    </label>
+                    <label className="cost-label">ราคาลูกละ (บาท):</label>
                     <input
                       type="number"
                       value={ballPrice === 0 ? "" : ballPrice}
                       onChange={(e) => setBallPrice(parseFloat(e.target.value) || 0)}
                       placeholder="ราคาลูกละ"
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: "5px",
-                        border: "1px solid #ccc",
-                        fontSize: "15px",
-                        width: "120px",
-                      }}
+                      className="cost-input"
+                      style={{ width: "120px" }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#555" }}>
-                      ค่าจัดก๊วน (บาท/คน):
-                    </label>
+                    <label className="cost-label">ค่าจัดก๊วน (บาท/คน):</label>
                     <input
                       type="number"
                       value={organizeFee === 0 ? "" : organizeFee}
                       onChange={(e) => setOrganizeFee(parseFloat(e.target.value) || 0)}
                       placeholder="ค่าจัดก๊วน"
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: "5px",
-                        border: "1px solid #ccc",
-                        fontSize: "15px",
-                        width: "120px",
-                      }}
+                      className="cost-input"
+                      style={{ width: "120px" }}
                     />
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* NEW: Early Exit Calculation Section */}
-             <div
-              style={{
-                marginTop: "20px",
-                padding: "15px",
-                border: "1px solid #d0d0d0",
-                borderRadius: "5px",
-                backgroundColor: "#e9f7ef", // Light green background
-              }}
-            >
-              <h4
-                style={{ fontSize: "16px", marginBottom: "10px", color: "#28a745" }}
-              >
-                คำนวณยอดสำหรับสมาชิกที่ต้องการออกก่อน
-              </h4>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <select
-                  value={selectedMemberForEarlyExit}
-                  onChange={(e) =>
-                    setSelectedMemberForEarlyExit(e.target.value)
-                  }
-                  // --- ส่วนที่แก้ไข: เพิ่ม inline styles ตรงนี้ ---
-                  style={{
-                    width: '15%', // ให้เต็มความกว้างของ container
-                    padding: '10px 15px', // ปรับ padding
-                    border: '1px solid #ccc', // สีขอบ
-                    borderRadius: '6px', // ความโค้งของมุม
-                    fontSize: '14px', // ขนาดตัวอักษร
-                    boxSizing: 'border-box', // รวม padding และ border ในความกว้าง
-                    minWidth: '200px', // กำหนดความกว้างขั้นต่ำ
-                    backgroundColor: '#fff', // สีพื้นหลัง
-                    cursor: 'pointer',
-                  }}
-                  // ---------------------------------------------
-                >
-                  <option value="">เลือกสมาชิก</option>
-                  {members.map((mem) => (
-                    <option key={mem.memberId} value={mem.name}>
-                      {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
-                    </option>
-                  ))}
-                </select>
+                {/* NEW: Clear Settings Button */}
                 <button
-                  onClick={calculatePlayerSummary}
-                  className="action-button"
-                  style={{
-                    backgroundColor: "#28a745",
-                    color: "white",
-                    padding: "8px 15px",
-                    borderRadius: "5px",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "15px",
-                    opacity: !isOpen || !selectedMemberForEarlyExit ? 0.6 : 1,
-                    pointerEvents:
-                      !isOpen || !selectedMemberForEarlyExit ? "none" : "auto",
-                  }}
-                  disabled={!isOpen || !selectedMemberForEarlyExit} // Disable if group not open or no member selected
+                  onClick={handleClearCostSettings}
+                  className="action-button clear-settings-button"
+                  style={{ marginTop: "20px", backgroundColor: "#dc3545" }} // Added margin-top for spacing
                 >
-                  คำนวณยอด
-                </button>
-                {/* NEW: ปุ่มล้างตัวเลือกสำหรับ Early Exit */}
-                <button
-                  onClick={handleClearEarlyExitSelection}
-                  className="action-button"
-                  style={{
-                    backgroundColor: "#6c757d", // Gray color for clear button
-                    color: "white",
-                    padding: "8px 15px",
-                    borderRadius: "5px",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "15px",
-                    // Disable if no member selected and no result to clear
-                    opacity: (!selectedMemberForEarlyExit && !earlyExitCalculationResult && ballPrice === 0 && courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0 && organizeFee === 0) ? 0.6 : 1,
-                    pointerEvents: (!selectedMemberForEarlyExit && !earlyExitCalculationResult && ballPrice === 0 && courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0 && organizeFee === 0) ? "none" : "auto",
-                  }}
-                  disabled={!selectedMemberForEarlyExit && !earlyExitCalculationResult && ballPrice === 0 && courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0 && organizeFee === 0} // Disable if no member selected and no result and all cost parameters are 0
-                >
-                  ล้างตัวเลือก
+                  ล้างการตั้งค่าทั้งหมด
                 </button>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Early Exit Calculation Section - Now always visible within Financial Summary Card */}
+        <div className="early-exit-section">
+          <h4 className="early-exit-heading">คำนวณยอดสำหรับสมาชิกที่ต้องการออกก่อน</h4>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selectedMemberForEarlyExit}
+              onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)}
+              className="early-exit-select"
+            >
+              <option value="">เลือกสมาชิก</option>
+              {members.map((mem) => (
+                <option key={mem.memberId} value={mem.name}>
+                  {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={calculatePlayerSummary}
+              className="action-button calculate-button"
+              disabled={!isOpen || !selectedMemberForEarlyExit} // Disable if group not open or no member selected
+            >
+              คำนวณยอด
+            </button>
+            <button
+              onClick={handleClearEarlyExitSelection}
+              className="action-button clear-button"
+              disabled={!selectedMemberForEarlyExit && !earlyExitCalculationResult}
+            >
+              ล้างตัวเลือก
+            </button>
+          </div>
+        </div>
       </div>
-      {/* Existing Match Table and other JSX below */}
-      <div className="match-table-container">
-        {/* NEW: Display Match Count - Moved here */}
-        <div style={{
+
+      {/* Match Table Card */}
+      <div className="card match-table-card">
+        {/* NEW: Display Match Count & Region Selector - Moved here into match-table-card */}
+        <div
+          style={{
             textAlign: "left",
             marginBottom: "15px",
-            fontSize: "12px",
+            fontSize: "14px", // Adjusted font size
             fontWeight: "600",
             color: "#333",
             padding: "10px 0",
-            display: "flex", /* Use flexbox for alignment */
-            justifyContent: "space-between", /* Space out content */
-            alignItems: "center" /* Vertically align items */
-        }}>
-            จำนวนทั้งหมด : {matchCount}
-            {/* NEW: Region Selector - Moved here into match-table-container */}
-            <div className="region-selector-inline">
-              <label htmlFor="region-select" style={{ margin: 0, fontSize: "14px", color: "#555" }}>
-                เลือกภาค:
-              </label>
-              <select
-                id="region-select"
-                value={selectedRegion}
-                onChange={(e) => setSelectedRegion(e.target.value)}
-                style={{
-                  minWidth: "100px",
-                  padding: "6px 8px",
-                  border: "1px solid #ccc",
-                  borderRadius: "5px",
-                  fontSize: "13px",
-                  width: "auto",
-                  marginLeft: "8px"
-                }}
-                disabled={isOpen} // Disable if group is open
-              >
-                <option value="ภาคอีสาน">ภาคอีสาน</option>
-                <option value="ภาคกลาง">ภาคกลาง</option>
-              </select>
-            </div>
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap", // Added flex-wrap for responsiveness
+            gap: "10px" // Added gap for spacing
+          }}
+        >
+          <span>จำนวน Match ทั้งหมด: {matchCount}</span>
+          <div className="region-selector-inline">
+            <label
+              htmlFor="region-select"
+              style={{ margin: 0, fontSize: "14px", color: "#555" }}
+            >
+              เลือกภาค:
+            </label>
+            <select
+              id="region-select"
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              style={{
+                minWidth: "100px",
+                padding: "6px 8px",
+                border: "1px solid #ccc",
+                borderRadius: "5px",
+                fontSize: "13px",
+                width: "auto",
+                marginLeft: "8px",
+              }}
+              disabled={isOpen} // Disable if group is open
+            >
+              <option value="ภาคอีสาน">ภาคอีสาน</option>
+              <option value="ภาคกลาง">ภาคกลาง</option>
+            </select>
+          </div>
         </div>
+
         {matches.length === 0 && isOpen && (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "20px",
-              color: "#777",
-              backgroundColor: "#fff",
-              borderRadius: "8px",
-              marginBottom: "20px",
-            }}
-          >
+          <div className="no-matches-message">
             <p>ยังไม่มี Match เพิ่ม "Add New Match" เพื่อเริ่มต้น</p>
           </div>
         )}
         {matches.length > 0 && (
-          <table className="match-table">
-            <thead>
-              <tr>
-                <th>Match ID</th>
-                <th>สนาม</th>
-                <th>ทีม A (ผู้เล่น 1)</th>
-                <th>ทีม A (ผู้เล่น 2)</th>
-                <th>ทีม B (ผู้เล่น 1)</th>
-                <th>ทีม B (ผู้เล่น 2)</th>
-                <th>ลูก</th>
-                <th>ผล</th>
-                <th>คะแนน</th>
-                <th>สถานะ</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedMatches.map((match, idx) => (
-                <tr key={match.matchId}>
-                  <td data-label="Match ID">{match.matchId}</td>
-                  <td data-label="สนาม">
-                    <select
-                      value={match.court}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "court",
-                          e.target.value
-                        )
-                      }
-                      style={{ border: match.court ? "1px solid #ddd" : "1px solid #FFD700" }}
-                      disabled={match.status === "จบการแข่งขัน"}
-                    >
-                      <option value="">เลือกสนาม</option>
-                      {courts.map((court) => (
-                        <option key={court} value={court}>
-                          {court}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td data-label="ทีม A (ผู้เล่น 1)">
-                    <select
-                      value={match.A1}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "A1",
-                          e.target.value
-                        )
-                      }
-                      style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #FFD700" }}
-                      disabled={match.status === "จบการแข่งขัน"}
-                    >
-                      <option value="">เลือกผู้เล่น A1</option>
-                      {renderMemberOptions(match, "A1")}
-                    </select>
-                  </td>
-                  <td data-label="ทีม A (ผู้เล่น 2)">
-                    <select
-                      value={match.A2}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "A2",
-                          e.target.value
-                        )
-                      }
-                      style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #FFD700" }}
-                      disabled={match.status === "จบการแข่งขัน"}
-                    >
-                      <option value="">เลือกผู้เล่น A2</option>
-                      {renderMemberOptions(match, "A2")}
-                    </select>
-                  </td>
-                  <td data-label="ทีม B (ผู้เล่น 1)">
-                    <select
-                      value={match.B1}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "B1",
-                          e.target.value
-                        )
-                      }
-                      style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #FFD700" }}
-                      disabled={match.status === "จบการแข่งขัน"}
-                    >
-                      <option value="">เลือกผู้เล่น B1</option>
-                      {renderMemberOptions(match, "B1")}
-                    </select>
-                  </td>
-                  <td data-label="ทีม B (ผู้เล่น 2)">
-                    <select
-                      value={match.B2}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "B2",
-                          e.target.value
-                        )
-                      }
-                      style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #FFD700" }}
-                      disabled={match.status === "จบการแข่งขัน"}
-                    >
-                      <option value="">เลือกผู้เล่น B2</option>
-                      {renderMemberOptions(match, "B2")}
-                    </select>
-                  </td>
-                  <td data-label="ลูก">
-                    <select
-                      value={match.balls}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "balls",
-                          e.target.value
-                        )
-                      }
-                      className="balls-select"
-                      style={{
-                        backgroundColor: match.balls ? "#e6f7ff" : "#fff",
-                        border: match.balls ? "1px solid #ddd" : "1px solid #FFD700", // Conditional border
-                      }}
-                      disabled={match.status === "จบการแข่งขัน"}
-                    >
-                      <option value="">เลือกลูก</option>
-                      {balls.map((ball) => (
-                        <option key={ball} value={ball}>
-                          {ball}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td data-label="ผล">
-                    <select
-                      value={match.result}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "result",
-                          e.target.value
-                        )
-                      }
-                      className="result-select"
-                      style={{
-                        backgroundColor: match.result ? "#e6f7ff" : "#fff",
-                      }}
-                      disabled={match.status === "จบการแข่งขัน"} // Disable if finished
-                    >
-                      {RESULT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td data-label="คะแนน">
-                    <span className="score-display">{match.score}</span>
-                  </td>
-                  <td data-label="สถานะ">
-                    <select
-                      value={match.status}
-                      onChange={(e) =>
-                        handleChangeMatch(
-                          (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                          "status",
-                          e.target.value
-                        )
-                      }
-                      className="status-select"
-                      style={{
-                        backgroundColor: STATUS_COLORS[match.status] || "#fff",
-                        color: match.status === "จบการแข่งขัน" ? "#fff" : "#333",
-                      }}
-                    >
-                      {Object.keys(STATUS_COLORS).map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td data-label="Action">
-                    <div className="action-menu">
-                      <button
-                        className="action-menu-button"
-                        onClick={() =>
-                          setShowMenuId(
-                            showMenuId === match.matchId ? null : match.matchId
+          <div className="match-table-wrapper"> {/* New wrapper for overflow-x */}
+            <table className="match-table">
+              <thead>
+                <tr>
+                  <th>Match ID</th>
+                  <th>สนาม</th>
+                  <th>ทีม A (ผู้เล่น 1)</th>
+                  <th>ทีม A (ผู้เล่น 2)</th>
+                  <th>ทีม B (ผู้เล่น 1)</th>
+                  <th>ทีม B (ผู้เล่น 2)</th>
+                  <th>ลูก</th>
+                  <th>ผล</th>
+                  <th>คะแนน</th>
+                  <th>สถานะ</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedMatches.map((match, idx) => (
+                  <tr key={match.matchId}>
+                    <td data-label="Match ID">{match.matchId}</td>
+                    <td data-label="สนาม">
+                      <select
+                        value={match.court}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "court",
+                            e.target.value
                           )
                         }
+                        style={{ border: match.court ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
-                        &#x22EF;
-                      </button>
-                      {showMenuId === match.matchId && (
-                        <div className="action-menu-dropdown">
-                          <button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)}>ลบ</button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        <option value="">เลือกสนาม</option>
+                        {courts.map((court) => (
+                          <option key={court} value={court}>
+                            {court}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td data-label="ทีม A (ผู้เล่น 1)">
+                      <select
+                        value={match.A1}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "A1",
+                            e.target.value
+                          )
+                        }
+                        style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
+                      >
+                        <option value="">เลือกผู้เล่น A1</option>
+                        {renderMemberOptions(match, "A1")}
+                      </select>
+                    </td>
+                    <td data-label="ทีม A (ผู้เล่น 2)">
+                      <select
+                        value={match.A2}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "A2",
+                            e.target.value
+                          )
+                        }
+                        style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
+                      >
+                        <option value="">เลือกผู้เล่น A2</option>
+                        {renderMemberOptions(match, "A2")}
+                      </select>
+                    </td>
+                    <td data-label="ทีม B (ผู้เล่น 1)">
+                      <select
+                        value={match.B1}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "B1",
+                            e.target.value
+                          )
+                        }
+                        style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
+                      >
+                        <option value="">เลือกผู้เล่น B1</option>
+                        {renderMemberOptions(match, "B1")}
+                      </select>
+                    </td>
+                    <td data-label="ทีม B (ผู้เล่น 2)">
+                      <select
+                        value={match.B2}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "B2",
+                            e.target.value
+                          )
+                        }
+                        style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
+                      >
+                        <option value="">เลือกผู้เล่น B2</option>
+                        {renderMemberOptions(match, "B2")}
+                      </select>
+                    </td>
+                    <td data-label="ลูก">
+                      <select
+                        value={match.balls}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "balls",
+                            e.target.value
+                          )
+                        }
+                        className="balls-select"
+                        style={{
+                          backgroundColor: match.balls ? "#e6f7ff" : "#fff",
+                          border: match.balls ? "1px solid #ddd" : "1px solid #FFD700", // Conditional border
+                        }}
+                        disabled={match.status === "จบการแข่งขัน"}
+                      >
+                        <option value="">เลือกลูก</option>
+                        {balls.map((ball) => (
+                          <option key={ball} value={ball}>
+                            {ball}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td data-label="ผล">
+                      <select
+                        value={match.result}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "result",
+                            e.target.value
+                          )
+                        }
+                        className="result-select"
+                        style={{
+                          backgroundColor: match.result ? "#e6f7ff" : "#fff",
+                        }}
+                        disabled={match.status === "จบการแข่งขัน"} // Disable if finished
+                      >
+                        {RESULT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td data-label="คะแนน">
+                      <span className="score-display">{match.score}</span>
+                    </td>
+                    <td data-label="สถานะ">
+                      <select
+                        value={match.status}
+                        onChange={(e) =>
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "status",
+                            e.target.value
+                          )
+                        }
+                        className="status-select"
+                        style={{
+                          backgroundColor: STATUS_COLORS[match.status] || "#fff",
+                          color: match.status === "จบการแข่งขัน" ? "#fff" : "#333",
+                        }}
+                      >
+                        {Object.keys(STATUS_COLORS).map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td data-label="Action">
+                      <div className="action-menu">
+                        <button
+                          className="action-menu-button"
+                          onClick={() =>
+                            setShowMenuId(
+                              showMenuId === match.matchId ? null : match.matchId
+                            )
+                          }
+                        >
+                          &#x22EF;
+                        </button>
+                        {showMenuId === match.matchId && (
+                          <div className="action-menu-dropdown">
+                            <button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)}>
+                              ลบ
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         <div className="pagination-controls">
@@ -1602,34 +1531,210 @@ const Match = () => {
           </button>
         </div>
 
-        <button onClick={handleAddMatch} className="add-match-button" disabled={!isOpen}>
+        <button
+          onClick={handleAddMatch}
+          className="add-match-button"
+          disabled={!isOpen}
+        >
           + Add New Match
         </button>
       </div>
 
       <style jsx>{`
-        /* General Styles */
-        .control-panel {
+        /* General Card Styling */
+        .card {
           background-color: #ffffff;
           padding: 25px;
           border-radius: 10px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-          margin-bottom: 30px;
-          display: flex; /* Changed to flex */
-          flex-direction: row; /* Changed to row */
-          flex-wrap: wrap; /* Added flex-wrap for responsiveness */
-          gap: 20px;
-          justify-content: space-between; /* Space out children */
-          align-items: flex-start; /* Align items to the top */
+          margin-bottom: 30px; /* Space between cards */
         }
 
+        /* Control Panel Specific Adjustments */
+        .control-panel-card {
+          /* No additional styling needed here, .control-panel already defines flex behavior */
+        }
+
+        .control-panel {
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          gap: 20px;
+          justify-content: space-between;
+          align-items: flex-start;
+        }
+
+        /* Financial Summary Card Specific Adjustments */
+        .financial-summary-card {
+          /* Inherits from .card */
+          padding-top: 15px; /* Adjust padding for collapsible header */
+        }
+
+        .cost-input-group {
+          padding: 15px;
+          border: 1px solid #d0d0d0;
+          border-radius: 5px;
+          background-color: #f9f9f9;
+          flex: 1;
+          min-width: 280px; /* Adjusted min-width for inputs */
+        }
+
+        .cost-input-heading {
+          font-size: 16px;
+          margin-bottom: 10px;
+          color: #333;
+        }
+
+        .cost-label {
+          display: block;
+          margin-bottom: 5px;
+          font-size: 14px;
+          color: #555;
+        }
+
+        .cost-input {
+          padding: 8px 12px;
+          border-radius: 5px;
+          border: 1px solid #ccc;
+          font-size: 15px;
+          width: 140px; /* Default width */
+          box-sizing: border-box;
+        }
+
+        .early-exit-section {
+          margin-top: 20px;
+          padding: 15px;
+          border: 1px solid #d0d0d0;
+          border-radius: 5px;
+          background-color: #e9f7ef; /* Light green background */
+        }
+
+        .early-exit-heading {
+          font-size: 16px;
+          margin-bottom: 10px;
+          color: #28a745;
+        }
+
+        .early-exit-select {
+          width: 15%; /* Initial width */
+          padding: 10px 15px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+          font-size: 14px;
+          box-sizing: border-box;
+          min-width: 200px;
+          background-color: #fff;
+          cursor: pointer;
+        }
+
+        .action-button.calculate-button {
+            background-color: #28a745;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: var(--button-opacity, 1);
+            pointer-events: var(--button-pointer-events, auto);
+        }
+
+        .action-button.clear-button {
+            background-color: #6c757d; /* Gray color for clear button */
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: var(--button-opacity, 1);
+            pointer-events: var(--button-pointer-events, auto);
+        }
+        .action-button.clear-settings-button { /* Style for the new clear settings button */
+            background-color: #dc3545; /* Red color */
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: var(--button-opacity, 1);
+            pointer-events: var(--button-pointer-events, auto);
+            width: fit-content; /* Adjust width to content */
+        }
+        .action-button.clear-settings-button:hover {
+            background-color: #c82333;
+        }
+
+        /* Match Table Card Specific Adjustments */
+        .match-table-card {
+          /* Inherits from .card */
+          overflow-x: auto; /* Ensure table scrolling still works */
+        }
+
+        .match-table-wrapper {
+            overflow-x: auto; /* Ensure the table itself can scroll horizontally if needed */
+        }
+
+
+        .match-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 15px; /* Add some space above the table */
+        }
+
+        .match-table th,
+        .match-table td {
+          border: 1px solid #eee;
+          padding: 12px 10px;
+          text-align: center;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        .match-table th {
+          background-color: #323943;
+          font-weight: 600;
+          color: #fff;
+        }
+
+        /* Table Row Striping */
+        .match-table tbody tr:nth-child(even) {
+          background-color: #f8f8f8; /* Light gray for even rows */
+        }
+
+        .match-table tbody tr:hover {
+          background-color: #eaf6ff; /* Highlight on hover */
+        }
+
+        .match-table td select,
+        .match-table td input {
+          width: 100%;
+          padding: 8px 5px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 12px;
+          box-sizing: border-box;
+        }
+
+        .no-matches-message {
+          text-align: center;
+          padding: 20px;
+          color: #777;
+          background-color: #fdfdfd; /* Lighter background for message */
+          border-radius: 8px;
+          margin-bottom: 20px;
+          border: 1px dashed #e0e0e0; /* Dashed border for visual cue */
+        }
+
+
+        /* Existing Styles (modified/copied below for context) */
         .date-topic-group,
         .action-time-group {
           display: flex;
           flex-wrap: wrap;
           gap: 20px;
           align-items: center;
-          /* Removed justify-content: space-between from here as it's now handled by control-panel */
         }
 
         .input-group {
@@ -1667,7 +1772,7 @@ const Match = () => {
         }
 
         .action-button.start-group {
-          background-color: #4bf196; /* Green */
+          background-color: #4bf196;
         }
 
         .action-button.start-group:hover {
@@ -1675,61 +1780,21 @@ const Match = () => {
         }
 
         .action-button.end-group {
-          background-color: #f44336; /* Red */
+          background-color: #f44336;
         }
 
         .action-button.end-group:hover {
           background-color: #d32f2f;
         }
 
-        .activity-time-display,
-        .match-count-display { /* Added match-count-display */
-          background-color: #e3f2fd; /* Light blue background */
+        .activity-time-display {
+          background-color: #e3f2fd;
           padding: 10px 15px;
           border-radius: 8px;
           font-size: 14px;
           display: flex;
           align-items: center;
           gap: 10px;
-        }
-
-        /* Match Table Styles */
-        .match-table-container {
-          background-color: #ffffff;
-          padding: 25px;
-          border-radius: 10px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-          overflow-x: auto; /* Enable horizontal scrolling for tables */
-        }
-
-        .match-table {
-          width: 100%; /* เพิ่มตรงนี้เลยครับ */
-          border-collapse: collapse; /* เพื่อให้เส้นขอบรวมกันสวยงาม */
-        }
-
-        .match-table th,
-        .match-table td {
-          border: 1px solid #eee;
-          padding: 12px 10px;
-          text-align: center;
-          font-size: 12px;
-          white-space: nowrap; /* Prevent text wrapping in cells */
-        }
-
-        .match-table th {
-          background-color: #323943;
-          font-weight: 600;
-          color: #fff;
-        }
-
-        .match-table td select,
-        .match-table td input {
-          width: 100%;
-          padding: 8px 5px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 12px;
-          box-sizing: border-box;
         }
 
         .match-table td select:disabled {
@@ -1745,7 +1810,7 @@ const Match = () => {
           background-repeat: no-repeat;
           background-position: right 10px top 50%;
           background-size: 12px auto;
-          padding-right: 30px; /* Make space for the arrow */
+          padding-right: 30px;
         }
 
         .score-display {
@@ -1756,7 +1821,6 @@ const Match = () => {
           min-width: 40px;
         }
 
-        /* Action Menu */
         .action-menu {
           position: relative;
           display: inline-block;
@@ -1800,7 +1864,6 @@ const Match = () => {
           background-color: #f1f1f1;
         }
 
-        /* Pagination */
         .pagination-controls {
           display: flex;
           justify-content: center;
@@ -1838,13 +1901,12 @@ const Match = () => {
           font-weight: 500;
         }
 
-        /* Add Match Button */
         .add-match-button {
           display: block;
           width: fit-content;
           margin: 25px auto 0 auto;
           padding: 12px 30px;
-          background-color: #007bff; /* Blue */
+          background-color: #007bff;
           color: white;
           border: none;
           border-radius: 8px;
@@ -1866,9 +1928,8 @@ const Match = () => {
         /* Mobile Responsiveness */
         @media (max-width: 768px) {
           .control-panel {
-            padding: 20px;
-            flex-direction: column; /* Stack vertically on small screens */
-            align-items: stretch; /* Stretch items to full width */
+            flex-direction: column;
+            align-items: stretch;
           }
 
           .date-topic-group,
@@ -1886,7 +1947,7 @@ const Match = () => {
           }
 
           .match-table thead {
-            display: none; /* Hide table headers on small screens */
+            display: none;
           }
 
           .match-table,
@@ -1907,9 +1968,9 @@ const Match = () => {
 
           .match-table td {
             text-align: right;
-            padding-left: 50%; /* Space for the data-label */
+            padding-left: 50%;
             position: relative;
-            border: none; /* Remove individual cell borders */
+            border: none;
           }
 
           .match-table td:before {
@@ -1924,56 +1985,86 @@ const Match = () => {
           }
 
           /* Specific data-labels for clarity */
-          .match-table td:nth-of-type(1):before { content: "Match ID"; }
-          .match-table td:nth-of-type(2):before { content: "สนาม"; }
-          .match-table td:nth-of-type(3):before { content: "ทีม A (ผู้เล่น 1)"; }
-          .match-table td:nth-of-type(4):before { content: "ทีม A (ผู้เล่น 2)"; }
-          .match-table td:nth-of-type(5):before { content: "ทีม B (ผู้เล่น 1)"; }
-          .match-table td:nth-of-type(6):before { content: "ทีม B (ผู้เล่น 2)"; }
-          .match-table td:nth-of-type(7):before { content: "ลูก"; }
-          .match-table td:nth-of-type(8):before { content: "ผล"; }
-          .match-table td:nth-of-type(9):before { content: "คะแนน"; }
-          .match-table td:nth-of-type(10):before { content: "สถานะ"; }
-          .match-table td:nth-of-type(11):before { content: "Action"; }
+          .match-table td:nth-of-type(1):before {
+            content: "Match ID";
+          }
+          .match-table td:nth-of-type(2):before {
+            content: "สนาม";
+          }
+          .match-table td:nth-of-type(3):before {
+            content: "ทีม A (ผู้เล่น 1)";
+          }
+          .match-table td:nth-of-type(4):before {
+            content: "ทีม A (ผู้เล่น 2)";
+          }
+          .match-table td:nth-of-type(5):before {
+            content: "ทีม B (ผู้เล่น 1)";
+          }
+          .match-table td:nth-of-type(6):before {
+            content: "ทีม B (ผู้เล่น 2)";
+          }
+          .match-table td:nth-of-type(7):before {
+            content: "ลูก";
+          }
+          .match-table td:nth-of-type(8):before {
+            content: "ผล";
+          }
+          .match-table td:nth-of-type(9):before {
+            content: "คะแนน";
+          }
+          .match-table td:nth-of-type(10):before {
+            content: "สถานะ";
+          }
+          .match-table td:nth-of-type(11):before {
+            content: "Action";
+          }
 
-          /* Ensure selects/inputs within mobile table cells take full width */
-          .match-table td select,\
+          .match-table td select,
           .match-table td input {
             width: 100%;
-            max-width: unset; /* Remove any max-width */
-            text-align: right; /* Align text to the right for values */
-            flex-grow: 1; /* Allow input/select to grow */
+            max-width: unset;
+            text-align: right;
+            flex-grow: 1;
           }
           .match-table td select.status-select {
-            background-position: right 10px center; /* Adjust dropdown arrow position */
+            background-position: right 10px center;
           }
 
           .match-table td .score-display {
-            width: 100%; /* Make score display take full width */
+            width: 100%;
             text-align: right;
           }
 
           .action-menu-dropdown {
-            right: auto; /* Remove right alignment */
-            left: 50%; /* Center dropdown horizontally */
+            right: auto;
+            left: 50%;
             transform: translateX(-50%);
             min-width: 150px;
           }
 
-          .region-selector-inline { /* Adjust for inline display on small screens */
+          .region-selector-inline {
             width: 100%;
             justify-content: flex-start;
+          }
+
+          .cost-input-group {
+            min-width: unset; /* Remove min-width on small screens */
+            width: 100%; /* Make it full width */
+          }
+          .cost-input {
+            width: 100%; /* Make inputs full width on small screens */
+          }
+          .early-exit-select {
+            width: 100%; /* Make select full width on small screens */
+            min-width: unset;
           }
         }
         @media (max-width: 480px) {
           .match-table td {
-            padding-left: 45%; /* Adjust padding for smaller screens */
+            padding-left: 45%;
           }
           .match-table td:before {
             width: 40%;
-          }
-          .game-count-display {
-            justify-content: flex-start;
           }
         }
       `}</style>
