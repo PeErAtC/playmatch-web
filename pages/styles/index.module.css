@@ -1,0 +1,240 @@
+/* คุณควรสร้างไฟล์นี้ขึ้นมา เช่น ในโฟลเดอร์ src/styles/index.module.css */
+
+/*
+   *** สำคัญมาก: ตรวจสอบและแก้ไข CSS ของ HTML และ BODY ในไฟล์ GLOBAL CSS ของคุณ ***
+   (เช่น: globals.css หรือใน _app.js หรือ layout.js ที่คุณ import Global CSS)
+
+   เพื่อให้ useInView ทำงานได้อย่างถูกต้องกับการ Scroll ของ Browser:
+   1. ตรวจสอบให้แน่ใจว่า html และ body ไม่มี 'overflow: hidden;' หรือ 'overflow: auto;'
+   2. ตรวจสอบว่า html และ body ไม่ได้ถูกกำหนด 'height: 100vh;' หรือ 'height: 100%;' แบบตายตัว
+      ถ้ามี ให้ลบออกหรือปรับเปลี่ยนเพื่อให้ Browser สามารถสร้าง Scrollbar หลักได้ตามปกติ
+*/
+/* ตัวอย่างโค้ดที่คุณควร *ไม่มี* หรือแก้ไขใน Global CSS ของคุณ */
+/*
+html, body {
+  height: 100vh; // ถ้ามี ให้ลบออก
+  overflow: hidden; // ถ้ามี ให้ลบออก
+}
+*/
+
+/* Font Import (หากยังไม่มีใน global CSS ของคุณ) */
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap');
+
+/* Initial states for fade-in animation */
+.feature-left {
+  opacity: 0;
+  transform: translateX(-100px); /* เริ่มต้นจากซ้าย 100px */
+}
+
+.feature-right {
+  opacity: 0;
+  transform: translateX(100px); /* เริ่มต้นจากขวา 100px */
+}
+
+/* State when element is in view and should be visible */
+.feature-visible {
+  opacity: 1;
+  transform: translateX(0); /* เคลื่อนที่กลับมาที่เดิม */
+}
+
+/* Transitions for smooth animation */
+.feature-left,
+.feature-right {
+  transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.8s ease-out;
+}
+
+
+/* Hover effects (ใช้ className จาก stylesCss) */
+.startButton {
+    position: relative;
+    overflow: hidden;
+    z-index: 1; /* Make sure pseudo-element is behind text */
+}
+
+.startButton::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.1) 100%);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease-out;
+    z-index: -1; /* Place behind button content */
+}
+
+.startButton:hover::before {
+    transform: translateX(0);
+}
+
+.startButton:hover {
+  background: linear-gradient(45deg, #00d2ff 0%, #3a7bd5 100%); /* สลับเฉดสีหรือเปลี่ยนสีเมื่อ hover */
+  box-shadow: 0 15px 35px rgba(58, 123, 213, 0.7); /* เงาที่ชัดเจนและกระจายมากขึ้น */
+  transform: translateY(-5px) scale(1.03); /* ยกขึ้นและขยายใหญ่ขึ้นเล็กน้อย */
+  cursor: pointer;
+}
+
+.featureImage:hover {
+  transform: scale(1.03);
+}
+
+.featureLearnMore:hover {
+  color: #00d2ff; /* เปลี่ยนสีเมื่อ hover ให้เข้ากับธีม */
+  text-decoration: underline;
+}
+
+.socialIcon:hover {
+  transform: scale(1.2);
+}
+
+/* Pseudo-elements for decoration (ใช้ className จาก stylesCss) */
+.featureContentTitle::before {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  width: 60px;
+  height: 4px;
+  background-color: #00d2ff; /* เปลี่ยนสีให้เข้ากับธีม */
+  border-radius: 2px;
+}
+
+.footerHeading::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background-color: #00d2ff; /* เปลี่ยนสีให้เข้ากับธีม */
+}
+
+
+/* Responsive adjustments (คัดลอกจาก styles object ใน JS มาไว้ที่นี่) */
+@media (max-width: 992px) {
+  body {
+    font-family: 'Kanit', sans-serif;
+  }
+
+  .heroTitle {
+    font-size: 3rem;
+  }
+  .heroSubtitle {
+    font-size: 1.2rem;
+  }
+  .featuresTitle {
+    font-size: 2.2rem;
+  }
+  .featureItem {
+    flex-direction: column !important; /* Override inline style for mobile */
+    text-align: center;
+    padding: 20px;
+  }
+  .featureImageContainer {
+    margin-bottom: 20px;
+  }
+  .featureContent {
+    padding: 10px 20px;
+  }
+  .featureContentTitle {
+    font-size: 1.8rem;
+  }
+  .featureContentTitle::before {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .footerContent {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .footerSection {
+    align-items: center;
+  }
+  .footerHeading::after {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .footerBottom {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+@media (max-width: 768px) {
+  .heroTitle {
+    font-size: 2.5rem;
+  }
+  .heroSubtitle {
+    font-size: 1.1rem;
+  }
+  .startButton {
+    padding: 15px 30px;
+    font-size: 1.1rem;
+  }
+  .featuresTitle {
+    font-size: 2rem;
+  }
+  .featureContentTitle {
+    font-size: 1.6rem;
+  }
+  .featureContentDescription {
+    font-size: 1rem;
+  }
+  .footer {
+    padding: 30px 15px 15px;
+  }
+  .footerBrandName {
+    font-size: 1.8rem; /* ปรับขนาดให้ใหญ่ขึ้นเล็กน้อย*/
+  }
+  .footerHeading {
+    font-size: 1.1rem;
+  }
+  .footerLink {
+    font-size: 0.85rem;
+  }
+  .footerIcon {
+    marginRight: "10px",
+  }
+  .footerCopyright {
+    font-size: 0.8rem;
+  }
+}
+@media (max-width: 480px) {
+  .heroSection {
+    padding: 70px 15px 50px;
+  }
+  .heroTitle {
+    font-size: 2rem;
+    margin-bottom: 15px;
+  }
+  .heroSubtitle {
+    font-size: 0.95rem;
+    margin-bottom: 30px;
+  }
+  .startButton {
+    padding: 12px 25px;
+    font-size: 1rem;
+  }
+  .featuresTitle {
+    font-size: 1.8rem;
+    margin-bottom: 50px;
+  }
+  .featureItem {
+    margin-bottom: 50px;
+    padding: 15px;
+  }
+  .featureContentTitle {
+    font-size: 1.4rem;
+    margin-bottom: 15px;
+  }
+  .featureContentDescription {
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .footerContent {
+    gap: 20px;
+  }
+  .footerLogo {
+    justify-content: center;
+  }
+}
