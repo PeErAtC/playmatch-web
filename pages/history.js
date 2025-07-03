@@ -13,6 +13,10 @@ import {
 } from "firebase/firestore";
 import Swal from "sweetalert2";
 import { useRouter } from "next/router";
+import debounce from "lodash.debounce";
+import { useMemo } from "react";
+
+
 
 // Constants
 const ITEMS_PER_PAGE = 25; // <<< กำหนดให้ดึงมาหน้าละ 25 รายการ
@@ -25,6 +29,8 @@ const History = () => {
   const [totalMatches, setTotalMatches] = useState(0); // จะแสดงจำนวนรายการในหน้าปัจจุบันเท่านั้น
   const [loggedInEmail, setLoggedInEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [viewedMatches, setViewedMatches] = useState({});
 
   const [isBrowser, setIsBrowser] = useState(false);
 
@@ -39,124 +45,154 @@ const History = () => {
     if (typeof window !== "undefined") {
       setIsBrowser(true);
       setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
+      // โหลดสถานะ viewedMatches จาก localStorage เมื่อ component โหลด
+      try {
+        const storedViewedMatches = JSON.parse(localStorage.getItem("viewedMatches") || "{}");
+        setViewedMatches(storedViewedMatches);
+      } catch (error) {
+        console.error("Failed to parse viewedMatches from localStorage", error);
+        setViewedMatches({});
+      }
     }
   }, []);
+// กำหนดว่าแมตช์จะถือว่าเป็น "ใหม่" ภายในกี่ชั่วโมง
+  const NEW_MATCH_THRESHOLD_HOURS = 24; // คุณสามารถปรับค่านี้ได้ตามต้องการ
+
+  // ฟังก์ชันตรวจสอบว่าเป็นแมตช์ใหม่หรือไม่
+  const isNewMatch = (match) => {
+  if (!match.savedAt) return false;
+
+  let savedDate;
+  try {
+    savedDate = match.savedAt.toDate(); // <-- แปลงจาก Firestore Timestamp
+  } catch {
+    savedDate = new Date(match.savedAt); // fallback
+  }
+
+  const now = new Date();
+  const diffHours = Math.abs(now.getTime() - savedDate.getTime()) / (1000 * 60 * 60);
+  return diffHours < NEW_MATCH_THRESHOLD_HOURS && !viewedMatches[match.id];
+  };
 
   // <<< ฟังก์ชัน fetchMatches ถูกแก้ไขใหม่หมด เพื่อทำ Server-side Pagination
-  const fetchMatches = useCallback(
-    async (direction = "current", cursor = null) => {
-      if (!loggedInEmail) return;
+ const fetchMatches = useCallback(
+  async (direction = "current", cursor = null) => {
+    if (!loggedInEmail) return;
 
-      setIsLoading(true);
-      try {
-        // ขั้นตอนที่ 1: ค้นหา userId จาก email
-        const usersRef = collection(db, "users");
-        const userQuery = query(usersRef, where("email", "==", loggedInEmail));
-        const userSnap = await getDocs(userQuery);
-        let userId = null;
-        userSnap.forEach((doc) => {
-          userId = doc.id;
-        });
+    setIsLoading(true);
+    try {
+      const usersRef = collection(db, "users");
+      const userQuery = query(usersRef, where("email", "==", loggedInEmail));
+      const userSnap = await getDocs(userQuery);
 
-        if (!userId) {
-          Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้", "error");
-          setMatches([]);
-          setTotalMatches(0);
-          setIsLoading(false);
-          return;
-        }
+      let userId = null;
+      userSnap.forEach((doc) => {
+        userId = doc.id;
+      });
 
-        const userMatchesCollectionRef = collection(db, `users/${userId}/Matches`); // <<< ใช้ "Matches" ตามที่คุณส่งมาล่าสุด
-
-        let baseQuery = query(
-          userMatchesCollectionRef,
-          orderBy("savedAt", "desc") // <<< ใช้ "savedAt" ตามที่คุณส่งมาล่าสุด
-        );
-
-        // เพิ่มเงื่อนไขการค้นหา (where clause) หากมี searchTopic
-        if (searchTopic) {
-          baseQuery = query(
-            baseQuery,
-            where("topic", ">=", searchTopic), // <<< ใช้ "topic" ตามที่คุณส่งมาล่าสุด
-            where("topic", "<=", searchTopic + "\uf8ff")
-          );
-        }
-
-        let q;
-        if (direction === "next" && cursor) {
-          // ดึงหน้าถัดไป: เริ่มต้นหลังจากเอกสารสุดท้ายของหน้าปัจจุบัน
-          q = query(baseQuery, startAfter(cursor), limit(ITEMS_PER_PAGE));
-        } else if (direction === "prev" && cursor) {
-          // ดึงหน้าก่อนหน้า:
-          // ต้องเรียงลำดับย้อนกลับเพื่อใช้ startAfter/endBefore
-          // แล้วค่อยกลับลำดับผลลัพธ์ทีหลัง
-          q = query(
-            userMatchesCollectionRef, // ใช้ collectionRef ตรงๆ เพื่อสร้าง query ใหม่
-            orderBy("savedAt", "asc"), // เรียงลำดับย้อนกลับ (จากเก่าไปใหม่)
-            ...(searchTopic ? [where("topic", ">=", searchTopic), where("topic", "<=", searchTopic + "\uf8ff")] : []),
-            startAfter(cursor), // ใช้ firstVisible ของหน้าปัจจุบันเป็น cursor
-            limit(ITEMS_PER_PAGE)
-          );
-        } else {
-          // ดึงหน้าปัจจุบัน (หรือโหลดครั้งแรก)
-          q = query(baseQuery, limit(ITEMS_PER_PAGE)); // <<< ตรงนี้แหละที่จำกัดการอ่านแค่ 25
-        }
-
-        const documentSnapshots = await getDocs(q);
-        let fetchedMatches = documentSnapshots.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        // ถ้าเป็นการดึงหน้าก่อนหน้า ให้กลับลำดับผลลัพธ์ให้ถูกต้อง
-        if (direction === "prev") {
-          fetchedMatches.reverse();
-        }
-
-        setMatches(fetchedMatches);
-        setTotalMatches(fetchedMatches.length); // แสดงจำนวนรายการที่ดึงมาในหน้าปัจจุบัน
-
-        // กำหนด cursor สำหรับหน้าถัดไป/ก่อนหน้า
-        if (fetchedMatches.length > 0) {
-          setFirstVisible(documentSnapshots.docs[0]);
-          setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
-        } else {
-          setFirstVisible(null);
-          setLastVisible(null);
-        }
-
-        // --- ตรวจสอบว่ามีหน้าถัดไปหรือหน้าก่อนหน้าหรือไม่ (ต้องมีการอ่านเพิ่มเติม 1 Read สำหรับแต่ละการตรวจสอบ) ---
-
-        // ตรวจสอบหน้าถัดไป
-        const nextCheckQuery = query(
-          baseQuery, // ใช้ baseQuery เพื่อคงเงื่อนไขการค้นหาเดิม
-          startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1] || null), // เริ่มต้นหลังจากเอกสารสุดท้ายของหน้าปัจจุบัน
-          limit(1) // ดึงมา 1 รายการเพื่อตรวจสอบเท่านั้น
-        );
-        const nextSnapshot = await getDocs(nextCheckQuery);
-        setHasMoreNext(!nextSnapshot.empty);
-
-        // ตรวจสอบหน้าก่อนหน้า
-        const prevCheckQuery = query(
-          baseQuery, // ใช้ baseQuery เพื่อคงเงื่อนไขการค้นหาเดิม
-          endBefore(documentSnapshots.docs[0] || null), // สิ้นสุดก่อนเอกสารแรกของหน้าปัจจุบัน
-          limit(1) // ดึงมา 1 รายการเพื่อตรวจสอบเท่านั้น
-        );
-        const prevSnapshot = await getDocs(prevCheckQuery);
-        setHasMorePrev(!prevSnapshot.empty);
-
-      } catch (error) {
-        console.error("Error fetching matches:", error);
-        Swal.fire("Error", "ไม่สามารถดึงข้อมูลประวัติได้: " + error.message, "error");
+      if (!userId) {
+        Swal.fire("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้", "error");
         setMatches([]);
         setTotalMatches(0);
-      } finally {
         setIsLoading(false);
+        return;
       }
-    },
-    [loggedInEmail, searchTopic] // Dependencies: เรียก fetchMatches ใหม่เมื่อ loggedInEmail หรือ searchTopic เปลี่ยน
-  );
+
+      const userMatchesCollectionRef = collection(db, `users/${userId}/Matches`);
+
+      const trimmedSearch = searchTopic.trim();
+      let baseQuery = query(userMatchesCollectionRef, orderBy("savedAt", "desc"));
+
+      if (trimmedSearch) {
+        baseQuery = query(
+          userMatchesCollectionRef,
+          where("topic", ">=", trimmedSearch),
+          where("topic", "<=", trimmedSearch + "\uf8ff"),
+          orderBy("topic"),
+          orderBy("savedAt", "desc")
+        );
+      }
+
+      let q;
+      if (direction === "next" && cursor) {
+        q = query(baseQuery, startAfter(cursor), limit(ITEMS_PER_PAGE));
+      } else if (direction === "prev" && cursor) {
+        q = query(
+          userMatchesCollectionRef,
+          orderBy("savedAt", "asc"),
+          ...(trimmedSearch
+            ? [where("topic", ">=", trimmedSearch), where("topic", "<=", trimmedSearch + "\uf8ff")]
+            : []),
+          startAfter(cursor),
+          limit(ITEMS_PER_PAGE)
+        );
+      } else {
+        q = query(baseQuery, limit(ITEMS_PER_PAGE));
+      }
+
+      const documentSnapshots = await getDocs(q);
+      let fetchedMatches = documentSnapshots.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      if (direction === "prev") {
+        fetchedMatches.reverse();
+      }
+
+      setMatches(fetchedMatches);
+      setTotalMatches(fetchedMatches.length);
+
+      if (fetchedMatches.length > 0) {
+        setFirstVisible(documentSnapshots.docs[0]);
+        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+      } else {
+        setFirstVisible(null);
+        setLastVisible(null);
+      }
+
+      // ตรวจสอบหน้าถัดไป
+      const nextCheckQuery = query(
+        baseQuery,
+        startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1] || null),
+        limit(1)
+      );
+      const nextSnapshot = await getDocs(nextCheckQuery);
+      setHasMoreNext(!nextSnapshot.empty);
+
+      // ตรวจสอบหน้าก่อนหน้า
+      const prevCheckQuery = query(
+        baseQuery,
+        endBefore(documentSnapshots.docs[0] || null),
+        limit(1)
+      );
+      const prevSnapshot = await getDocs(prevCheckQuery);
+      setHasMorePrev(!prevSnapshot.empty);
+    } catch (error) {
+      console.error("Error fetching matches:", error);
+      Swal.fire("Error", "ไม่สามารถดึงข้อมูลได้: " + error.message, "error");
+      setMatches([]);
+      setTotalMatches(0);
+    } finally {
+      setIsLoading(false);
+    }
+  },
+  [loggedInEmail, searchTopic]
+);
+
   // >>> สิ้นสุดการปรับปรุง fetchMatches
+
+
+    const debouncedSearch = useMemo(() => debounce((value) => {
+  setSearchTopic(value); // update state ที่ผูกกับ query
+}, 300), []);
+
+const handleSearchChange = (e) => {
+  const value = e.target.value;
+  setSearchText(value); // แสดงใน input
+  debouncedSearch(value.trim());
+};
+
 
   // <<< ปรับปรุง useEffect ให้เรียก fetchMatches ด้วย Pagination
   useEffect(() => {
@@ -199,6 +235,10 @@ const History = () => {
   };
 
   const showMatchDetailsInNewTab = (matchId) => {
+    // บันทึก matchId ลงใน localStorage เมื่อกดดูรายละเอียด
+    const updatedViewedMatches = { ...viewedMatches, [matchId]: true };
+    localStorage.setItem("viewedMatches", JSON.stringify(updatedViewedMatches));
+    setViewedMatches(updatedViewedMatches); // อัปเดต state เพื่อ re-render
     window.open(`/MatchDetails?matchId=${matchId}`, '_blank');
   };
 
@@ -215,7 +255,7 @@ const History = () => {
             type="text"
             placeholder="ค้นหาหัวเรื่อง"
             value={searchTopic}
-            onChange={(e) => setSearchTopic(e.target.value)}
+    onChange={handleSearchChange}
             className="topic-search-input"
           />
         </div>
@@ -268,12 +308,18 @@ const History = () => {
                 <td colSpan={4} className="no-data-message">
                   {searchTopic ? "ไม่พบหัวเรื่องที่ค้นหา" : "ไม่พบประวัติการจัดก๊วน"}
                 </td>
+                
               </tr>
             )}
             {!isLoading && matches.length > 0 && matches.map((match, idx) => (
               <tr key={match.id || idx} className={idx % 2 === 0 ? "even-row" : "odd-row"}>
                 <td>{formatDate(match.matchDate)}</td>
-                <td>{match.topic}</td>
+                <td>
+                  {match.topic}
+                  {isNewMatch(match) && ( // แสดง "(ใหม่)" ถ้าเป็นแมตช์ใหม่
+                    <span className="new-match-indicator"> (ใหม่)</span>
+                  )}
+                </td>
                 <td>
                   {match.totalTime ? `${Math.floor(match.totalTime / 60).toString().padStart(2, '0')}:${(match.totalTime % 60).toString().padStart(2, '0')} นาที` : 'N/A'}
                 </td>
@@ -284,6 +330,12 @@ const History = () => {
                   >
                     ดูรายละเอียด
                   </button>
+                   {/* เพิ่มการแสดงสถานะ Ranking ตรงนี้ */}
+                  {match.hasRankingSaved ? (
+                    <div className="ranking-status saved">บันทึก Ranking เรียบร้อย</div>
+                  ) : (
+                    <div className="ranking-status not-saved">ไม่ได้บันทึก Ranking</div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -409,6 +461,13 @@ const History = () => {
           margin-bottom: 16px;
         }
 
+        .new-match-indicator { //คำว่าใหม่ ของเเมตที่สร้างใหม่
+          color: red;
+          font-weight: bold;
+          margin-left: 5px;
+          font-size: 0.9em; /* ปรับขนาดตามต้องการ */
+        }
+
         .matches-table {
           width: 100%;
           border-collapse: collapse;
@@ -483,7 +542,54 @@ const History = () => {
         .detail-button:hover {
           background-color: #37d381;
         }
+        /* สไตล์ใหม่สำหรับสถานะ Ranking */
+        .ranking-status {
+          font-size: 11px; /* ปรับขนาดตัวอักษรตามต้องการ */
+          margin-top: 5px; /* ระยะห่างเล็กน้อยเพื่อแยกจากปุ่ม */
+          text-align: center;
+          white-space: nowrap; /* ตรวจสอบให้แน่ใจว่าข้อความไม่ขึ้นบรรทัดใหม่ */
+        }
 
+        .ranking-status.saved {
+          color: #28a745; /* สีเขียวสำหรับ "บันทึกRankingเรียบร้อย" */
+        }
+
+        .ranking-status.not-saved {
+          color: #dc3545; /* สีแดงสำหรับ "ไม่ได้บันทึก Ranking" */
+        }
+
+        /* Media Queries สำหรับ Responsive Design (ปรับตามความจำเป็นสำหรับองค์ประกอบใหม่) */
+        @media (max-width: 480px) {
+          .main-content {
+            padding: 10px;
+          }
+          .search-and-total-row {
+            padding: 10px;
+          }
+          .search-input-container {
+            align-items: center;
+          }
+          .topic-search-input {
+            padding: 8px 10px;
+            font-size: 12px;
+          }
+          .total-matches-display {
+            justify-content: center;
+            font-size: 13px;
+          }
+          .detail-button {
+            padding: 5px 12px;
+            font-size: 12px;
+          }
+          .pagination-button {
+            padding: 6px 8px;
+            font-size: 10px;
+          }
+          /* การปรับปรุงสำหรับสถานะ Ranking ใหม่บนหน้าจอขนาดเล็ก */
+          .ranking-status {
+            font-size: 10px;
+            margin-top: 3px;
+          }
         /* Media Queries for Responsive Design */
         @media (max-width: 768px) {
           .main-content {
