@@ -222,6 +222,8 @@ function MyApp({ Component, pageProps }) {
       </main>
 
       <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap');
+
         html,
         body,
         #__next {
