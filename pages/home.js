@@ -20,6 +20,7 @@ import {
 import * as XLSX from "xlsx";
 // Import ChevronUp, ChevronDown for active sorting, and ArrowUpDown for default sortable state
 import { ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'; 
+import Head from 'next/head'; // <--- เพิ่มบรรทัดนี้
 
 // Modal Component - Integrated within Home.js
 const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
@@ -916,6 +917,10 @@ useEffect(() => {
 
   return (
     <div className="overall-layout">
+    <Head>
+      <title>หน้าหลัก PlayMatch - จัดการสมาชิกก๊วนแบดมินตัน</title> {/* เพิ่ม Title ที่นี่ */}
+      <meta name="description" content="จัดการข้อมูลสมาชิกก๊วนแบดมินตันของคุณได้อย่างง่ายดาย เพิ่ม, แก้ไข, ลบ, ค้นหา, จัดเรียง และนำเข้า/ส่งออกข้อมูลสมาชิกด้วย PlayMatch." /> {/* เพิ่ม Description ที่นี่ */}
+    </Head>
       <main className="main-content">
         <h2>สมาชิก</h2>
         <hr className="title-separator" /> {/* Changed hr to use common class for consistency */}
