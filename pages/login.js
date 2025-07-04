@@ -3,10 +3,11 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-// นำเข้า auth, db, และ serverTimestamp จากไฟล์ firebaseConfig ของคุณ
-import { auth, db, serverTimestamp } from "../lib/firebaseConfig"; 
-// นำเข้า doc, getDoc, และ updateDoc จาก firebase/firestore
-import { doc, getDoc, updateDoc } from "firebase/firestore"; 
+// ตรวจสอบให้แน่ใจว่าได้ import serverTimestamp จาก firebaseConfig.js อย่างถูกต้อง
+import { auth, db, serverTimestamp } from "../lib/firebaseConfig";
+// เพิ่ม doc, getDoc, และ updateDoc สำหรับการจัดการเอกสารผู้ใช้
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import Head from 'next/head'; // <--- เพิ่มบรรทัดนี้สำหรับ SEO Head Tags
 
 export default function Login() {
   const router = useRouter();
@@ -52,10 +53,10 @@ export default function Login() {
       localStorage.setItem("loggedInEmail", user.email);
 
       setIsLoading(true);
+      // เปลี่ยนจาก router.push("/home") เป็น window.location.href = "/home";
       setTimeout(() => {
         setIsLoading(false);
-        // การรีโหลดหน้าทั้งหมดตามที่คุณต้องการ
-        window.location.href = "/home"; 
+        window.location.href = "/home"; // นี่คือการสั่งให้บราวเซอร์รีเฟรชและโหลดหน้า /home ใหม่ทั้งหมด
       }, 1000);
     } catch (error) {
       setMsg({ type: "error", text: error.message || "Login failed" });
@@ -66,12 +67,21 @@ export default function Login() {
 
   return (
     <main className="login-main">
+      <Head> {/* <--- เพิ่ม Head component ที่นี่ */}
+        <title>เข้าสู่ระบบ PlayMatch - จัดการและติดตามการแข่งขันกีฬา</title>
+        <meta
+          name="description"
+          content="เข้าสู่ระบบ PlayMatch แพลตฟอร์มจัดการก๊วนแบดมินตันและกีฬาอื่นๆ เพื่อการบริหารสมาชิก สร้างแมตช์ และติดตามผลได้อย่างง่ายดาย."
+        />
+        {/* คุณสามารถเพิ่ม meta tag อื่นๆ ที่นี่ได้หากต้องการ */}
+      </Head>
+
       <div className="login-bg-overlay" />
       <div className="login-form-wrapper">
         <div className="login-logo">
           <Image
             src="/images/Logo-iconnew.png"
-            alt="PlayMatch Logo"
+            alt="โลโก้ PlayMatch" // อัปเดต Alt text ให้ตรงกับเนื้อหามากขึ้น
             width={74}
             height={86}
             priority
@@ -129,7 +139,7 @@ export default function Login() {
             aria-label="Line"
           >
             <span>
-              <img src="/images/Line-icon.png" alt="Line Icon" />
+              <img src="/images/Line-icon.png" alt="ไอคอน Line" />
             </span>
           </a>
           <a
@@ -138,7 +148,7 @@ export default function Login() {
             aria-label="Email"
           >
             <span>
-              <img src="/images/Email-icon.png" alt="Email Icon" />
+              <img src="/images/Email-icon.png" alt="ไอคอน Email" />
             </span>
           </a>
         </div>
