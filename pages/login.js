@@ -3,8 +3,10 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../lib/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+// นำเข้า auth, db, และ serverTimestamp จากไฟล์ firebaseConfig ของคุณ
+import { auth, db, serverTimestamp } from "../lib/firebaseConfig"; 
+// นำเข้า doc, getDoc, และ updateDoc จาก firebase/firestore
+import { doc, getDoc, updateDoc } from "firebase/firestore"; 
 
 export default function Login() {
   const router = useRouter();
@@ -38,14 +40,22 @@ export default function Login() {
         localStorage.setItem("groupName", groupName);
       }
 
+      // ******** ส่วนที่เพิ่มเข้ามาเพื่อบันทึกเวลาเข้าสู่ระบบล่าสุด ********
+      // ใช้ updateDoc เพื่ออัปเดตช่อง 'lastLogin' ในเอกสารผู้ใช้
+      // serverTimestamp() จะบันทึกเวลาปัจจุบันตามเซิร์ฟเวอร์ Firestore ซึ่งมีความแม่นยำ
+      await updateDoc(userRef, {
+        lastLogin: serverTimestamp(),
+      });
+      // *******************************************************************
+
       setMsg({ type: "success", text: "✅ เข้าสู่ระบบสำเร็จ" });
       localStorage.setItem("loggedInEmail", user.email);
 
       setIsLoading(true);
-      // เปลี่ยนจาก router.push("/home") เป็น window.location.href = "/home";
       setTimeout(() => {
         setIsLoading(false);
-        window.location.href = "/home"; // นี่คือการสั่งให้บราวเซอร์รีเฟรชและโหลดหน้า /home ใหม่ทั้งหมด
+        // การรีโหลดหน้าทั้งหมดตามที่คุณต้องการ
+        window.location.href = "/home"; 
       }, 1000);
     } catch (error) {
       setMsg({ type: "error", text: error.message || "Login failed" });
@@ -134,7 +144,7 @@ export default function Login() {
         </div>
 
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.0.5
+          © 2025–2026 PlayMatch version 1.2.1
         </div>
       </div>
 
