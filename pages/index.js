@@ -1,5 +1,5 @@
 import React from "react";
-import Head from "next/head";
+import Head from "next/head"; // มีอยู่แล้ว
 import Navbar from "./components/navbar";
 import { useInView } from "react-intersection-observer";
 import { ChevronRight, Flag, Mail, Phone, MapPin } from "lucide-react";
@@ -43,18 +43,18 @@ function IndexPage() {
 
   // ฟังก์ชันสำหรับจัดการการคลิกปุ่มเริ่มต้นใช้งาน
   const handleStartButtonClick = () => {
-    // นี่คือส่วนที่คุณจะระบุ path ไปยังหน้า patch login ของคุณ
+    // นี่คือส่วนที่คุณจะระบุ path ไปยังหน้า login ของคุณ
     window.location.href = '/login'; // เปลี่ยน '/patch_login' เป็น path จริงของคุณ
   };
 
   return (
     <div style={inlineStyles.container}>
       <Head>
-        <title>PlayMatch - แพลตฟอร์มจัดการก๊วนแบดมินตันครบวงจร</title> {/* แก้ไขตรงนี้ให้เป็น PlayMatch */}
+        <title>PlayMatch - แพลตฟอร์มจัดการก๊วนแบดมินตันครบวงจรและกีฬาอื่น ๆ</title> {/* ปรับปรุง Title ให้ชัดเจนและมี Keyword เพิ่มเติม */}
         <meta
           name="description"
-          content="PlayMatch: จัดการสมาชิก, สร้างแมตซ์, คำนวณค่าใช้จ่าย, จัดอันดับ และดูภาพรวมก๊วน" /* แก้ไขตรงนี้ให้เป็น PlayMatch */
-        />
+          content="PlayMatch คือระบบจัดการสมาชิกก๊วนแบดมินตัน สร้างแมตช์ คำนวณค่าใช้จ่าย จัดอันดับ (Ranking) และแสดงภาพรวม Dashboard ครบวงจรสำหรับนักกีฬาและผู้จัด."
+        /> {/* ปรับปรุง Description ให้ละเอียดและมี Keyword มากขึ้น */}
       </Head>
 
       <Navbar />
@@ -107,7 +107,7 @@ function IndexPage() {
                 <div style={inlineStyles.featureImageContainer}>
                   <img
                     src={feature.image}
-                    alt={feature.title}
+                    alt={feature.title + " - หน้าจอ PlayMatch"} // <--- เพิ่ม alt text ที่นี่
                     className={stylesCss.featureImage}
                     style={inlineStyles.featureImage}
                   />
@@ -162,9 +162,9 @@ function IndexPage() {
         <div style={inlineStyles.footerBottom}>
           <p style={inlineStyles.footerCopyright}>© 2025 PlayMatch Co., Ltd. All rights reserved.</p>
           <div style={inlineStyles.footerSocialIcons}>
-            <a href="#" className={stylesCss.socialIcon} style={inlineStyles.socialIcon}><img src="/images/facebook.png" alt="Facebook" style={{width: '24px', height: '24px'}}/></a>
-            <a href="#" className={stylesCss.socialIcon} style={inlineStyles.socialIcon}><img src="/images/line.png" alt="LINE" style={{width: '24px', height: '24px'}}/></a>
-            <a href="#" className={stylesCss.socialIcon} style={inlineStyles.socialIcon}><img src="/images/twitter.png" alt="Twitter" style={{width: '24px', height: '24px'}}/></a>
+            <a href="#" className={stylesCss.socialIcon} style={inlineStyles.socialIcon}><img src="/images/facebook.png" alt="ไอคอน Facebook" style={{width: '24px', height: '24px'}}/></a> {/* เพิ่ม alt text */}
+            <a href="#" className={stylesCss.socialIcon} style={inlineStyles.socialIcon}><img src="/images/line.png" alt="ไอคอน LINE" style={{width: '24px', height: '24px'}}/></a> {/* เพิ่ม alt text */}
+            <a href="#" className={stylesCss.socialIcon} style={inlineStyles.socialIcon}><img src="/images/twitter.png" alt="ไอคอน Twitter" style={{width: '24px', height: '24px'}}/></a> {/* เพิ่ม alt text */}
           </div>
         </div>
       </footer>
