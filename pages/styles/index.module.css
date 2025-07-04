@@ -113,9 +113,6 @@ html, body {
 
 /* Responsive adjustments (คัดลอกจาก styles object ใน JS มาไว้ที่นี่) */
 @media (max-width: 992px) {
-  body {
-    font-family: 'Kanit', sans-serif;
-  }
 
   .heroTitle {
     font-size: 3rem;
