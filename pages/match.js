@@ -716,13 +716,12 @@ const Match = () => {
                   memberUpdates[player].scoreToAdd += 1;
                 });
               }
-
               playersInMatch.forEach(player => {
-                  if (!memberSessionStats[player]) {
-                      memberSessionStats[player] = { games: 0, balls: 0 };
-                  }
-                  memberSessionStats[player].games += 1;
-                  memberSessionStats[player].balls += ballsInGame;
+                if (!memberSessionStats[player]) {
+                  memberSessionStats[player] = { games: 0, balls: 0 };
+                }
+                memberSessionStats[player].games += 1;
+                memberSessionStats[player].balls += ballsInGame;
               });
             }
           });
@@ -756,6 +755,62 @@ const Match = () => {
             }
           }
 
+          // อัปเดตสถานะคูปองเป็น 'USED' เมื่อปิดก๊วนสำเร็จ
+          if (selectedCoupon && loggedInEmail) {
+            try {
+              const couponDocRef = doc(db, `users/${userId}/Coupons`, selectedCoupon.id);
+              await updateDoc(couponDocRef, {
+                status: 'USED',
+                redeemedAt: serverTimestamp(),
+                redeemedBy: loggedInEmail,
+              });
+              console.log(`Coupon ${selectedCoupon.id} updated to USED.`);
+            } catch (couponError) {
+              console.error("Error updating coupon status:", couponError);
+              // ในกรณีที่อัปเดตคูปองไม่สำเร็จ จะแค่ทำการ log ข้อผิดพลาดไว้ แต่ยังคงบันทึกข้อมูล Match ต่อไป
+            }
+          }
+
+          // --- START: เพิ่มข้อมูลสถานะการชำระเงินของสมาชิกและระดับมือ ---
+          const sessionPlayerSummaries = [];
+          const totalMembersInSession = members.filter(m => m.gamesPlayed > 0 || m.ballsUsed > 0).length;
+
+          for (const member of members) {
+              if (member.gamesPlayed > 0 || member.ballsUsed > 0) { // เฉพาะสมาชิกที่เข้าร่วม
+                  const parsedBallPrice = parseFloat(ballPrice) || 0;
+                  const parsedCourtFee = parseFloat(courtFee) || 0;
+                  const parsedCourtFeePerGame = parseFloat(courtFeePerGame) || 0;
+                  const parsedFixedCourtFeePerPerson = parseFloat(fixedCourtFeePerPerson) || 0;
+                  const parsedOrganizeFee = parseFloat(organizeFee) || 0;
+
+                  const gamesPlayed = member.gamesPlayed;
+                  const ballsUsed = member.ballsUsed || 0;
+
+                  const ballCost = ballsUsed * parsedBallPrice;
+
+                  let courtCostPerPerson = 0;
+                  if (parsedFixedCourtFeePerPerson > 0) {
+                      courtCostPerPerson = parsedFixedCourtFeePerPerson;
+                  } else if (parsedCourtFeePerGame > 0) {
+                      courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
+                  } else if (parsedCourtFee > 0) {
+                      courtCostPerPerson = totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
+                  }
+
+                  const calculatedCost = Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
+
+                  sessionPlayerSummaries.push({
+                      name: member.name,
+                      level: member.level, // ระดับมือของสมาชิก ณ ตอนปิดก๊วน
+                      gamesPlayed: gamesPlayed,
+                      ballsUsed: ballsUsed,
+                      calculatedCost: calculatedCost,
+                      paymentStatus: "Pending", // สถานะเริ่มต้นเป็น "Pending"
+                  });
+              }
+          }
+          // --- END: เพิ่มข้อมูลสถานะการชำระเงินของสมาชิกและระดับมือ ---
+
           const matchesRef = collection(db, `users/${userId}/Matches`);
           await addDoc(matchesRef, {
             topic,
@@ -768,6 +823,11 @@ const Match = () => {
             fixedCourtFeePerPerson,
             organizeFee,
             savedAt: serverTimestamp(),
+            // --- START: เพิ่มข้อมูลใหม่ใน Matches collection ---
+            sessionPlayerSummaries: sessionPlayerSummaries, // ข้อมูลสรุปสมาชิกแต่ละคน
+            couponUsedId: selectedCoupon ? selectedCoupon.id : null, // ID คูปองที่ใช้
+            sessionDiscountAmount: discountAmount, // จำนวนส่วนลดที่ใช้ในเซสชัน
+            // --- END: เพิ่มข้อมูลใหม่ใน Matches collection ---
           });
           Swal.fire(
             "บันทึกสำเร็จ!",
