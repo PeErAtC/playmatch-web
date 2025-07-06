@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from '../lib/firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
@@ -249,27 +249,42 @@ const CouponsPage = () => {
     const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
     let status = coupon.status;
     if (status === 'ACTIVE' && expiryDate < now) status = 'EXPIRED';
-    const statusClasses = { ACTIVE: 'status-active', REDEEMED: 'status-redeemed', EXPIRED: 'status-expired' };
-    const statusTexts = { ACTIVE: 'ใช้งานได้', REDEEMED: 'ใช้แล้ว', EXPIRED: 'หมดอายุ' };
+    // Updated statusClasses and statusTexts to include 'USED'
+    const statusClasses = { ACTIVE: 'status-active', USED: 'status-redeemed', EXPIRED: 'status-expired' };
+    const statusTexts = { ACTIVE: 'ใช้งานได้', USED: 'ถูกใช้แล้ว', EXPIRED: 'หมดอายุ' };
     return <span className={`status ${statusClasses[status] || ''}`}>{statusTexts[status] || status}</span>;
   };
+
+  const getActualStatus = (coupon) => {
+    const now = new Date();
+    const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
+    let status = coupon.status;
+    if (status === 'ACTIVE' && expiryDate < now) status = 'EXPIRED';
+    return status;
+  };
+
 
   const openCouponModal = (coupon) => setViewingCoupon(coupon);
   const closeCouponModal = () => setViewingCoupon(null);
   
-  const redeemedCoupons = allCoupons.filter(c => c.status === 'REDEEMED');
+  // Filter for 'USED' coupons for the history table
+  const redeemedCoupons = allCoupons.filter(c => c.status === 'USED');
 
-  // Filter coupons based on search query
-  const filteredCoupons = allCoupons.filter(coupon =>
-    coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    String(coupon.amount).toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (coupon.reason && coupon.reason.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-  const filteredRedeemedCoupons = redeemedCoupons.filter(coupon =>
-    coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    String(coupon.amount).toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (coupon.redeemedBy && coupon.redeemedBy.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter for 'ACTIVE' and non-expired coupons
+  const activeAndNonExpiredCoupons = allCoupons.filter(coupon => getActualStatus(coupon) === 'ACTIVE');
+
+  // Filter coupons based on active tab and search query
+  const filteredCouponsForDisplay = activeTab === 'all'
+    ? activeAndNonExpiredCoupons.filter(coupon =>
+        coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(coupon.amount).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (coupon.reason && coupon.reason.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : redeemedCoupons.filter(coupon =>
+        coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(coupon.amount).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (coupon.redeemedBy && coupon.redeemedBy.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
 
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
@@ -302,8 +317,8 @@ const CouponsPage = () => {
   // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredCoupons.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredCoupons.length / itemsPerPage);
+  const currentItems = filteredCouponsForDisplay.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredCouponsForDisplay.length / itemsPerPage);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
@@ -354,7 +369,7 @@ const CouponsPage = () => {
         <div className="card table-container-card">
           <div className="tab-nav">
               <button className={`tab-button ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
-                  คูปองทั้งหมด ({allCoupons.length})
+                  คูปองทั้งหมด ({activeAndNonExpiredCoupons.length})
               </button>
               <button className={`tab-button ${activeTab === 'used' ? 'active' : ''}`} onClick={() => setActiveTab('used')}>
                   ประวัติการใช้งาน ({redeemedCoupons.length})
@@ -415,7 +430,7 @@ const CouponsPage = () => {
                             <tr><th>รหัส</th><th>มูลค่า</th><th>ผู้ใช้งาน</th><th>วันที่ใช้</th></tr>
                         </thead>
                         <tbody>
-                            {filteredRedeemedCoupons.length > 0 ? filteredRedeemedCoupons.map(coupon => (
+                            {filteredCouponsForDisplay.length > 0 ? filteredCouponsForDisplay.map(coupon => ( // Use filteredCouponsForDisplay here too
                                 <tr key={coupon.id}>
                                     <td data-label="รหัส">{coupon.code}</td>
                                     <td data-label="มูลค่า">{coupon.amount} บาท</td>
@@ -428,7 +443,7 @@ const CouponsPage = () => {
               )}
 
               {/* Pagination Controls */}
-              {totalPages > 1 && activeTab === 'all' && (
+              {totalPages > 1 && ( // Apply pagination to both tabs if applicable
                 <div className="pagination">
                   {Array.from({ length: totalPages }, (_, i) => (
                     <button
