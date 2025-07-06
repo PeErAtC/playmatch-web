@@ -1,5 +1,5 @@
 // pages/MatchDetails.js
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -17,6 +17,7 @@ import {
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import html2canvas from "html2canvas";
 
 // Helper function to format date
 const formatDate = (dateString) => {
@@ -54,6 +55,8 @@ const MatchDetails = () => {
   const [isSavingRanking, setIsSavingRanking] = useState(false);
   const [memberPaidStatus, setMemberPaidStatus] = useState({});
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
+
+  const tableRef = useRef(null);
 
   // Define a Toast mixin for subtle notifications
   const Toast = Swal.mixin({
@@ -209,8 +212,6 @@ const MatchDetails = () => {
         }
       });
 
-      // --- START: CORRECTED CALCULATION LOGIC ---
-      // แก้ไขตรรกะการคำนวณค่าสนาม: ให้ความสำคัญกับค่าที่ > 0 เพื่อหลีกเลี่ยงปัญหาเมื่อค่าอื่นถูกบันทึกเป็น 0
       if (isFixedCourtFeePerPersonValid && parsedFixedCourtFeePerPerson > 0) {
         playersInMatch.forEach((player) => {
           tempMemberCalculations[player].courtCostPerPerson = Math.ceil(parsedFixedCourtFeePerPerson);
@@ -227,7 +228,6 @@ const MatchDetails = () => {
           tempMemberCalculations[player].courtCostPerPerson = courtCostPerPersonCalculated;
         });
       }
-      // --- END: CORRECTED CALCULATION LOGIC ---
 
       playersInMatch.forEach((player) => {
         const ballsUsed = memberBallsUsed[player] || 0;
@@ -513,6 +513,26 @@ const MatchDetails = () => {
     Swal.fire("Download Successful", "Excel file downloaded!", "success");
   };
 
+  const handleDownloadImage = async () => {
+    if (!tableRef.current || Object.keys(memberCalculations).length === 0) {
+      Swal.fire("ไม่มีข้อมูล", "กรุณาคำนวณข้อมูลก่อนดาวน์โหลดรูปภาพ", "warning");
+      return;
+    }
+    try {
+      const canvas = await html2canvas(tableRef.current, {
+        scale: 2,
+        useCORS: true,
+      });
+      const fileName = `MatchSummary_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
+      saveAs(canvas.toDataURL("image/png"), fileName);
+      Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพสำเร็จ!' });
+    } catch (error) {
+      console.error("Error generating image:", error);
+      Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพได้", "error");
+    }
+  };
+
+
   if (loading) { return (<div style={{ textAlign: "center", padding: "50px" }}>Loading Match Details...</div>); }
   if (error) { return (<div style={{ textAlign: "center", padding: "50px", color: "red" }}>{error}</div>); }
   if (!matchData) { return (<div style={{ textAlign: "center", padding: "50px" }}>No Match Data Found.</div>); }
@@ -597,7 +617,44 @@ const MatchDetails = () => {
         </div>
       </div>
 
-      <div style={{ overflowX: "auto", marginBottom: "30px", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff" }}>
+      {/* MODIFIED: ย้ายปุ่มดาวน์โหลดมาไว้ข้างบนตาราง */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+          {isDataCalculated && (
+            <button
+              onClick={handleDownloadImage}
+              title="Download as Image"
+              style={{
+                background: '#ffffff',
+                border: '1px solid #ddd',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+                transition: 'all 0.2s ease-in-out',
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.backgroundColor = '#f5f5f5';
+                e.currentTarget.style.transform = 'scale(1.1)';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.backgroundColor = '#ffffff';
+                e.currentTarget.style.transform = 'scale(1.0)';
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          )}
+      </div>
+
+      <div ref={tableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '8px' }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
           <thead>
             <tr style={{ backgroundColor: "#323943", color: "white" }}>
@@ -611,7 +668,8 @@ const MatchDetails = () => {
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>จำนวนชนะ</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>คะแนน</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>Total (บาท)</th>
-              <th style={{ padding: "12px 10px", textAlign: "center", backgroundColor: "#323943", borderRight: "1px solid #444" }}>จ่ายแล้ว</th>
+              {/* MODIFIED: ลบ borderRight ของ th สุดท้ายออก */}
+              <th style={{ padding: "12px 10px", textAlign: "center" }}>จ่ายแล้ว</th>
             </tr>
           </thead>
           <tbody>
