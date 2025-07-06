@@ -14,16 +14,16 @@ import {
 
 // รายการสนาม
 const courts = [
-  "สนาม 1",
-  "สนาม 2",
-  "สนาม 3",
-  "สนาม 4",
-  "สนาม 5",
-  "สนาม 6",
-  "สนาม 7",
-  "สนาม 8",
-  "สนาม 9",
-  "สนาม 10",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
 ];
 
 const RESULT_OPTIONS = [
@@ -35,8 +35,8 @@ const RESULT_OPTIONS = [
 
 const STATUS_COLORS = {
   เตรียมพร้อม: "#fff8d8", // Light yellow for "เตรียมพร้อม"
-  playing: "#57e497", // Light green for "Playing"
-  finished: "#f44336", // Red for "Finished"
+  กำลังแข่งขัน: "#57e497", // Light green for "Playing"
+  จบการแข่งขัน: "#f44336", // Red for "Finished"
 };
 
 // Colors for member levels - UPDATED WITH ALL YOUR LEVELS (Darker and cool to warm)
@@ -47,10 +47,16 @@ const LEVEL_COLORS = {
   P: "#6a3d9a", // Darker Green
   "N-": "#1f78b4", // Lighter Green (distinct from P)
   N: "#1f78b4", // Darker Purple
+  "BG": "#1f78b4",
+  "BG-": "#1f78b4",
+  "Rookie": "#1f78b4",
 
   // Warmer tones (higher levels)
   "S-": "#f44336", // Orange-Yellow
   S: "#f44336", // Darker Orange
+  "S+": "#f44336",
+  "P+": "#6a3d9a",
+
   มือหน้าบ้าน: "#33a02c", // Darker Red
   มือหน้าบ้าน1: "#33a02c", // Lighter Red (distinct from มือหน้าบ้าน)
   มือหน้าบ้าน2: "#33a02c", // Lavender (distinct, but still warm-ish)
@@ -58,23 +64,38 @@ const LEVEL_COLORS = {
 };
 
 // Define the order of levels EXACTLY as provided by the user (from high to low, or specific display order)
-const LEVEL_ORDER = [
-  "C",
-  "P",
-  "P-",
-  "N",
-  "N-",
-  "S",
-  "S-",
+const LEVEL_ORDER_NORTHEAST = [
   "มือหน้าบ้าน",
   "มือหน้าบ้าน1",
   "มือหน้าบ้าน2",
-  "มือหน้าบ้าน3", // assuming these are the lowest based on provided order
+  "มือหน้าบ้าน3",
+  "BG",
+  "S-",
+  "S",
+  "N-",
+  "N",
+  "P-",
+  "P",
+  "C",
+];
+
+const LEVEL_ORDER_CENTRAL = [
+  "Rookie",
+  "BG-",
+  "BG",
+  "N-",
+  "N",
+  "S",
+  "S+",
+  "P-",
+  "P",
+  "P+",
+  "C",
 ];
 
 // Helper function to get the index of a level in the defined order
-const getLevelOrderIndex = (level) => {
-  const index = LEVEL_ORDER.indexOf(level);
+const getLevelOrderIndex = (level, currentLevelOrder) => {
+  const index = currentLevelOrder.indexOf(level);
   return index === -1 ? Infinity : index; // Unknown levels go to the end
 };
 
@@ -106,11 +127,54 @@ const Match = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showMenuId, setShowMenuId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
-  // เพิ่ม gamesPlayed ใน state ของสมาชิกแต่ละคน
+  // เพิ่ม gamesPlayed และ ballsUsed ใน state ของสมาชิกแต่ละคน
+  // gamesPlayed and ballsUsed are for the CURRENT session
+  // totalGamesPlayed and totalBallsUsed will be fetched from Firebase and are cumulative
   const [members, setMembers] = useState([]);
   const [balls] = useState(
     Array.from({ length: 10 }, (_, i) => (i + 1).toString())
   );
+  // NEW: State for match count
+  const [matchCount, setMatchCount] = useState(0);
+
+  // NEW: States for cost parameters
+  const isBrowser = typeof window !== "undefined"; //
+  const [ballPrice, setBallPrice] = useState(() =>
+    isBrowser ? parseFloat(localStorage.getItem("ballPrice")) || 0 : 0
+  );
+  const [courtFee, setCourtFee] = useState(() =>
+    isBrowser ? parseFloat(localStorage.getItem("courtFee")) || 0 : 0
+  );
+  const [courtFeePerGame, setCourtFeePerGame] = useState(() =>
+    isBrowser ? parseFloat(localStorage.getItem("courtFeePerGame")) || 0 : 0
+  );
+  const [fixedCourtFeePerPerson, setFixedCourtFeePerPerson] = useState(() =>
+    isBrowser
+      ? parseFloat(localStorage.getItem("fixedCourtFeePerPerson")) || 0
+      : 0
+  );
+  const [organizeFee, setOrganizeFee] = useState(() =>
+    isBrowser ? parseFloat(localStorage.getItem("organizeFee")) || 0 : 0
+  );
+
+  // NEW: State for early exit calculation
+  const [selectedMemberForEarlyExit, setSelectedMemberForEarlyExit] =
+    useState("");
+  const [earlyExitCalculationResult, setEarlyExitCalculationResult] =
+    useState(null);
+
+  // NEW: State for cost settings collapse
+  const [isCostSettingsOpen, setIsCostSettingsOpen] = useState(false);
+  const contentRef = useRef(null); // Ref for the collapsible content
+
+  // NEW: State for regional level order
+  const [selectedRegion, setSelectedRegion] = useState(() =>
+    isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน"
+  );
+
+  const currentLevelOrder =
+    selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
+
 
   // ดึงข้อมูลอีเมลผู้ใช้
   useEffect(() => {
@@ -118,57 +182,116 @@ const Match = () => {
   }, []);
 
   // ดึงสมาชิกที่สถานะเป็น "มา" และจัดเรียงตามระดับฝีมือ
-  useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        if (!loggedInEmail) return;
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("email", "==", loggedInEmail));
-        const userSnap = await getDocs(q);
-        let userId = null;
-        userSnap.forEach((doc) => {
-          userId = doc.id;
-        });
-        if (!userId) return;
+  // This function is now standalone and can be called with a flag
+  // ส่วนที่ 1: ฟังก์ชัน fetchMembers
+// โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
+  const fetchMembers = async (isNewSessionStart = false) => {
+    try {
+      if (!loggedInEmail) return;
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", loggedInEmail));
+      const userSnap = await getDocs(q);
+      let userId = null;
+      userSnap.forEach((doc) => {
+        userId = doc.id;
+      });
+      if (!userId) return;
 
-        const membersRef = collection(db, `users/${userId}/Members`);
-        const memSnap = await getDocs(membersRef);
-        let memberList = [];
-        memSnap.forEach((doc) => {
-          const data = doc.data();
-          if (data.status === "มา") {
-            memberList.push({
-              memberId: doc.id,
-              name: data.name,
-              level: data.level,
-              score: data.score || 0,
-              wins: data.wins || 0,
-              gamesPlayed: 0, // Initialize gamesPlayed for current session
+      const membersRef = collection(db, `users/${userId}/Members`);
+      const memSnap = await getDocs(membersRef);
+      let memberList = [];
+      memSnap.forEach((doc) => {
+        const data = doc.data();
+        if (data.status === "มา") {
+          memberList.push({
+            memberId: doc.id,
+            name: data.name,
+            level: data.level,
+            score: data.score || 0,
+            wins: data.wins || 0,
+            gamesPlayed: 0, // Initialize gamesPlayed for current session (จะถูก recalculate ด้านล่างหากไม่ใช่ new session)
+            ballsUsed: 0,   // Initialize ballsUsed for current session (จะถูก recalculate ด้านล่างหากไม่ใช่ new session)
+            totalGamesPlayed: data.totalGamesPlayed || 0, // Load cumulative games from Firebase
+            totalBallsUsed: data.totalBallsUsed || 0,     // Load cumulative balls from Firebase
+          });
+        }
+      });
+
+      // Sort members by currentLevelOrder
+      memberList.sort((a, b) => {
+        return getLevelOrderIndex(a.level, currentLevelOrder) - getLevelOrderIndex(b.level, currentLevelOrder);
+      });
+
+      // NEW LOGIC: Only restore session-specific games/balls if it's NOT a new session start
+      // AND a session is currently marked as open in localStorage.
+      if (!isNewSessionStart && isBrowser && localStorage.getItem("isOpen") === "true") {
+        const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
+        const tempGamesPlayed = {};
+        const tempBallsUsed = {};
+        savedMatches.forEach((match) => {
+          if (match.status === "จบการแข่งขัน") {
+            const playersInMatch = [match.A1, match.A2, match.B1, match.B2]
+              .filter(Boolean);
+            const ballsInGame = parseInt(match.balls) || 0;
+            playersInMatch.forEach((playerName) => {
+              tempGamesPlayed[playerName] = (tempGamesPlayed[playerName] || 0) + 1;
+              tempBallsUsed[playerName] = (tempBallsUsed[playerName] || 0) + ballsInGame;
             });
           }
         });
-
-        // Sort members by LEVEL_ORDER
-        memberList.sort((a, b) => {
-          return getLevelOrderIndex(a.level) - getLevelOrderIndex(b.level);
-        });
-
-        setMembers(memberList);
-      } catch (err) {
-        console.error("Error fetching members:", err);
-        setMembers([]);
+        // Apply recalculated session data to the memberList
+        memberList = memberList.map(member => ({
+          ...member,
+          gamesPlayed: tempGamesPlayed[member.name] || 0,
+          ballsUsed: tempBallsUsed[member.name] || 0,
+        }));
       }
-    };
-    fetchMembers();
-  }, [loggedInEmail]);
 
-  const isBrowser = typeof window !== "undefined";
+      setMembers(memberList);
+    } catch (err) {
+      console.error("Error fetching members:", err);
+      setMembers([]);
+    }
+  };
+
+  // Initial fetch of members when component mounts or loggedInEmail changes
+  useEffect(() => {
+    fetchMembers(false); // Not a new session start on initial load
+  }, [loggedInEmail, isBrowser, selectedRegion]); // selectedRegion added as dependency
+
+  // NEW: Save cost parameters to localStorage
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("ballPrice", ballPrice.toString());
+      localStorage.setItem("courtFee", courtFee.toString());
+      localStorage.setItem("courtFeePerGame", courtFeePerGame.toString());
+      localStorage.setItem(
+        "fixedCourtFeePerPerson",
+        fixedCourtFeePerPerson.toString()
+      );
+      localStorage.setItem("organizeFee", organizeFee.toString());
+    }
+  }, [
+    ballPrice,
+    courtFee,
+    courtFeePerGame,
+    fixedCourtFeePerPerson,
+    organizeFee,
+    isBrowser,
+  ]);
 
   useEffect(() => {
     if (isBrowser) {
       localStorage.setItem("topic", topic);
     }
-  }, [topic]);
+  }, [topic, isBrowser]);
+
+  // Save selected region to localStorage
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("selectedRegion", selectedRegion);
+    }
+  }, [selectedRegion, isBrowser]);
 
   const resetSession = () => {
     setMatches([]);
@@ -176,65 +299,57 @@ const Match = () => {
     setIsOpen(false);
     setCurrentPage(1);
     clearInterval(timerRef.current);
-    // Reset gamesPlayed for all members when session resets
+    setMatchCount(0); // Reset match count
+    // Reset gamesPlayed and ballsUsed for current session only in state
     setMembers((prevMembers) =>
-      prevMembers.map((member) => ({ ...member, gamesPlayed: 0 }))
+      prevMembers.map((member) => ({ ...member, gamesPlayed: 0, ballsUsed: 0 }))
     );
+    // NEW: Reset early exit calculation result
+    setEarlyExitCalculationResult(null);
+    setSelectedMemberForEarlyExit("");
+
     if (isBrowser) {
       localStorage.removeItem("isOpen");
       localStorage.removeItem("matches");
       localStorage.removeItem("activityTime");
+      localStorage.removeItem("sessionMembers"); // NEW: Clear session members from localStorage
     }
   };
 
+  // 1. useEffect for initial loading of state from localStorage (runs once on mount)
   useEffect(() => {
     if (!isBrowser) return;
 
-    const savedIsOpen = localStorage.getItem("isOpen");
+    const savedIsOpen = localStorage.getItem("isOpen") === "true";
     const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
-    const savedActivityTime =
-      parseInt(localStorage.getItem("activityTime")) || 0;
+    const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
 
-    if (savedIsOpen === "true") {
-      setIsOpen(true);
-      setMatches(savedMatches);
-      setActivityTime(savedActivityTime);
-      // Recalculate gamesPlayed based on saved matches if session restored
-      const tempGamesPlayed = {};
-      savedMatches.forEach((match) => {
-        if (match.status === "finished") {
-          [match.A1, match.A2, match.B1, match.B2]
-            .filter(Boolean)
-            .forEach((playerName) => {
-              tempGamesPlayed[playerName] =
-                (tempGamesPlayed[playerName] || 0) + 1;
-            });
-        }
-      });
-      setMembers((prevMembers) =>
-        prevMembers.map((member) => ({
-          ...member,
-          gamesPlayed: tempGamesPlayed[member.name] || 0,
-        }))
-      );
-    }
+    setIsOpen(savedIsOpen);
+    setMatches(savedMatches);
+    setActivityTime(savedActivityTime);
+    setMatchCount(savedMatches.length); // Initialize match count from saved matches
 
-    if (isOpen) {
+  }, [isBrowser]);
+
+  // 2. useEffect for managing the timer (runs when `isOpen` changes)
+  useEffect(() => {
+    if (!isBrowser) return;
+
+    clearInterval(timerRef.current); // Clear any previous timer
+
+    if (isOpen) { // This `isOpen` is the current, up-to-date state
       timerRef.current = setInterval(() => {
         setActivityTime((prev) => {
           const newTime = prev + 1;
-          if (isBrowser) {
-            localStorage.setItem("activityTime", newTime.toString());
-          }
+          localStorage.setItem("activityTime", newTime.toString());
           return newTime;
         });
       }, 1000);
-    } else {
-      clearInterval(timerRef.current);
     }
 
-    return () => clearInterval(timerRef.current);
+    return () => clearInterval(timerRef.current); // Cleanup function
   }, [isOpen, isBrowser]);
+
 
   const handleAddMatch = () => {
     setMatches((prev) => {
@@ -256,6 +371,7 @@ const Match = () => {
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(newMatches));
       }
+      setMatchCount(newMatches.length); // Update match count
       return newMatches;
     });
     setShowMenuId(null);
@@ -286,7 +402,7 @@ const Match = () => {
       // This is primarily to prevent self-exclusion issues.
       if (
         match.matchId !== currentMatch.matchId &&
-        match.status === "playing"
+        match.status === "กำลังแข่งขัน" // Use Thai for "playing"
       ) {
         [match.A1, match.A2, match.B1, match.B2]
           .filter(Boolean)
@@ -321,101 +437,102 @@ const Match = () => {
     setMatches((prev) => {
       const updated = [...prev];
       const oldStatus = updated[idx].status;
+      const oldBalls = parseInt(updated[idx].balls) || 0; // Capture old balls for decrement
+
       updated[idx][field] = value;
+      let newStatus = updated[idx].status; // Current status after update
+
       if (field === "result") {
         updated[idx].score = getScoreByResult(value);
-        // NEW LOGIC: If result is selected, automatically set status to 'finished'
-        if (value && updated[idx].status !== "finished") {
-          updated[idx].status = "finished";
-          // Increment gamesPlayed immediately if not already finished
-          const playersInMatch = [
-            updated[idx].A1,
-            updated[idx].A2,
-            updated[idx].B1,
-            updated[idx].B2,
-          ].filter(Boolean);
-          setMembers((prevMembers) =>
-            prevMembers.map((member) =>
-              playersInMatch.includes(member.name)
-                ? { ...member, gamesPlayed: member.gamesPlayed + 1 }
-                : member
-            )
-          );
+        if (value && newStatus !== "จบการแข่งขัน") { // Set status to 'finished' if result is selected
+          newStatus = "จบการแข่งขัน";
+          updated[idx].status = newStatus;
+        } else if (!value && newStatus === "จบการแข่งขัน") {
+          newStatus = ""; // Revert status if result is cleared from a finished game
+          updated[idx].status = newStatus;
         }
       }
 
-      // Logic to update gamesPlayed when status changes to "finished" manually (if result was already there)
-      // or revert if status changes from "finished" to something else
-      // This is now also handled by the 'result' change, but keeping this for manual status changes
-      if (field === "status") {
-        if (value === "finished" && oldStatus !== "finished") {
-          // Match just finished, increment gamesPlayed for all players in this match
-          const playersInMatch = [
-            updated[idx].A1,
-            updated[idx].A2,
-            updated[idx].B1,
-            updated[idx].B2,
-          ].filter(Boolean);
-          setMembers((prevMembers) =>
-            prevMembers.map((member) =>
-              playersInMatch.includes(member.name)
-                ? { ...member, gamesPlayed: member.gamesPlayed + 1 }
-                : member
-            )
-          );
-        } else if (value !== "finished" && oldStatus === "finished") {
-          // Match was finished, but now it's not (e.g., changed back to playing/ready), decrement gamesPlayed
-          const playersInMatch = [
-            updated[idx].A1,
-            updated[idx].A2,
-            updated[idx].B1,
-            updated[idx].B2,
-          ].filter(Boolean);
-          setMembers((prevMembers) =>
-            prevMembers.map((member) =>
-              playersInMatch.includes(member.name)
-                ? {
-                    ...member,
-                    gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                  } // Ensure non-negative
-                : member
-            )
-          );
-        }
+      // Logic to update gamesPlayed and ballsUsed for the *current session*
+      const playersInCurrentMatch = [
+        updated[idx].A1,
+        updated[idx].A2,
+        updated[idx].B1,
+        updated[idx].B2,
+      ].filter(Boolean);
+      const ballsInCurrentGame = parseInt(updated[idx].balls) || 0;
+
+      // Handle status change from non-finished to finished
+      if (newStatus === "จบการแข่งขัน" && oldStatus !== "จบการแข่งขัน") {
+        setMembers((prevMembers) =>
+          prevMembers.map((member) =>
+            playersInCurrentMatch.includes(member.name)
+              ? {
+                  ...member,
+                  gamesPlayed: member.gamesPlayed + 1,
+                  ballsUsed: member.ballsUsed + ballsInCurrentGame,
+                }
+              : member
+          )
+        );
+      }
+      // Handle status change from finished to non-finished
+      else if (newStatus !== "จบการแข่งขัน" && oldStatus === "จบการแข่งขัน") {
+        setMembers((prevMembers) =>
+          prevMembers.map((member) =>
+            playersInCurrentMatch.includes(member.name)
+              ? {
+                  ...member,
+                  gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                  ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
+                }
+              : member
+          )
+        );
+      }
+      // Handle balls change for an already finished match
+      else if (
+        field === "balls" &&
+        updated[idx].status === "จบการแข่งขัน" &&
+        updated[idx].result
+      ) {
+        const newBalls = parseInt(value) || 0;
+        setMembers((prevMembers) =>
+          prevMembers.map((member) => {
+            if (playersInCurrentMatch.includes(member.name)) {
+              return {
+                ...member,
+                ballsUsed: member.ballsUsed - oldBalls + newBalls, // Adjust ballsUsed
+              };
+            }
+            return member;
+          })
+        );
       }
 
-      // If balls or result are changed, and status was finished,
-      // and now either is empty, revert status to empty.
-      // IMPORTANT: This logic needs to check if the status *was* finished and *now* is being unset
+      // Ensure status is reset if balls or result are cleared from a previously finished game
       if (
-        updated[idx].status === "finished" &&
+        oldStatus === "จบการแข่งขัน" &&
+        newStatus === "จบการแข่งขัน" && // was finished, still finished (not changed by direct status dropdown)
         (!updated[idx].balls || !updated[idx].result)
       ) {
-        // Status was finished, but now either balls or result is missing. Revert status.
-        const playersInMatch = [
-          updated[idx].A1,
-          updated[idx].A2,
-          updated[idx].B1,
-          updated[idx].B2,
-        ].filter(Boolean);
-        // Only decrement gamesPlayed if the previous status was finished due to this match being complete
-        // and we are now moving away from finished. This is to avoid double decrementing if 'result' was just
-        // set to empty and already decremented.
-        if (oldStatus === "finished") {
-          // Check if it was truly finished before this change
-          setMembers((prevMembers) =>
-            prevMembers.map((member) =>
-              playersInMatch.includes(member.name)
-                ? {
-                    ...member,
-                    gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                  }
-                : member
-            )
-          );
-        }
-        updated[idx].status = ""; // Set status back to empty
+        // but content became empty
+        updated[idx].status = ""; // Force status to be empty
+        // Need to decrement gamesPlayed and ballsUsed here because the above "newStatus !== 'finished' && oldStatus === 'finished'" block
+        // wouldn't have caught this internal status change.
+        setMembers((prevMembers) =>
+          prevMembers.map((member) =>
+            playersInCurrentMatch.includes(member.name)
+              ? {
+                  ...member,
+                  gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                  ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
+                }
+              : member
+          )
+        );
       }
+
 
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(updated));
@@ -431,34 +548,56 @@ const Match = () => {
         value={mem.name}
         style={{ color: LEVEL_COLORS[mem.level] || "black" }}
       >
-        {mem.name} ({mem.level}) ({mem.gamesPlayed})เกม{" "}
-        {/* Display games played */}
+        {mem.name} ({mem.level}) (เกม: {mem.gamesPlayed}) (ลูก:{" "}
+        { (mem.ballsUsed || 0)})
       </option>
     ));
 
-  const handleStartGroup = () => {
+  // ส่วนที่ 2: ฟังก์ชัน handleStartGroup
+  // โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
+  const handleStartGroup = async () => { // Made async
     if (!topic) {
-      Swal.fire("กรุณาระบุหัวเรื่อง", "", "warning");
+      Swal.fire({
+        title: "กรุณาระบุหัวเรื่อง",
+        text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History",
+        icon:"warning"});
       return;
     }
-    setIsOpen(true);
-    setActivityTime(0);
-    setMatches([]);
-    setCurrentPage(1);
-    // Reset gamesPlayed for all members when starting a new group
-    setMembers((prevMembers) =>
-      prevMembers.map((member) => ({ ...member, gamesPlayed: 0 }))
-    );
-
+    // Set localStorage items first, including clearing matches
     if (isBrowser) {
       localStorage.setItem("isOpen", "true");
-      localStorage.setItem("matches", JSON.stringify([]));
+      localStorage.setItem("matches", JSON.stringify([])); // Explicitly clear matches in localStorage <<< สำคัญมากสำหรับรีเซ็ต!
       localStorage.setItem("activityTime", "0");
+      localStorage.removeItem("sessionMembers");
+      localStorage.setItem("topic", topic); // Ensure topic is saved here
     }
+
+    // Update local state variables
+    setIsOpen(true);
+    setActivityTime(0);
+    setMatches([]); // Clear matches state
+    setCurrentPage(1);
+    setEarlyExitCalculationResult(null);
+    setSelectedMemberForEarlyExit("");
+    setMatchCount(0); // Reset match count when starting new session
+
+    // Then, fetch members. This *will* set `members` state, ensuring session games/balls are 0.
+    // Await it to ensure state is set before the function completes.
+    await fetchMembers(true); // <<< ถูกต้อง: เรียก fetchMembers พร้อม `true` เพื่อระบุว่าเป็นการเริ่มเซสชันใหม่
   };
 
   const handleEndGroup = async () => {
-    const hasUnfinished = matches.some((m) => m.status !== "finished");
+    if (matches.length === 0) {
+        Swal.fire(
+            "ไม่มี Match ให้บันทึก",
+            "กรุณาเพิ่ม Match ก่อนปิดก๊วน หรือกด 'ยกเลิก' เพื่อกลับไปจัดการ Match",
+            "info"
+        );
+        resetSession(); // Still reset the session state even if no matches to save
+        return;
+    }
+
+    const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire(
         "มี Match ที่ยังไม่จบการแข่งขัน",
@@ -468,110 +607,140 @@ const Match = () => {
       return;
     }
 
-    const result = await Swal.fire({
-      title: "คุณต้องการบันทึกและปิดก๊วนหรือไม่?",
+    Swal.fire({
+      title: "ปิดก๊วนและบันทึก?",
+      text: "คุณแน่ใจหรือไม่ว่าต้องการปิดก๊วนและบันทึกข้อมูลทั้งหมด?",
       icon: "question",
       showCancelButton: true,
-      confirmButtonText: "ยืนยัน",
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "ใช่, ปิดก๊วนและบันทิก",
       cancelButtonText: "ยกเลิก",
-    });
-
-    if (!result.isConfirmed) return;
-
-    if (matches.length === 0) {
-      Swal.fire("ไม่มี match ที่จะบันทึก", "", "info");
-      resetSession();
-      return;
-    }
-
-    try {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", loggedInEmail));
-      const userSnap = await getDocs(q);
-      let userId = null;
-      userSnap.forEach((doc) => {
-        userId = doc.id;
-      });
-      if (!userId) throw new Error("User not found");
-
-      const membersToUpdate = {};
-
-      matches.forEach((match) => {
-        const { A1, A2, B1, B2, result } = match;
-
-        let score = 0;
-        let wins = 0;
-
-        if (result === "A") {
-          score = 2;
-          wins = 1;
-          [A1, A2].filter(Boolean).forEach((playerName) => {
-            membersToUpdate[playerName] = membersToUpdate[playerName] || {
-              scoreToAdd: 0,
-              winsToAdd: 0,
-            };
-            membersToUpdate[playerName].scoreToAdd += score;
-            membersToUpdate[playerName].winsToAdd += wins;
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          if (!loggedInEmail) {
+            throw new Error("User not logged in.");
+          }
+          const usersRef = collection(db, "users");
+          const q = query(usersRef, where("email", "==", loggedInEmail));
+          const userSnap = await getDocs(q);
+          let userId = null;
+          userSnap.forEach((doc) => {
+            userId = doc.id;
           });
-        } else if (result === "B") {
-          score = 2;
-          wins = 1;
-          [B1, B2].filter(Boolean).forEach((playerName) => {
-            membersToUpdate[playerName] = membersToUpdate[playerName] || {
-              scoreToAdd: 0,
-              winsToAdd: 0,
-            };
-            membersToUpdate[playerName].scoreToAdd += score;
-            membersToUpdate[playerName].winsToAdd += wins;
-          });
-        } else if (result === "DRAW") {
-          score = 1;
-          [A1, A2, B1, B2].filter(Boolean).forEach((playerName) => {
-            membersToUpdate[playerName] = membersToUpdate[playerName] || {
-              scoreToAdd: 0,
-              winsToAdd: 0,
-            };
-            membersToUpdate[playerName].scoreToAdd += score;
-          });
-        }
-      });
+          if (!userId) {
+            throw new Error("User data not found. Please log in again.");
+          }
 
-      const membersRef = collection(db, `users/${userId}/Members`);
-      for (const [memberName, data] of Object.entries(membersToUpdate)) {
-        const memberQuery = query(membersRef, where("name", "==", memberName));
-        const memberSnap = await getDocs(memberQuery);
+          // Aggregate scores and wins for members
+          const memberUpdates = {}; // For score and wins
+          const memberSessionStats = {}; // For current session games and balls
 
-        if (!memberSnap.empty) {
-          const memberDoc = memberSnap.docs[0];
-          const currentData = memberDoc.data();
-          const currentScore = currentData.score || 0;
-          const currentWins = currentData.wins || 0;
+          matches.forEach((match) => {
+            if (match.status === "จบการแข่งขัน") { // Use Thai for "finished"
+              const playersInMatch = [
+                match.A1,
+                match.A2,
+                match.B1,
+                match.B2, // Corrected: removed duplicate B1
+              ].filter(Boolean);
+              const ballsInGame = parseInt(match.balls) || 0; // Get balls for this specific match
 
-          await updateDoc(doc(db, `users/${userId}/Members`, memberDoc.id), {
-            score: currentScore + data.scoreToAdd,
-            wins: currentWins + data.winsToAdd,
+              // Aggregate scores and wins
+              if (match.result === "A") {
+                playersInMatch.forEach((player) => {
+                  if (!memberUpdates[player])
+                    memberUpdates[player] = { scoreToAdd: 0, winsToAdd: 0 };
+                  if ([match.A1, match.A2].includes(player)) {
+                    memberUpdates[player].winsToAdd += 1;
+                    memberUpdates[player].scoreToAdd += 2;
+                  }
+                });
+              } else if (match.result === "B") {
+                playersInMatch.forEach((player) => {
+                  if (!memberUpdates[player])
+                    memberUpdates[player] = { scoreToAdd: 0, winsToAdd: 0 };
+                  if ([match.B1, match.B2].includes(player)) {
+                    memberUpdates[player].winsToAdd += 1;
+                    memberUpdates[player].scoreToAdd += 2;
+                  }
+                });
+              } else if (match.result === "DRAW") {
+                playersInMatch.forEach((player) => {
+                  if (!memberUpdates[player])
+                    memberUpdates[player] = { scoreToAdd: 0, winsToAdd: 0 };
+                  memberUpdates[player].scoreToAdd += 1;
+                });
+              }
+
+              // Aggregate current session gamesPlayed and ballsUsed
+              playersInMatch.forEach(player => {
+                  if (!memberSessionStats[player]) {
+                      memberSessionStats[player] = { games: 0, balls: 0 };
+                  }
+                  memberSessionStats[player].games += 1;
+                  memberSessionStats[player].balls += ballsInGame;
+              });
+            }
           });
+
+          // Update member scores, wins, totalGamesPlayed, and totalBallsUsed in Firebase
+          for (const playerName of members.map(m => m.name)) { // Iterate through all active members
+            const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
+            const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
+
+            const memberQuery = query(
+              collection(db, `users/${userId}/Members`),
+              where("name", "==", playerName)
+            );
+            const memberSnap = await getDocs(memberQuery);
+            if (!memberSnap.empty) {
+              const memberDoc = memberSnap.docs[0];
+              const currentData = memberDoc.data();
+              const currentScore = currentData.score || 0;
+              const currentWins = currentData.wins || 0;
+              const currentTotalGamesPlayed = currentData.totalGamesPlayed || 0;
+              const currentTotalBallsUsed = currentData.totalBallsUsed || 0;
+
+              await updateDoc(
+                doc(db, `users/${userId}/Members`, memberDoc.id),
+                {
+                  score: currentScore + data.scoreToAdd,
+                  wins: currentWins + data.winsToAdd,
+                  totalGamesPlayed: currentTotalGamesPlayed + sessionStats.games, // Update cumulative
+                  totalBallsUsed: currentTotalBallsUsed + sessionStats.balls,     // Update cumulative
+                }
+              );
+            }
+          }
+
+          const matchesRef = collection(db, `users/${userId}/Matches`);
+          await addDoc(matchesRef, {
+            topic,
+            matchDate,
+            totalTime: activityTime,
+            matches,
+            ballPrice, // Save cost parameters with the match
+            courtFee, //
+            courtFeePerGame, //
+            fixedCourtFeePerPerson, //
+            organizeFee, //
+            savedAt: serverTimestamp(),
+          });
+          Swal.fire(
+            "บันทึกสำเร็จ!",
+            "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว",
+            "success"
+          );
+          resetSession();
+          fetchMembers(false); // Call fetchMembers after session reset to get latest cumulative totals
+        } catch (error) {
+          console.error("Error ending group and saving matches:", error);
+          Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
         }
       }
-
-      const matchesRef = collection(db, `users/${userId}/Matches`);
-      await addDoc(matchesRef, {
-        topic,
-        matchDate,
-        totalTime: activityTime,
-        matches,
-        savedAt: serverTimestamp(),
-      });
-      Swal.fire(
-        "บันทึกสำเร็จ!",
-        "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว",
-        "success"
-      );
-      resetSession();
-    } catch (error) {
-      console.error("Error ending group and saving matches:", error);
-      Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
-    }
+    });
   };
 
   const handleDeleteMatch = (idxToDelete) => {
@@ -587,326 +756,582 @@ const Match = () => {
     }).then((result) => {
       if (result.isConfirmed) {
         setMatches((prevMatches) => {
-          const updatedMatches = prevMatches.filter((_, idx) => {
-            // If the deleted match was finished, decrement gamesPlayed for its players
-            if (idx === idxToDelete && prevMatches[idx].status === "finished") {
-              const playersInDeletedMatch = [
-                prevMatches[idx].A1,
-                prevMatches[idx].A2,
-                prevMatches[idx].B1,
-                prevMatches[idx].B2,
-              ].filter(Boolean);
-              setMembers((prevMembers) =>
-                prevMembers.map((member) =>
-                  playersInDeletedMatch.includes(member.name)
-                    ? {
-                        ...member,
-                        gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                      }
-                    : member
-                )
-              );
-            }
-            return idx !== idxToDelete;
-          });
-          const rePaddedMatches = updatedMatches.map((match, index) => ({
+          const matchToDelete = prevMatches[idxToDelete];
+          const updatedMatches = prevMatches.filter(
+            (_, idx) => idx !== idxToDelete
+          );
+          // Adjust matchId for remaining matches to keep them sequential
+          const reIndexedMatches = updatedMatches.map((match, idx) => ({
             ...match,
-            matchId: padId(index + 1, 4),
+            matchId: padId(idx + 1, 4),
           }));
+
+          // Recalculate gamesPlayed and ballsUsed for the *current session* after deletion
+          // This must re-evaluate all finished matches in the *remaining* list
+          const tempGamesPlayed = {};
+          const tempBallsUsed = {};
+          reIndexedMatches.forEach((match) => {
+            if (match.status === "จบการแข่งขัน") { // Use Thai for "finished"
+              const playersInMatch = [
+                match.A1,
+                match.A2,
+                match.B1,
+                match.B2,
+              ].filter(Boolean);
+              const ballsInGame = parseInt(match.balls) || 0;
+              playersInMatch.forEach((playerName) => {
+                tempGamesPlayed[playerName] =
+                  (tempGamesPlayed[playerName] || 0) + 1;
+                tempBallsUsed[playerName] =
+                  (tempBallsUsed[playerName] || 0) + ballsInGame;
+              });
+            }
+          });
+          setMembers((prevMembers) =>
+            prevMembers.map((member) => ({
+              ...member,
+              gamesPlayed: tempGamesPlayed[member.name] || 0, // Update current session games
+              ballsUsed: tempBallsUsed[member.name] || 0,     // Update current session balls
+            }))
+          );
+
           if (isBrowser) {
-            localStorage.setItem("matches", JSON.stringify(rePaddedMatches));
+            localStorage.setItem("matches", JSON.stringify(reIndexedMatches));
           }
-          return rePaddedMatches;
+          setMatchCount(reIndexedMatches.length); // Update match count after deletion
+          Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
+          return reIndexedMatches;
         });
-        Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
-        setShowMenuId(null);
       }
     });
   };
 
-  const indexOfLast = currentPage * ITEMS_PER_PAGE;
-  const indexOfFirst = indexOfLast - ITEMS_PER_PAGE;
-  const currentMatches = matches.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
 
-  const formatTime = (sec) => {
-    const m = Math.floor(sec / 60)
-      .toString()
-      .padStart(2, "0");
-    const s = (sec % 60).toString().padStart(2, "0");
-    return `${m}:${s} นาที`;
+    const pad = (num) => String(num).padStart(2, "0");
+
+    if (hours > 0) {
+      return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
+    } else {
+      return `${pad(minutes)}:${pad(remainingSeconds)}`;
+    }
   };
+
+  // Pagination Logic
+  const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
+  const paginatedMatches = matches.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Determine if there are unfinished matches for disabling "ปิดก๊วน"
+  const cannotFinish = matches.some((m) => m.status !== "จบการแข่งขัน");
+
+  // NEW: Function to calculate summary for a specific player
+  const calculatePlayerSummary = () => {
+    if (!selectedMemberForEarlyExit) {
+      Swal.fire("กรุณาเลือกสมาชิกที่ต้องการคำนวณ", "", "warning");
+      return;
+    }
+
+    if (
+        (courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0) &&
+        ballPrice === 0 &&
+        organizeFee === 0
+      ) {
+        Swal.fire(
+          "ข้อมูลไม่ครบถ้วน",
+          "กรุณากรอกข้อมูลค่าลูก, ค่าจัดก๊วน หรือค่าสนาม ให้ครบถ้วนก่อนคำนวณ",
+          "warning"
+        );
+        return;
+      }
+
+    const player = members.find((mem) => mem.name === selectedMemberForEarlyExit);
+
+    if (!player) {
+      Swal.fire("ไม่พบข้อมูลสมาชิก", "กรุณาลองใหม่อีกครั้ง", "error");
+      return;
+    }
+
+    const parsedBallPrice = parseFloat(ballPrice) || 0;
+    const parsedCourtFee = parseFloat(courtFee) || 0;
+    const parsedCourtFeePerGame = parseFloat(courtFeePerGame) || 0;
+    const parsedFixedCourtFeePerPerson =
+      parseFloat(fixedCourtFeePerPerson) || 0;
+    const parsedOrganizeFee = parseFloat(organizeFee) || 0; // Can be 0
+
+    // Use current session's gamesPlayed and ballsUsed for early exit calculation
+    const gamesPlayed = player.gamesPlayed;
+    const ballsUsed = player.ballsUsed || 0;
+
+    const ballCost = ballsUsed * parsedBallPrice;
+    let courtCostPerPerson = 0;
+
+    // Logic for court cost, similar to MatchDetails.js
+    if (parsedFixedCourtFeePerPerson > 0) {
+      courtCostPerPerson = parsedFixedCourtFeePerPerson;
+    } else if (parsedCourtFeePerGame > 0) {
+      courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
+    } else if (parsedCourtFee > 0) {
+      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0).length; // Members who have played at least one game in this session
+      courtCostPerPerson =
+        totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
+    }
+
+    const estimatedTotalCost =
+      Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
+
+    const result = {
+      name: player.name,
+      gamesPlayed: gamesPlayed,
+      ballsUsed: ballsUsed,
+      estimatedTotalCost: estimatedTotalCost,
+      ballCost: Math.ceil(ballCost),
+      courtCost: Math.ceil(courtCostPerPerson),
+      organizeFee: Math.ceil(parsedOrganizeFee),
+    };
+
+    setEarlyExitCalculationResult(result);
+
+    Swal.fire({
+      title: `ยอดรวมสำหรับ ${result.name}`,
+      html: `
+        <div style="text-align: left; font-size: 16px; color: #333;">
+          <p style="margin-bottom: 8px;"><strong>จำนวนเกมที่เล่น:</strong> <span style="float: right;">${result.gamesPlayed} เกม</span></p>
+          <p style="margin-bottom: 8px;"><strong>จำนวนลูกขนไก่ที่ใช้:</strong> <span style="float: right;">${result.ballsUsed} ลูก</span></p>
+          <hr style="margin: 15px 0; border-top: 1px dashed #ccc;">
+          <p style="margin-bottom: 8px;"><strong>ค่าลูก:</strong> <span style="float: right; color: #007bff;">${result.ballCost} บาท</span></p>
+          <p style="margin-bottom: 8px;"><strong>ค่าสนาม:</strong> <span style="float: right; color: #007bff;">${result.courtCost} บาท</span></p>
+          <p style="margin-bottom: 8px;"><strong>ค่าจัดก๊วน:</strong> <span style="float: right; color: #007bff;">${result.organizeFee} บาท</span></p>
+          <hr style="margin: 15px 0; border-top: 2px solid #5cb85c;">
+          <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมโดยประมาณ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
+        </div>
+      `,
+      icon: "info",
+      confirmButtonText: "รับทราบ",
+    });
+  };
+
+  // NEW: Function to clear early exit selection and result
+  const handleClearEarlyExitSelection = () => {
+    setSelectedMemberForEarlyExit("");
+    setEarlyExitCalculationResult(null);
+  };
+
+  // Determine which court fee input is currently active/filled for display purposes
+  const isCourtFeeActive = courtFee > 0;
+  const isCourtFeePerGameActive = courtFeePerGame > 0;
+  const isFixedCourtFeePerPersonActive = fixedCourtFeePerPerson > 0;
+
+  // Handlers for court fee changes, ensuring only one is active
+  const handleCourtFeeChange = (e) => {
+    const value = parseFloat(e.target.value) || 0;
+    setCourtFee(value);
+    if (value > 0) {
+      setCourtFeePerGame(0);
+      setFixedCourtFeePerPerson(0);
+    }
+  };
+
+  const handleCourtFeePerGameChange = (e) => {
+    const value = parseFloat(e.target.value) || 0;
+    setCourtFeePerGame(value);
+    if (value > 0) {
+      setCourtFee(0);
+      setFixedCourtFeePerPerson(0);
+    }
+  };
+
+  const handleFixedCourtFeePerPersonChange = (e) => {
+    const value = parseFloat(e.target.value) || 0;
+    setFixedCourtFeePerPerson(value);
+    if (value > 0) {
+      setCourtFee(0);
+      setCourtFeePerGame(0);
+    }
+  };
+
+  // NEW: Function to clear all cost settings
+  const handleClearCostSettings = () => {
+    Swal.fire({
+      title: "คุณแน่ใจหรือไม่?",
+      text: "การดำเนินการนี้จะล้างค่าใช้จ่ายทั้งหมด (ค่าลูก, ค่าสนาม, ค่าจัดก๊วน) เป็น 0",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "ใช่, ล้างค่าทั้งหมด",
+      cancelButtonText: "ยกเลิก",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setBallPrice(0);
+        setCourtFee(0);
+        setCourtFeePerGame(0);
+        setFixedCourtFeePerPerson(0);
+        setOrganizeFee(0);
+        Swal.fire("ล้างค่าสำเร็จ!", "ค่าใช้จ่ายทั้งหมดถูกรีเซ็ตเป็น 0 แล้ว", "success");
+      }
+    });
+  };
+
 
   return (
     <div
       style={{
-        display: "block",
-        height: "100vh",
+        padding: "15px",
+        backgroundColor: "#f0f2f5", // Lighter background for the entire page
+        minHeight: "100vh",
+        fontFamily: "'Kanit', sans-serif",
       }}
     >
-      <main
-        className="main-content"
-        style={{
-          padding: "28px",
-          backgroundColor: "#f7f7f7",
-          borderRadius: "12px",
-          overflowY: "auto",
-        }}
-      >
-        <h2 style={{ fontSize: "18px", marginBottom: "10px" }}>จัดก๊วน</h2>
-        <hr />
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            alignItems: "center",
-            gap: "18px",
-            marginBottom: "18px",
-            marginTop: "20px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "16px",
-            }}
-          >
-            <input
-              type="date"
-              value={matchDate}
-              onChange={(e) => setMatchDate(e.target.value)}
-              disabled={isOpen}
-              style={{
-                fontSize: "14px",
-                border: "1px solid #ccc",
-                borderRadius: "6px",
-                padding: "7px 14px",
-                minWidth: "140px",
-                background: "#fff",
-              }}
-            />
-            <div>
-              <label
-                style={{
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  marginRight: "6px",
-                  color: "#333",
-                }}
-              >
-                หัวเรื่อง
-              </label>
+      {/* Control Panel Card */}
+      <div className="card control-panel-card">
+        <div className="control-panel">
+          <div className="date-topic-group">
+            <div className="input-group">
+              <label htmlFor="matchDate" className="control-label"></label>
+              <input
+                type="date"
+                id="matchDate"
+                value={matchDate}
+                onChange={(e) => setMatchDate(e.target.value)}
+                className="control-input"
+                style={{ minWidth: "160px" }}
+                disabled={isOpen} // Disable if group is open
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="topic" className="control-label"></label>
               <input
                 type="text"
+                id="topic"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                placeholder="กรุณากรอกหัวเรื่อง"
-                disabled={isOpen}
+                placeholder="เช่น ก๊วนตอนเย็น, ก๊วนพิเศษ"
+                className="control-input"
                 style={{
-                  fontSize: "13px",
-                  border: topic ? "1px solid #ccc" : "1px solid #FFD700", // Conditional border
-                  borderRadius: "6px",
-                  padding: "7px 14px",
-                  minWidth: "180px",
-                  background: "#fff",
-                }}
+                  border: topic ? "1px solid #ccc" : "1px solid #FFD700",
+                }} // Conditional border
+                disabled={isOpen} // Disable if group is open
               />
             </div>
           </div>
-          <div
-            className="action-time-group" // Apply class for responsive control
-          >
+          <div className="action-time-group">
             <button
               onClick={isOpen ? handleEndGroup : handleStartGroup}
-              className={`action-button ${
-                isOpen ? "end-group" : "start-group"
-              }`}
+              className={`action-button ${isOpen ? "end-group" : "start-group"}`}
             >
               {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
             </button>
-            <div
-              className="activity-time-display" // Apply class for responsive control
-            >
+            <div className="activity-time-display">
               <span style={{ color: "#2196f3", fontWeight: 600 }}>
-                Total Activity Time
+                {" "}
+                Total Activity Time{" "}
               </span>
               <span
                 style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}
               >
-                - {formatTime(activityTime)}
+                {" "}
+                - {formatTime(activityTime)}{" "}
               </span>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* NEW: Input Section for Cost Parameters & Early Exit - Combined Card */}
+      <div className="card financial-summary-card">
         <div
           style={{
             display: "flex",
-            justifyContent: "flex-end",
+            justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "10px",
-            fontSize: "14px",
-            color: "#353535",
-            fontWeight: 500,
+            marginBottom: "15px",
+            borderBottom: isCostSettingsOpen ? "1px solid #eee" : "none", // Add border only when open
+            paddingBottom: isCostSettingsOpen ? "10px" : "0",
+            cursor: "pointer", // Indicate clickability
           }}
+          onClick={() => setIsCostSettingsOpen(!isCostSettingsOpen)}
         >
-          จำนวนเกม : {matches.length}
-        </div>
-
-        <div
-          style={{
-            overflowX: "auto",
-            marginBottom: "16px",
-          }}
-        >
-          <table
+          <h3
             style={{
-              width: "100%",
-              borderCollapse: "separate",
-              borderSpacing: 0,
-              backgroundColor: "#fff",
-              borderRadius: "13px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.07)",
-              fontSize: "14px",
-              minWidth: "1250px",
+              fontSize: "15px", // Slightly larger font for main heading
+              margin: 0, // Remove default margin
+              color: "#222",
             }}
           >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: "#323943",
-                  color: "white",
-                  fontSize: "12px",
-                  textAlign: "center",
-                  height: "20px",
-                }}
-              >
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+            ตั้งค่าค่าใช้จ่าย (จะบันทึกอัตโนมัติ)
+          </h3>
+          <span
+            style={{
+              fontSize: "20px", // Larger plus sign
+              fontWeight: "bold",
+              transition: "transform 0.3s ease",
+              transform: isCostSettingsOpen ? "rotate(45deg)" : "rotate(0deg)",
+              color: "#222",
+            }}
+          >
+            +
+          </span>
+        </div>
+
+        {/* Collapsible content wrapper for cost settings */}
+        <div
+          ref={contentRef}
+          style={{
+            maxHeight: isCostSettingsOpen
+              ? contentRef.current
+                ? contentRef.current.scrollHeight + "px"
+                : "500px" // Fallback large height
+              : "0", // Dynamic height for smooth transition
+            overflow: "hidden",
+            transition: "max-height 0.4s ease-in-out", // Smooth transition
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: "flex",
+                gap: "20px",
+                flexWrap: "wrap",
+                marginBottom: "25px", // Increased margin for separation
+              }}
+            >
+              {/* Court Fee Inputs */}
+              <div className="cost-input-group">
+                <h4 className="cost-input-heading">
+                  ค่าสนาม: (เลือกเพียง 1 รูปแบบ)
+                </h4>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
                 >
-                  Match ID
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                  <div>
+                    <label className="cost-label">ค่าสนามรวม (บาท):</label>
+                    <input
+                      type="number"
+                      value={courtFee === 0 ? "" : courtFee}
+                      onChange={handleCourtFeeChange}
+                      placeholder="ค่าสนามรวม"
+                      className="cost-input"
+                      style={{
+                        backgroundColor:
+                          isCourtFeePerGameActive || isFixedCourtFeePerPersonActive
+                            ? "#e9e9e9"
+                            : "#fff",
+                      }}
+                      disabled={isCourtFeePerGameActive || isFixedCourtFeePerPersonActive}
+                    />
+                  </div>
+                  <div>
+                    <label className="cost-label">ค่าสนามต่อเกม (บาท/เกม):</label>
+                    <input
+                      type="number"
+                      value={courtFeePerGame === 0 ? "" : courtFeePerGame}
+                      onChange={handleCourtFeePerGameChange}
+                      placeholder="ค่าสนามต่อเกม"
+                      className="cost-input"
+                      style={{
+                        backgroundColor:
+                          isCourtFeeActive || isFixedCourtFeePerPersonActive
+                            ? "#e9e9e9"
+                            : "#fff",
+                      }}
+                      disabled={isCourtFeeActive || isFixedCourtFeePerPersonActive}
+                    />
+                  </div>
+                  <div>
+                    <label className="cost-label">ค่าสนามคงที่ต่อคน (บาท/คน):</label>
+                    <input
+                      type="number"
+                      value={fixedCourtFeePerPerson === 0 ? "" : fixedCourtFeePerPerson}
+                      onChange={handleFixedCourtFeePerPersonChange}
+                      placeholder="ค่าสนามคงที่ต่อคน"
+                      className="cost-input"
+                      style={{
+                        backgroundColor:
+                          isCourtFeeActive || isCourtFeePerGameActive
+                            ? "#e9e9e9"
+                            : "#fff",
+                      }}
+                      disabled={isCourtFeeActive || isCourtFeePerGameActive}
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* Ball Price and Organize Fee Inputs */}
+              <div className="cost-input-group">
+                <h4 className="cost-input-heading">ค่าลูกและค่าจัดก๊วน:</h4>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
                 >
-                  court
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
+                  <div>
+                    <label className="cost-label">ราคาลูกละ (บาท):</label>
+                    <input
+                      type="number"
+                      value={ballPrice === 0 ? "" : ballPrice}
+                      onChange={(e) => setBallPrice(parseFloat(e.target.value) || 0)}
+                      placeholder="ราคาลูกละ"
+                      className="cost-input"
+                      style={{ width: "120px" }}
+                    />
+                  </div>
+                  <div>
+                    <label className="cost-label">ค่าจัดก๊วน (บาท/คน):</label>
+                    <input
+                      type="number"
+                      value={organizeFee === 0 ? "" : organizeFee}
+                      onChange={(e) => setOrganizeFee(parseFloat(e.target.value) || 0)}
+                      placeholder="ค่าจัดก๊วน"
+                      className="cost-input"
+                      style={{ width: "120px" }}
+                    />
+                  </div>
+                </div>
+                {/* NEW: Clear Settings Button */}
+                <button
+                  onClick={handleClearCostSettings}
+                  className="action-button clear-settings-button"
+                  style={{ marginTop: "20px", backgroundColor: "#dc3545" }} // Added margin-top for spacing
                 >
-                  A1
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  A2
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  B1
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  B2
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  ลูกที่ใช้/เกม
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  ผลการแข่งขัน
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  score
-                </th>
-                <th
-                  style={{ padding: "11px 9px", borderRight: "1px solid #ddd" }}
-                >
-                  status
-                </th>
-                <th style={{ padding: "11px 9px" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentMatches.length === 0 && (
+                  ล้างการตั้งค่าทั้งหมด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Early Exit Calculation Section - Now always visible within Financial Summary Card */}
+        <div className="early-exit-section">
+          <h4 className="early-exit-heading">คำนวณยอดสำหรับสมาชิกที่ต้องการออกก่อน</h4>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selectedMemberForEarlyExit}
+              onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)}
+              className="early-exit-select"
+            >
+              <option value="">เลือกสมาชิก</option>
+              {members.map((mem) => (
+                <option key={mem.memberId} value={mem.name}>
+                  {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={calculatePlayerSummary}
+              className="action-button calculate-button"
+              disabled={!isOpen || !selectedMemberForEarlyExit} // Disable if group not open or no member selected
+            >
+              คำนวณยอด
+            </button>
+            <button
+              onClick={handleClearEarlyExitSelection}
+              className="action-button clear-button"
+              disabled={!selectedMemberForEarlyExit && !earlyExitCalculationResult}
+            >
+              ล้างตัวเลือก
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Match Table Card */}
+      <div className="card match-table-card">
+        {/* NEW: Display Match Count & Region Selector - Moved here into match-table-card */}
+        <div
+          style={{
+            textAlign: "left",
+            marginBottom: "15px",
+            fontSize: "14px", // Adjusted font size
+            fontWeight: "600",
+            color: "#333",
+            padding: "10px 0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap", // Added flex-wrap for responsiveness
+            gap: "10px" // Added gap for spacing
+          }}
+        >
+          <span>จำนวน Match ทั้งหมด: {matchCount}</span>
+          <div className="region-selector-inline">
+            <label
+              htmlFor="region-select"
+              style={{ margin: 0, fontSize: "14px", color: "#555" }}
+            >
+              เลือกภาค:
+            </label>
+            <select
+              id="region-select"
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              style={{
+                minWidth: "100px",
+                padding: "6px 8px",
+                border: "1px solid #ccc",
+                borderRadius: "5px",
+                fontSize: "13px",
+                width: "auto",
+                marginLeft: "8px",
+              }}
+              disabled={isOpen} // Disable if group is open
+            >
+              <option value="ภาคอีสาน">ภาคอีสาน</option>
+              <option value="ภาคกลาง">ภาคกลาง</option>
+            </select>
+          </div>
+        </div>
+
+        {matches.length === 0 && isOpen && (
+          <div className="no-matches-message">
+            <p>ยังไม่มี Match เพิ่ม "Add New Match" เพื่อเริ่มต้น</p>
+          </div>
+        )}
+        {matches.length > 0 && (
+          <div className="match-table-wrapper"> {/* New wrapper for overflow-x */}
+            <table className="match-table">
+              <thead>
                 <tr>
-                  <td
-                    colSpan={11}
-                    style={{
-                      padding: "34px 0",
-                      color: "#999",
-                      textAlign: "center",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {isOpen
-                      ? "ยังไม่มี Match กรุณาเพิ่มรายการ"
-                      : "กรุณากดเริ่มจัดก๊วนก่อน"}
-                  </td>
+                  <th>Match ID</th>
+                  <th>สนาม</th>
+                  <th>ทีม A (ผู้เล่น 1)</th>
+                  <th>ทีม A (ผู้เล่น 2)</th>
+                  <th>ทีม B (ผู้เล่น 1)</th>
+                  <th>ทีม B (ผู้เล่น 2)</th>
+                  <th>ลูก</th>
+                  <th>ผล</th>
+                  <th>คะแนน</th>
+                  <th>สถานะ</th>
+                  <th>Action</th>
                 </tr>
-              )}
-              {currentMatches.map((match, idx) => {
-                const globalIdx = indexOfFirst + idx;
-
-                const cannotFinish =
-                  !match.balls ||
-                  !match.result ||
-                  !match.A1 ||
-                  !match.A2 ||
-                  !match.B1 ||
-                  !match.B2;
-                // status select should only be disabled if match is already 'finished'
-                // manual 'finished' selection can still be done if all fields are filled
-                const isDisabledManualStatus = !isOpen || cannotFinish;
-
-                return (
-                  <tr
-                    key={match.matchId}
-                    style={{
-                      background: globalIdx % 2 === 0 ? "#f8fcfe" : "#f4f7fa",
-                      height: "53px",
-                      transition: "background 0.25s",
-                    }}
-                  >
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                        fontWeight: 500,
-                        fontSize: "12px",
-                      }}
-                    >
-                      {match.matchId}
-                    </td>
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+              </thead>
+              <tbody>
+                {paginatedMatches.map((match, idx) => (
+                  <tr key={match.matchId}>
+                    <td data-label="Match ID">{match.matchId}</td>
+                    <td data-label="สนาม">
                       <select
                         value={match.court}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "court", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "court",
+                            e.target.value
+                          )
                         }
-                        // Disable court selection if match is finished or group is not open
-                        disabled={!isOpen || match.status === "finished"}
-                        style={{
-                          width: "110px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.court
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
-                        }}
+                        style={{ border: match.court ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
                         <option value="">เลือกสนาม</option>
                         {courts.map((court) => (
@@ -916,903 +1341,730 @@ const Match = () => {
                         ))}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td data-label="ทีม A (ผู้เล่น 1)">
                       <select
                         value={match.A1}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "A1", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "A1",
+                            e.target.value
+                          )
                         }
-                        // Disable player selection if match is finished or group is not open
-                        disabled={!isOpen || match.status === "finished"}
-                        style={{
-                          width: "120px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.A1
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
-                        }}
+                        style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
-                        <option value="">เลือกผู้เล่น</option>
+                        <option value="">เลือกผู้เล่น A1</option>
                         {renderMemberOptions(match, "A1")}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td data-label="ทีม A (ผู้เล่น 2)">
                       <select
                         value={match.A2}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "A2", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "A2",
+                            e.target.value
+                          )
                         }
-                        // Disable player selection if match is finished or group is not open
-                        disabled={!isOpen || match.status === "finished"}
-                        style={{
-                          width: "120px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.A2
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
-                        }}
+                        style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
-                        <option value="">เลือกผู้เล่น</option>
+                        <option value="">เลือกผู้เล่น A2</option>
                         {renderMemberOptions(match, "A2")}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td data-label="ทีม B (ผู้เล่น 1)">
                       <select
                         value={match.B1}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "B1", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "B1",
+                            e.target.value
+                          )
                         }
-                        // Disable player selection if match is finished or group is not open
-                        disabled={!isOpen || match.status === "finished"}
-                        style={{
-                          width: "120px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.B1
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
-                        }}
+                        style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
-                        <option value="">เลือกผู้เล่น</option>
+                        <option value="">เลือกผู้เล่น B1</option>
                         {renderMemberOptions(match, "B1")}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td data-label="ทีม B (ผู้เล่น 2)">
                       <select
                         value={match.B2}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "B2", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "B2",
+                            e.target.value
+                          )
                         }
-                        // Disable player selection if match is finished or group is not open
-                        disabled={!isOpen || match.status === "finished"}
-                        style={{
-                          width: "120px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.B2
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
-                        }}
+                        style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
-                        <option value="">เลือกผู้เล่น</option>
+                        <option value="">เลือกผู้เล่น B2</option>
                         {renderMemberOptions(match, "B2")}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td data-label="ลูก">
                       <select
                         value={match.balls}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "balls", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "balls",
+                            e.target.value
+                          )
                         }
-                        // Disable balls selection if match is finished or group is not open
-                        disabled={!isOpen || match.status === "finished"}
+                        className="balls-select"
                         style={{
-                          width: "90px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.balls
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
+                          backgroundColor: match.balls ? "#e6f7ff" : "#fff",
+                          border: match.balls ? "1px solid #ddd" : "1px solid #FFD700", // Conditional border
                         }}
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
-                        <option value="">เลือก</option>
-                        {balls.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
+                        <option value="">เลือกลูก</option>
+                        {balls.map((ball) => (
+                          <option key={ball} value={ball}>
+                            {ball}
                           </option>
                         ))}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                      }}
-                    >
+                    <td data-label="ผล">
                       <select
                         value={match.result}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "result", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "result",
+                            e.target.value
+                          )
                         }
-                        // Disable result selection if group is not open. If match is finished, it's already set.
-                        disabled={!isOpen}
+                        className="result-select"
                         style={{
-                          width: "110px",
-                          padding: "7px",
-                          borderRadius: "5px",
-                          border: match.result
-                            ? "1px solid #bbb"
-                            : "1px solid #FFD700", // Conditional border
-                          fontSize: "12px",
+                          backgroundColor: match.result ? "#e6f7ff" : "#fff",
                         }}
+                        disabled={match.status === "จบการแข่งขัน"} // Disable if finished
                       >
-                        {RESULT_OPTIONS.map((op) => (
-                          <option key={op.value} value={op.value}>
-                            {op.label}
+                        {RESULT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
                           </option>
                         ))}
                       </select>
                     </td>
-
-                    <td
-                      style={{
-                        textAlign: "center",
-                        borderRight: "1px solid #e3e3e3",
-                        fontWeight: 600,
-                        fontSize: "12px",
-                        color: "#138c0f",
-                      }}
-                    >
-                      {match.score}
+                    <td data-label="คะแนน">
+                      <span className="score-display">{match.score}</span>
                     </td>
-
-                    <td data-label="status">
+                    <td data-label="สถานะ">
                       <select
                         value={match.status}
                         onChange={(e) =>
-                          handleChangeMatch(globalIdx, "status", e.target.value)
+                          handleChangeMatch(
+                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
+                            "status",
+                            e.target.value
+                          )
                         }
-                        // Status can be manually changed if group is open and it's not finished via result auto-set
-                        disabled={!isOpen || match.status === "finished"} // If auto-set to finished, disable manual change.
                         className="status-select"
                         style={{
-                          background: STATUS_COLORS[match.status] || "#fff8d8",
-                          color: match.status === "finished" ? "#fff" : "#666",
+                          backgroundColor: STATUS_COLORS[match.status] || "#fff",
+                          color: match.status === "จบการแข่งขัน" ? "#fff" : "#333",
                         }}
                       >
-                        <option value="">เตรียมพร้อม</option>
-                        <option value="playing">กำลังแข่งขัน</option>
-                        <option value="finished" disabled={cannotFinish}>
-                          จบการแข่งขัน
-                        </option>
+                        {Object.keys(STATUS_COLORS).map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
                       </select>
                     </td>
-
-                    <td style={{ textAlign: "center", minWidth: "48px" }}>
-                      {isOpen && (
-                        <div
-                          style={{
-                            position: "relative",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
+                    <td data-label="Action">
+                      <div className="action-menu">
+                        <button
+                          className="action-menu-button"
+                          onClick={() =>
+                            setShowMenuId(
+                              showMenuId === match.matchId ? null : match.matchId
+                            )
+                          }
                         >
-                          <button
-                            tabIndex={-1}
-                            onClick={() =>
-                              setShowMenuId(
-                                showMenuId === match.matchId
-                                  ? null
-                                  : match.matchId
-                              )
-                            }
-                            style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: "5px",
-                              borderRadius: "50%",
-                              width: "32px",
-                              height: "32px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "23px",
-                            }}
-                          >
-                            <span style={{ color: "#666" }}>⋮</span>
-                          </button>
-                          {showMenuId === match.matchId && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "32px",
-                                right: 0,
-                                background: "#fff",
-                                border: "1px solid #ddd",
-                                borderRadius: "7px",
-                                boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
-                                zIndex: 12,
-                              }}
-                            >
-                              <button
-                                onClick={() => handleDeleteMatch(globalIdx)}
-                                style={{
-                                  padding: "9px 28px 9px 22px",
-                                  fontSize: "15px",
-                                  minWidth: "110px",
-                                  color: "#b71c1c",
-                                  background: "none",
-                                  border: "none",
-                                  textAlign: "left",
-                                  width: "100%",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                ลบแถวนี้
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                          &#x22EF;
+                        </button>
+                        {showMenuId === match.matchId && (
+                          <div className="action-menu-dropdown">
+                            <button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)}>
+                              ลบ
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            margin: "18px 0 22px 8px",
-          }}
-        >
+        <div className="pagination-controls">
           <button
-            onClick={handleAddMatch}
-            disabled={!isOpen}
-            style={{
-              width: "25px",
-              height: "25px",
-              borderRadius: "50%",
-              backgroundColor: isOpen ? "#40c2ec" : "#bbb",
-              border: "none",
-              color: "#fff",
-              fontSize: "25px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "7px",
-              cursor: isOpen ? "pointer" : "not-allowed",
-              transition: "all 0.15s",
-              boxShadow: "0 2px 7px rgba(50,200,250,0.10)",
-              userSelect: "none",
-            }}
-            tabIndex={-1}
-          >
-            +
-          </button>
-          <span
-            style={{
-              fontSize: "15px",
-              color: "#222",
-              borderBottom: "2px solid #40c2ec",
-              fontWeight: 500,
-              cursor: isOpen ? "pointer" : "not-allowed",
-              userSelect: "none",
-              marginRight: "12px",
-            }}
-            onClick={() => isOpen && handleAddMatch()}
-          ></span>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-start",
-            marginBottom: "20px",
-          }}
-        >
-          <button
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
-            style={{
-              padding: "6px 12px",
-              border: "1px solid #ddd",
-              borderRadius: "5px",
-              backgroundColor: "#f1f1f1",
-              marginRight: "5px",
-              cursor: currentPage === 1 ? "not-allowed" : "pointer",
-            }}
           >
-            ย้อนกลับ
+            ก่อนหน้า
           </button>
-          {Array.from({ length: totalPages }, (_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => setCurrentPage(index + 1)}
-              style={{
-                padding: "6px 12px",
-                border: "1px solid #ddd",
-                borderRadius: "5px",
-                backgroundColor:
-                  currentPage === index + 1 ? "#6c757d" : "#f1f1f1",
-                marginRight: "5px",
-                cursor: "pointer",
-                color: currentPage === index + 1 ? "white" : "black",
-              }}
-            >
-              {index + 1}
-            </button>
-          ))}
+          <span>
+            หน้า {currentPage} จาก {totalPages}
+          </span>
           <button
             onClick={() =>
-              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
             }
-            disabled={currentPage === totalPages || totalPages === 0}
-            style={{
-              padding: "6px 12px",
-              border: "1px solid #ddd",
-              borderRadius: "5px",
-              backgroundColor: "#f1f1f1",
-              cursor:
-                currentPage === totalPages || totalPages === 0
-                  ? "not-allowed"
-                  : "pointer",
-            }}
+            disabled={currentPage === totalPages}
           >
             ถัดไป
           </button>
         </div>
-      </main>
+
+        <button
+          onClick={handleAddMatch}
+          className="add-match-button"
+          disabled={!isOpen}
+        >
+          + Add New Match
+        </button>
+      </div>
 
       <style jsx>{`
-        /* Global Styles */
-        * {
-          box-sizing: border-box;
-          font-family: "Kanit", sans-serif;
+        /* General Card Styling */
+        .card {
+          background-color: #ffffff;
+          padding: 25px;
+          border-radius: 10px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          margin-bottom: 30px; /* Space between cards */
         }
 
-        .overall-layout {
-          display: block;
-          width: 100%;
-          min-height: 100vh;
+        /* Control Panel Specific Adjustments */
+        .control-panel-card {
+          /* No additional styling needed here, .control-panel already defines flex behavior */
         }
 
-        .main-content {
-          padding: 28px;
-          background-color: #f7f7f7;
-          overflow-y: auto;
-        }
-
-        .title-separator {
-          border: 0;
-          border-top: 1px solid #aebdc9;
-          margin-bottom: 18px;
-        }
-
-        /* Top Control Panel - Refined */
-        .top-control-panel {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          align-items: center;
-          gap: 25px; /* Increased gap for clearer separation */
-          margin-bottom: 18px;
-          margin-top: 20px;
-          background-color: #ffffff; /* Add background to the panel itself */
-          padding: 20px; /* Add padding */
-          border-radius: 12px; /* Rounded corners */
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); /* Subtle shadow */
-        }
-
-        .date-topic-group {
+        .control-panel {
           display: flex;
-          align-items: center;
-          gap: 16px;
-          flex-wrap: wrap; /* Allow wrapping on smaller screens */
-          justify-content: flex-start; /* Ensure left alignment */
+          flex-direction: row;
+          flex-wrap: wrap;
+          gap: 20px;
+          justify-content: space-between;
+          align-items: flex-start;
         }
 
-        .input-group {
-          display: flex;
-          align-items: center;
-          gap: 6px;
+        /* Financial Summary Card Specific Adjustments */
+        .financial-summary-card {
+          /* Inherits from .card */
+          padding-top: 15px; /* Adjust padding for collapsible header */
         }
 
-        .control-label {
-          font-size: 14px;
-          font-weight: 500;
+        .cost-input-group {
+          padding: 15px;
+          border: 1px solid #d0d0d0;
+          border-radius: 5px;
+          background-color: #f9f9f9;
+          flex: 1;
+          min-width: 280px; /* Adjusted min-width for inputs */
+        }
+
+        .cost-input-heading {
+          font-size: 16px;
+          margin-bottom: 10px;
           color: #333;
-          white-space: nowrap; /* Prevent label from wrapping */
         }
 
-        .control-input {
-          font-size: 13px;
+        .cost-label {
+          display: block;
+          margin-bottom: 5px;
+          font-size: 14px;
+          color: #555;
+        }
+
+        .cost-input {
+          padding: 8px 12px;
+          border-radius: 5px;
+          border: 1px solid #ccc;
+          font-size: 15px;
+          width: 140px; /* Default width */
+          box-sizing: border-box;
+        }
+
+        .early-exit-section {
+          margin-top: 20px;
+          padding: 15px;
+          border: 1px solid #d0d0d0;
+          border-radius: 5px;
+          background-color: #e9f7ef; /* Light green background */
+        }
+
+        .early-exit-heading {
+          font-size: 16px;
+          margin-bottom: 10px;
+          color: #28a745;
+        }
+
+        .early-exit-select {
+          width: 15%; /* Initial width */
+          padding: 10px 15px;
           border: 1px solid #ccc;
           border-radius: 6px;
-          padding: 7px 14px;
-          background: #fff;
-          flex-grow: 1; /* Allow inputs to grow */
-          min-width: 140px; /* Adjusted min-width for date input */
-        }
-        .input-group .control-input {
-          min-width: 140px; /* Adjust as needed */
-        }
-
-        .action-time-group {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          justify-content: flex-end; /* Ensure right alignment */
-          flex-wrap: wrap; /* Allow wrapping on smaller screens */
-        }
-
-        .action-button {
-          padding: 10px 32px;
           font-size: 14px;
-          border-radius: 7px;
-          border: none;
+          box-sizing: border-box;
+          min-width: 200px;
+          background-color: #fff;
           cursor: pointer;
-          transition: all 0.22s;
-          color: black; /* Ensure text is visible on colored backgrounds */
-          margin-right: 4px; /* Added from inline style */
         }
 
-        .action-button.end-group {
-          background-color: #f44336;
-          box-shadow: 0 2px 8px rgba(244, 67, 54, 0.07);
-        }
-        .action-button.start-group {
-          background-color: #4bf196; /* Corrected to original color */
-          box-shadow: 0 2px 8px rgba(55, 229, 77, 0.09);
-        }
-
-        .action-button:hover {
-          opacity: 0.9; /* Slight hover effect */
-        }
-
-        .activity-time-display {
-          background: #fff;
-          border: 1px solid #3ec5e0;
-          border-radius: 7px;
-          padding: 8px 20px;
-          font-size: 14px;
-          color: #0a6179;
-          min-width: 180px; /* Kept for large screens */
-          max-width: 280px; /* Kept for large screens */
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-grow: 1;
+        .action-button.calculate-button {
+            background-color: #28a745;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: var(--button-opacity, 1);
+            pointer-events: var(--button-pointer-events, auto);
         }
 
-        .activity-time-label {
-          color: #2196f3;
-          font-weight: 600;
+        .action-button.clear-button {
+            background-color: #6c757d; /* Gray color for clear button */
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: var(--button-opacity, 1);
+            pointer-events: var(--button-pointer-events, auto);
+        }
+        .action-button.clear-settings-button { /* Style for the new clear settings button */
+            background-color: #dc3545; /* Red color */
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: var(--button-opacity, 1);
+            pointer-events: var(--button-pointer-events, auto);
+            width: fit-content; /* Adjust width to content */
+        }
+        .action-button.clear-settings-button:hover {
+            background-color: #c82333;
         }
 
-        .activity-time-value {
-          font-weight: 600;
-          color: #222;
-          font-size: 15px;
+        /* Match Table Card Specific Adjustments */
+        .match-table-card {
+          /* Inherits from .card */
+          overflow-x: auto; /* Ensure table scrolling still works */
         }
 
-        .game-count-display {
-          display: flex;
-          justifyContent: "flex-end",
-          alignItems: "center",
-          marginBottom: "10px",
-          fontSize: "14px",
-          color: "#353535",
-          fontWeight: 500,
+        .match-table-wrapper {
+            overflow-x: auto; /* Ensure the table itself can scroll horizontally if needed */
         }
 
-        /* Table Styles */
-        .table-responsive-container {
-          overflow-x: auto;
-          margin-bottom: 16px;
-        }
 
         .match-table {
           width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          background-color: #fff;
-          border-radius: 13px;
-          box-shadow: "0 4px 12px rgba(0,0,0,0.07)";
-          font-size: 14px;
-          min-width: 1250px;
-        }
-
-        .match-table thead tr {
-          background-color: #323943;
-          color: white;
-          font-size: 12px;
-          text-align: center;
-          height: 40px;
+          border-collapse: collapse;
+          margin-top: 15px; /* Add some space above the table */
         }
 
         .match-table th,
         .match-table td {
-          padding: 11px 9px;
-          border-bottom: 1px solid #e3e3e3;
-          border-right: 1px solid #e3e3e3;
+          border: 1px solid #eee;
+          padding: 12px 10px;
           text-align: center;
           font-size: 12px;
           white-space: nowrap;
         }
 
-        .match-table th:last-child,
-        .match-table td:last-child {
-          border-right: none;
+        .match-table th {
+          background-color: #323943;
+          font-weight: 600;
+          color: #fff;
         }
 
-        .match-table tbody tr {
-          height: 53px;
-        }
-        .match-table tbody tr:last-child td {
-          border-bottom: none;
+        /* Table Row Striping */
+        .match-table tbody tr:nth-child(even) {
+          background-color: #f8f8f8; /* Light gray for even rows */
         }
 
-        .table-input {
+        .match-table tbody tr:hover {
+          background-color: #eaf6ff; /* Highlight on hover */
+        }
+
+        .match-table td select,
+        .match-table td input {
           width: 100%;
-          padding: 7px;
-          border-radius: 5px;
-          border: 1px solid #bbb;
-          font-size: 12px;
-          text-align: center;
-        }
-
-        .score-display {
-          font-weight: 600;
-          font-size: 12px;
-          color: #138c0f;
-        }
-
-        .status-select {
-          width: 110px;
-          padding: 7px;
-          border-radius: 5px;
-          border: 1px solid #bbb;
-          font-size: 12px;
-          font-weight: 600;
-          text-align: center;
-          appearance: none;
-          background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2C197.935L146.2%2C57.135L5.4%2C197.935L0.2%2C192.735L146.2%2C46.935L292.2%2C192.735L287%2C197.935z%22%2F%3E%3C%2Fsvg%3E");
-          background-repeat: no-repeat;
-          background-position: right 8px center;
-          background-size: 12px;
-          cursor: pointer;
-        }
-
-        .status-select:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        .no-data-message {
-          padding: 34px 0;
-          color: #999;
-          text-align: center;
-          font-size: 12px;
-        }
-
-        /* Action Menu (3 dots dropdown) */
-        .action-menu-container {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .action-menu-button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 5px;
-          border-radius: 50%;
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 23px;
-          color: #666;
-          transition: background-color 0.2s;
-        }
-        .action-menu-button:hover {
-          background-color: #f0f0f0;
-        }
-        .action-menu-dropdown {
-          position: absolute;
-          top: 32px;
-          right: 0;
-          background: #fff;
+          padding: 8px 5px;
           border: 1px solid #ddd;
-          border-radius: 7px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-          z-index: 12;
-          min-width: 120px;
+          border-radius: 4px;
+          font-size: 12px;
+          box-sizing: border-box;
+        }
+
+        .no-matches-message {
+          text-align: center;
+          padding: 20px;
+          color: #777;
+          background-color: #fdfdfd; /* Lighter background for message */
+          border-radius: 8px;
+          margin-bottom: 20px;
+          border: 1px dashed #e0e0e0; /* Dashed border for visual cue */
+        }
+
+
+        /* Existing Styles (modified/copied below for context) */
+        .date-topic-group,
+        .action-time-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+          align-items: center;
+        }
+
+        .input-group {
           display: flex;
           flex-direction: column;
         }
-        .action-menu-item {
-          padding: 9px 28px 9px 22px;
+
+        .control-label {
+          font-weight: 600;
+          margin-bottom: 8px;
+          color: #333;
           font-size: 15px;
-          color: #b71c1c;
-          background: none;
-          border: none;
-          text-align: left;
-          width: 100%;
-          cursor: pointer;
-          transition: background-color 0.2s;
-        }
-        .action-menu-item:hover {
-          background-color: #fbe9e7;
         }
 
-        /* Add Match Button */
-        .add-match-container {
+        .control-input {
+          padding: 10px 15px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+          font-size: 14px;
+          width: 200px;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+
+        .action-button {
+          padding: 10px 25px;
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 14px;
+          transition: background-color 0.3s ease;
+          min-width: 120px;
+        }
+
+        .action-button.start-group {
+          background-color: #4bf196;
+        }
+
+        .action-button.start-group:hover {
+          background-color: #3fc57b;
+        }
+
+        .action-button.end-group {
+          background-color: #f44336;
+        }
+
+        .action-button.end-group:hover {
+          background-color: #d32f2f;
+        }
+
+        .activity-time-display {
+          background-color: #e3f2fd;
+          padding: 10px 15px;
+          border-radius: 8px;
+          font-size: 14px;
           display: flex;
           align-items: center;
           gap: 10px;
-          margin: 18px 0 22px 8px;
+        }
+
+        .match-table td select:disabled {
+          background-color: #f0f0f0;
+          cursor: not-allowed;
+        }
+
+        .match-table td select.status-select {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%20viewBox%3D%220%200%20292.4%20292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+          background-repeat: no-repeat;
+          background-position: right 10px top 50%;
+          background-size: 12px auto;
+          padding-right: 30px;
+        }
+
+        .score-display {
+          display: block;
+          padding: 8px 5px;
+          background-color: #f5f5f5;
+          border-radius: 4px;
+          min-width: 40px;
+        }
+
+        .action-menu {
+          position: relative;
+          display: inline-block;
+        }
+
+        .action-menu-button {
+          background: none;
+          border: none;
+          font-size: 20px;
+          cursor: pointer;
+          padding: 5px;
+          line-height: 1;
+        }
+
+        .action-menu-dropdown {
+          position: absolute;
+          background-color: #f9f9f9;
+          min-width: 100px;
+          box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+          z-index: 1;
+          border-radius: 5px;
+          right: 0;
+          top: 100%;
+          margin-top: 5px;
+        }
+
+        .action-menu-dropdown button {
+          color: black;
+          padding: 8px 12px;
+          text-decoration: none;
+          display: block;
+          background: none;
+          border: none;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .action-menu-dropdown button:hover {
+          background-color: #f1f1f1;
+        }
+
+        .pagination-controls {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 15px;
+          margin-top: 20px;
+          padding: 10px;
+          background-color: #f2f2f2;
+          border-radius: 8px;
+        }
+
+        .pagination-controls button {
+          background-color: #007bff;
+          color: white;
+          border: none;
+          padding: 8px 15px;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 12px;
+          transition: background-color 0.3s ease;
+        }
+
+        .pagination-controls button:hover:not(:disabled) {
+          background-color: #0056b3;
+        }
+
+        .pagination-controls button:disabled {
+          background-color: #cccccc;
+          cursor: not-allowed;
+        }
+
+        .pagination-controls span {
+          font-size: 15px;
+          color: #333;
+          font-weight: 500;
         }
 
         .add-match-button {
-          width: 25px;
-          height: 25px;
-          border-radius: 50%;
-          background-color: #40c2ec;
-          border: none;
-          color: "#fff",
-          fontSize: "25px",
-          display: "flex",
-          alignItems: "center",
-          justify-content: "center",
-          marginRight: "7px",
-          cursor: "pointer",
-          transition: "all 0.15s",
-          boxShadow: "0 2px 7px rgba(50,200,250,0.10)",
-          userSelect: "none",
-        }
-        .add-match-button:disabled {
-          background-color: #bbb;
-          cursor: not-allowed;
-          box-shadow: none;
-        }
-        .add-match-button:hover:not(:disabled) {
-          background-color: #29b6f6;
-        }
-
-        .add-match-text {
-          font-size: 15px;
-          color: #222;
-          border-bottom: 2px solid #40c2ec;
-          font-weight: 500;
-          cursor: pointer;
-          user-select: none;
-          margin-right: 12px;
-        }
-        .add-match-text:hover {
-          opacity: 0.8;
-        }
-        .add-match-text[disabled] {
-          cursor: not-allowed;
-          opacity: 0.6;
-        }
-
-        /* Pagination */
-        .pagination-controls {
-          display: flex;
-          justify-content: flex-start;
-          margin-bottom: 20px;
-          flex-wrap: wrap;
-        }
-
-        .pagination-button {
-          padding: 6px 12px;
-          border: 1px solid #ddd;
-          border-radius: 5px;
-          background-color: #f1f1f1;
-          margin-right: 5px;
-          cursor: pointer;
-          transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-          color: black;
-          font-size: 12px;
-        }
-
-        .pagination-button:hover:not(:disabled) {
-          background-color: #e0e0e0;
-        }
-
-        .pagination-button.active {
-          background-color: #6c757d;
+          display: block;
+          width: fit-content;
+          margin: 25px auto 0 auto;
+          padding: 12px 30px;
+          background-color: #007bff;
           color: white;
-          border-color: #6c757d;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          transition: background-color 0.3s ease;
         }
 
-        .pagination-button:disabled {
-          opacity: 0.5;
+        .add-match-button:hover:not(:disabled) {
+          background-color: #0056b3;
+        }
+
+        .add-match-button:disabled {
+          background-color: #cccccc;
           cursor: not-allowed;
-          background-color: #f7f7f7;
         }
 
-        /* Responsive Design */
-        @media (max-width: 900px) {
-          .top-control-panel {
-            grid-template-columns: 1fr;
-            gap: 15px;
-            padding: 15px;
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+          .control-panel {
+            flex-direction: column;
+            align-items: stretch;
           }
+
           .date-topic-group,
           .action-time-group {
             flex-direction: column;
-            align-items: flex-start; /* Keep as is */
-            width: 100%;
-            gap: 10px;
+            align-items: stretch;
           }
-          .input-group,
+
           .control-input {
             width: 100%;
-            min-width: unset;
-            max-width: unset;
-          }
-          .input-group .control-input {
-            min-width: unset;
           }
 
-          /* Specific styles for responsive elements */
-          .action-button,
-          .activity-time-display {
+          .action-button {
             width: 100%;
-            min-width: unset; /* Override fixed min-width for small screens */
-            max-width: unset; /* Override fixed max-width for small screens */
           }
-          .activity-time-display {
-            justify-content: center; /* Center content horizontally when it takes full width */
-          }
-        }
 
-        @media (max-width: 768px) {
-          .match-table {
-            min-width: unset;
-            border-radius: 8px;
+          .match-table thead {
+            display: none;
           }
 
           .match-table,
-          .match-table thead,
           .match-table tbody,
-          .match-table th,
-          .match-table td,
-          .match-table tr {
+          .match-table tr,
+          .match-table td {
             display: block;
-          }
-
-          .match-table thead tr {
-            position: absolute;
-            top: -9999px;
-            left: -9999px;
+            width: 100%;
           }
 
           .match-table tr {
-            border: 1px solid #e0e0e0;
             margin-bottom: 15px;
+            border: 1px solid #ddd;
             border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            background-color: #fff;
             padding: 10px;
           }
 
           .match-table td {
-            border: none;
-            position: relative;
-            padding-left: 50%;
             text-align: right;
-            border-bottom: 1px solid #f0f0f0;
-            min-height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-top: 5px;
-            padding-bottom: 5px;
-          }
-
-          .match-table td:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-            padding-top: 0;
-            justify-content: center;
-          }
-
-          .match-table td:first-child {
-            padding-top: 10px;
+            padding-left: 50%;
+            position: relative;
+            border: none;
           }
 
           .match-table td:before {
-            position: absolute;
-            left: 15px;
-            width: 45%;
             content: attr(data-label);
-            font-weight: bold;
+            position: absolute;
+            left: 10px;
+            width: 45%;
             text-align: left;
+            font-weight: bold;
             color: #555;
-            font-size: 12px;
+            font-size: 13px;
           }
 
-          /* Ensure selects/inputs within mobile table cells take full width */
+          /* Specific data-labels for clarity */
+          .match-table td:nth-of-type(1):before {
+            content: "Match ID";
+          }
+          .match-table td:nth-of-type(2):before {
+            content: "สนาม";
+          }
+          .match-table td:nth-of-type(3):before {
+            content: "ทีม A (ผู้เล่น 1)";
+          }
+          .match-table td:nth-of-type(4):before {
+            content: "ทีม A (ผู้เล่น 2)";
+          }
+          .match-table td:nth-of-type(5):before {
+            content: "ทีม B (ผู้เล่น 1)";
+          }
+          .match-table td:nth-of-type(6):before {
+            content: "ทีม B (ผู้เล่น 2)";
+          }
+          .match-table td:nth-of-type(7):before {
+            content: "ลูก";
+          }
+          .match-table td:nth-of-type(8):before {
+            content: "ผล";
+          }
+          .match-table td:nth-of-type(9):before {
+            content: "คะแนน";
+          }
+          .match-table td:nth-of-type(10):before {
+            content: "สถานะ";
+          }
+          .match-table td:nth-of-type(11):before {
+            content: "Action";
+          }
+
           .match-table td select,
           .match-table td input {
             width: 100%;
-            max-width: unset; /* Remove any max-width */
-            text-align: right; /* Align text to the right for values */
-            flex-grow: 1; /* Allow input/select to grow */
+            max-width: unset;
+            text-align: right;
+            flex-grow: 1;
           }
           .match-table td select.status-select {
-            background-position: right 10px center; /* Adjust dropdown arrow position */
+            background-position: right 10px center;
           }
 
           .match-table td .score-display {
-            width: 100%; /* Make score display take full width */
+            width: 100%;
             text-align: right;
           }
 
           .action-menu-dropdown {
-            right: auto; /* Remove right alignment */
-            left: 50%; /* Center dropdown horizontally */
+            right: auto;
+            left: 50%;
             transform: translateX(-50%);
             min-width: 150px;
+          }
+
+          .region-selector-inline {
+            width: 100%;
+            justify-content: flex-start;
+          }
+
+          .cost-input-group {
+            min-width: unset; /* Remove min-width on small screens */
+            width: 100%; /* Make it full width */
+          }
+          .cost-input {
+            width: 100%; /* Make inputs full width on small screens */
+          }
+          .early-exit-select {
+            width: 100%; /* Make select full width on small screens */
+            min-width: unset;
           }
         }
         @media (max-width: 480px) {
           .match-table td {
-            padding-left: 45%; /* Adjust padding for smaller screens */
+            padding-left: 45%;
           }
           .match-table td:before {
             width: 40%;
-          }
-          .game-count-display {
-            justify-content: flex-start;
           }
         }
       `}</style>
