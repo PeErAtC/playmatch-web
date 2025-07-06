@@ -13,7 +13,8 @@ import { onAuthStateChanged } from "firebase/auth";
 import Swal from "sweetalert2";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { FaTrophy, FaCrown, FaSearch, FaMedal } from "react-icons/fa"; // เพิ่ม FaMedal
+import { FaTrophy, FaCrown, FaSearch, FaMedal, FaTable } from "react-icons/fa"; // เพิ่ม FaTable
+import { BsFillGridFill } from "react-icons/bs"; // เพิ่ม BsFillGridFill
 
 const Ranking = () => {
   const [rankings, setRankings] = useState([]);
@@ -26,11 +27,15 @@ const Ranking = () => {
   const [loggedInUserId, setLoggedInUserId] = useState(null);
 
   // --- State for Pagination ---
+  // เปลี่ยน itemsPerPage เป็น displayLimit ที่ปรับเปลี่ยนได้
+  const [displayLimit, setDisplayLimit] = useState(10); // เริ่มต้นแสดง 10 อันดับ
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(17);
 
   // --- State for Search ---
   const [searchTerm, setSearchTerm] = useState("");
+
+  // --- State for Display Mode ('cardsAndTable' or 'fullTable') ---
+  const [displayMode, setDisplayMode] = useState("cardsAndTable"); // Default mode
 
   const router = useRouter();
 
@@ -220,9 +225,9 @@ const Ranking = () => {
             if (score > wins * 2) {
               draws = score - wins * 2;
             } else if (score < wins * 2) {
-                // This case suggests score is less than expected from wins, implying a possible data discrepancy
-                // For robustness, ensure draws isn't negative
-                draws = 0;
+              // This case suggests score is less than expected from wins, implying a possible data discrepancy
+              // For robustness, ensure draws isn't negative
+              draws = 0;
             }
 
             let losses = Math.max(0, totalGames - wins - draws);
@@ -238,7 +243,7 @@ const Ranking = () => {
               draws: draws,
               losses: losses,
               totalGames: totalGames,
-              winRate: parseFloat(winRate),
+              winRate: winRate, // ส่งค่าเป็น string ที่มีทศนิยม 2 ตำแหน่ง
             };
           });
 
@@ -284,6 +289,44 @@ const Ranking = () => {
     }
   }, [selectedMonth, selectedYear, loggedInUserId, fetchRankings]);
 
+  // --- useEffect for adding keyframes client-side only ---
+  useEffect(() => {
+    if (typeof document !== 'undefined') { // Ensure document is defined (client-side)
+      const styleSheet = document.styleSheets[0];
+      if (styleSheet) {
+        try {
+          const spinKeyframes = `@keyframes spin {
+                      0% { transform: rotate(0deg); }
+                      100% { transform: rotate(360deg); }
+                  }`;
+          const glowRotateKeyframes = `@keyframes glow-rotate {
+                      0% { transform: rotate(0deg); }
+                      100% { transform: rotate(360deg); }
+                  }`;
+          if (
+            !Array.from(styleSheet.cssRules).some((rule) =>
+              rule.cssText.includes("@keyframes spin")
+            )
+          ) {
+            styleSheet.insertRule(spinKeyframes, styleSheet.cssRules.length);
+          }
+          if (
+            !Array.from(styleSheet.cssRules).some((rule) =>
+              rule.cssText.includes("@keyframes glow-rotate")
+            )
+          ) {
+            styleSheet.insertRule(glowRotateKeyframes, styleSheet.cssRules.length);
+          }
+        } catch (e) {
+          console.error(
+            "Could not insert CSS keyframes. This might happen if running in an environment without document.styleSheets or if rules already exist.",
+            e
+          );
+        }
+      }
+    }
+  }, []); // Empty dependency array means this runs once on mount (client-side)
+
   // --- Handlers for dropdown changes ---
   const handleMonthChange = (e) => {
     setSelectedMonth(e.target.value);
@@ -313,29 +356,38 @@ const Ranking = () => {
   };
 
   // --- Filtering rankings based on search term ---
-  const filteredRankings = rankings.filter(
-    (player) =>
-      player.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredRankings = rankings.filter((player) =>
+    player.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // แยกอันดับ 1, 2, 3
   const top3Rankings = filteredRankings.slice(0, 3);
   const otherRankings = filteredRankings.slice(3); // อันดับที่เหลือ
 
-  // --- Pagination Logic for otherRankings ---
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  // --- Pagination Logic for otherRankings (for cardsAndTable mode) ---
+  const indexOfLastItem = currentPage * displayLimit; // ใช้ displayLimit
+  const indexOfFirstItem = indexOfLastItem - displayLimit; // ใช้ displayLimit
   const currentOtherRankings = otherRankings.slice(
     indexOfFirstItem,
     indexOfLastItem
   );
 
-  const totalPages = Math.ceil(otherRankings.length / itemsPerPage);
+  const totalPages = Math.ceil(otherRankings.length / displayLimit); // ใช้ displayLimit
+
+  // --- Pagination Logic for fullTable mode ---
+  const indexOfLastItemFullTable = currentPage * displayLimit; // ใช้ displayLimit
+  const indexOfFirstItemFullTable = indexOfLastItemFullTable - displayLimit; // ใช้ displayLimit
+  const currentFullTableRankings = filteredRankings.slice(
+    indexOfFirstItemFullTable,
+    indexOfLastItemFullTable
+  );
+  const totalPagesFullTable = Math.ceil(filteredRankings.length / displayLimit); // ใช้ displayLimit
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   const nextPage = () => {
-    if (currentPage < totalPages) {
+    const totalPagesToUse = displayMode === 'cardsAndTable' ? totalPages : totalPagesFullTable;
+    if (currentPage < totalPagesToUse) {
       setCurrentPage(currentPage + 1);
     }
   };
@@ -344,6 +396,12 @@ const Ranking = () => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
+  };
+
+  // Handler for display limit buttons
+  const handleDisplayLimitChange = (limit) => {
+    setDisplayLimit(limit);
+    setCurrentPage(1); // Reset to first page when display limit changes
   };
 
   return (
@@ -370,7 +428,7 @@ const Ranking = () => {
 
         <div style={styles.filterControls}>
           <div style={styles.filterItem}>
-            <label htmlFor="month-select" style={{ display: 'none' }}>
+            <label htmlFor="month-select" style={{ display: "none" }}>
               เลือกเดือน
             </label>
             <select
@@ -389,7 +447,7 @@ const Ranking = () => {
             </select>
           </div>
           <div style={styles.filterItem}>
-            <label htmlFor="year-select" style={{ display: 'none' }}>
+            <label htmlFor="year-select" style={{ display: "none" }}>
               เลือกปี
             </label>
             <select
@@ -407,6 +465,69 @@ const Ranking = () => {
               ))}
             </select>
           </div>
+          {/* Display Mode Buttons */}
+          <div style={styles.displayModeButtons}>
+            <button
+              onClick={() => {
+                setDisplayMode("cardsAndTable");
+                setCurrentPage(1); // Reset page on mode change
+              }}
+              style={{
+                ...styles.displayModeButton,
+                ...(displayMode === "cardsAndTable"
+                  ? styles.displayModeButtonActive
+                  : {}),
+              }}
+              aria-label="Show Top 3 Cards and Remaining Table"
+            >
+              <BsFillGridFill size={20} />
+            </button>
+            <button
+              onClick={() => {
+                setDisplayMode("fullTable");
+                setCurrentPage(1); // Reset page on mode change
+              }}
+              style={{
+                ...styles.displayModeButton,
+                ...(displayMode === "fullTable"
+                  ? styles.displayModeButtonActive
+                  : {}),
+              }}
+              aria-label="Show Full Ranking Table"
+            >
+              <FaTable size={20} />
+            </button>
+          </div>
+          {/* Display Limit Buttons */}
+          <div style={styles.displayLimitButtons}>
+            <button
+              onClick={() => handleDisplayLimitChange(10)}
+              style={{
+                ...styles.displayLimitButton,
+                ...(displayLimit === 10 ? styles.displayLimitButtonActive : {}),
+              }}
+            >
+              10 อันดับ
+            </button>
+            <button
+              onClick={() => handleDisplayLimitChange(20)}
+              style={{
+                ...styles.displayLimitButton,
+                ...(displayLimit === 20 ? styles.displayLimitButtonActive : {}),
+              }}
+            >
+              20 อันดับ
+            </button>
+            <button
+              onClick={() => handleDisplayLimitChange(30)}
+              style={{
+                ...styles.displayLimitButton,
+                ...(displayLimit === 30 ? styles.displayLimitButtonActive : {}),
+              }}
+            >
+              30 อันดับ
+            </button>
+          </div>
         </div>
       </div>
 
@@ -422,856 +543,957 @@ const Ranking = () => {
         </div>
       ) : rankings.length > 0 ? (
         <>
-          {/* --- Top 3 Rankings Section --- */}
-          <div style={styles.top3CardsWrapper}>
-            {/* Rank 2 Card */}
-            {top3Rankings[1] && (
-              <div
-                key={top3Rankings[1].name}
-                style={{ ...styles.playerCardElite, ...styles.silverCard, ...styles.rank2CardElite }}
-              >
-                <div style={styles.cardGlowEffect}></div> {/* Glow effect */}
-                <span style={styles.cardPatternIconElite}>🥈</span> {/* เปลี่ยนไอคอน */}
-                {/* Removed playerRankNumberCircleElite for Rank 2 */}
-                <div style={styles.playerRankIconOnly}>
-                    <FaMedal style={{ ...styles.rankIconElite, color: '#A9A9A9' }} /> {/* ไอคอนเหรียญ */}
-                </div>
-                <h3 style={styles.playerCardNameElite}>{top3Rankings[1].name}</h3>
-                <p style={styles.playerCardLevelElite}>ระดับ: {top3Rankings[1].level}</p>
-                <p style={styles.playerCardScoreLargeElite}>{top3Rankings[1].score || 0}</p>
-              </div>
-            )}
-
-            {/* Rank 1 Card (Center, Largest) */}
-            {top3Rankings[0] && (
-              <div
-                key={top3Rankings[0].name}
-                style={{ ...styles.playerCardElite, ...styles.goldCard, ...styles.rank1CardElite }}
-              >
-                <div style={styles.cardGlowEffect}></div> {/* Glow effect */}
-                <span style={styles.cardPatternIconElite}>🥇</span> {/* เปลี่ยนไอคอน */}
-                {/* Removed playerRankNumberCircleElite for Rank 1 */}
-                <div style={styles.playerRankIconOnly}>
-                    <FaCrown style={styles.crownIconElite} />
-                </div>
-                <h3 style={styles.playerCardNameElite}>{top3Rankings[0].name}</h3>
-                <p style={styles.playerCardLevelElite}>ระดับ: {top3Rankings[0].level}</p>
-                <p style={styles.playerCardScoreLargestElite}>{top3Rankings[0].score || 0}</p>
-                <div style={styles.sparkleOverlay}></div> {/* เพิ่มประกาย */}
-              </div>
-            )}
-
-            {/* Rank 3 Card */}
-            {top3Rankings[2] && (
-              <div
-                key={top3Rankings[2].name}
-                style={{ ...styles.playerCardElite, ...styles.bronzeCard, ...styles.rank3CardElite }}
-              >
-                <div style={styles.cardGlowEffect}></div> {/* Glow effect */}
-                <span style={styles.cardPatternIconElite}>🥉</span> {/* เปลี่ยนไอคอน */}
-                {/* Removed playerRankNumberCircleElite for Rank 3 */}
-                <div style={styles.playerRankIconOnly}>
-                    <FaMedal style={{ ...styles.rankIconElite, color: '#CD7F32' }} /> {/* ไอคอนเหรียญ */}
-                </div>
-                <h3 style={styles.playerCardNameElite}>{top3Rankings[2].name}</h3>
-                <p style={styles.playerCardLevelElite}>ระดับ: {top3Rankings[2].level}</p>
-                <p style={styles.playerCardScoreLargeElite}>{top3Rankings[2].score || 0}</p>
-              </div>
-            )}
-          </div>
-
-          {/* --- Other Rankings Table Controls (Search, Pagination, Total) --- */}
-          {filteredRankings.length > 0 && (
-            <div style={styles.tableControlsWrapper}>
-              {/* Search Bar - Left */}
-              <div style={styles.searchBar}>
-                <FaSearch style={styles.searchIcon} />
-                <input
-                  type="text"
-                  placeholder="ค้นหารายชื่อผู้เล่น..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1); // Reset to first page on search
-                  }}
-                  style={styles.searchInput}
-                  aria-label="Search Player Name"
-                />
-              </div>
-
-              {/* Total Members - Center (Adjusted position) */}
-              <div style={styles.totalMembers}>
-                สมาชิกทั้งหมด:{" "}
-                <span style={styles.totalCount}>{filteredRankings.length}</span>{" "}
-                คน
-              </div>
-
-              {/* Pagination Controls - Right */}
-              {totalPages > 1 && (
-                <div style={styles.pagination}>
-                  <button
-                    onClick={prevPage}
-                    disabled={currentPage === 1}
-                    style={styles.paginationButton}
-                    aria-label="Previous Page"
+          {displayMode === "cardsAndTable" && (
+            <>
+              {/* --- Top 3 Rankings Section --- */}
+              <div style={styles.top3CardsWrapper}>
+                {/* Rank 2 Card */}
+                {top3Rankings[1] && (
+                  <div
+                    key={top3Rankings[1].name}
+                    style={{
+                      ...styles.playerCardElite,
+                      ...styles.silverCard,
+                      ...styles.rank2CardElite,
+                    }}
                   >
-                    ย้อนกลับ
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                      key={i + 1}
-                      onClick={() => paginate(i + 1)}
-                      style={{
-                        ...styles.paginationButton,
-                        ...(currentPage === i + 1 ? styles.paginationButtonActive : {}),
+                    <div style={styles.cardGlowEffect}></div>
+                    <span style={styles.cardPatternIconElite}>🥈</span>
+                    <div style={styles.playerRankIconOnly}>
+                      <FaMedal
+                        style={{ ...styles.rankIconElite, color: "#A9A9A9" }}
+                      />
+                    </div>
+                    <h3 style={styles.playerCardNameElite}>
+                      {top3Rankings[1].name}
+                    </h3>
+                    <p style={styles.playerCardLevelElite}>
+                      ระดับ: {top3Rankings[1].level}
+                    </p>
+                    <p style={styles.playerCardScoreLargeElite}>
+                      {top3Rankings[1].score || 0}
+                    </p>
+                    {/* --- Player Stats --- */}
+                    <div style={styles.playerCardStatsElite}>
+                      <p style={styles.statItemElite}>
+                        <span>Games</span>{" "}
+                        <span>{top3Rankings[1].totalGames}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Won</span> <span>{top3Rankings[1].wins}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Lost</span> <span>{top3Rankings[1].losses}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Tied</span> <span>{top3Rankings[1].draws}</span>
+                      </p>
+                      <p style={styles.statItemEliteFull}>
+                        <span>Win Rate</span>{" "}
+                        <span>{top3Rankings[1].winRate}%</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {/* Rank 1 Card (Center, Largest) */}
+                {top3Rankings[0] && (
+                  <div
+                    key={top3Rankings[0].name}
+                    style={{
+                      ...styles.playerCardElite,
+                      ...styles.goldCard,
+                      ...styles.rank1CardElite,
+                    }}
+                  >
+                    <div style={styles.cardGlowEffect}></div>
+                    <span style={styles.cardPatternIconElite}>🥇</span>
+                    <div style={styles.playerRankIconOnly}>
+                      <FaCrown style={styles.crownIconElite} />
+                    </div>
+                    <h3 style={styles.playerCardNameElite}>
+                      {top3Rankings[0].name}
+                    </h3>
+                    <p style={styles.playerCardLevelElite}>
+                      ระดับ: {top3Rankings[0].level}
+                    </p>
+                    <p style={styles.playerCardScoreLargestElite}>
+                      {top3Rankings[0].score || 0}
+                    </p>
+                    {/* --- Player Stats --- */}
+                    <div style={styles.playerCardStatsElite}>
+                      <p style={styles.statItemElite}>
+                        <span>Games</span>{" "}
+                        <span>{top3Rankings[0].totalGames}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Won</span> <span>{top3Rankings[0].wins}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Lost</span> <span>{top3Rankings[0].losses}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Tied</span> <span>{top3Rankings[0].draws}</span>
+                      </p>
+                      <p style={styles.statItemEliteFull}>
+                        <span>Win Rate</span>{" "}
+                        <span>{top3Rankings[0].winRate}%</span>
+                      </p>
+                    </div>
+                    <div style={styles.sparkleOverlay}></div>
+                  </div>
+                )}
+                {/* Rank 3 Card */}
+                {top3Rankings[2] && (
+                  <div
+                    key={top3Rankings[2].name}
+                    style={{
+                      ...styles.playerCardElite,
+                      ...styles.bronzeCard,
+                      ...styles.rank3CardElite,
+                    }}
+                  >
+                    <div style={styles.cardGlowEffect}></div>
+                    <span style={styles.cardPatternIconElite}>🥉</span>
+                    <div style={styles.playerRankIconOnly}>
+                      <FaMedal
+                        style={{ ...styles.rankIconElite, color: "#CD7F32" }}
+                      />
+                    </div>
+                    <h3 style={styles.playerCardNameElite}>
+                      {top3Rankings[2].name}
+                    </h3>
+                    <p style={styles.playerCardLevelElite}>
+                      ระดับ: {top3Rankings[2].level}
+                    </p>
+                    <p style={styles.playerCardScoreLargeElite}>
+                      {top3Rankings[2].score || 0}
+                    </p>
+                    {/* --- Player Stats --- */}
+                    <div style={styles.playerCardStatsElite}>
+                      <p style={styles.statItemElite}>
+                        <span>Games</span>{" "}
+                        <span>{top3Rankings[2].totalGames}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Won</span> <span>{top3Rankings[2].wins}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Lost</span> <span>{top3Rankings[2].losses}</span>
+                      </p>
+                      <p style={styles.statItemElite}>
+                        <span>Tied</span> <span>{top3Rankings[2].draws}</span>
+                      </p>
+                      <p style={styles.statItemEliteFull}>
+                        <span>Win Rate</span>{" "}
+                        <span>{top3Rankings[2].winRate}%</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* --- Other Rankings Table Controls (Search, Pagination, Total) --- */}
+              {filteredRankings.length > 0 && (
+                <div style={styles.tableControlsWrapper}>
+                  {/* Search Bar - Left */}
+                  <div style={styles.searchBar}>
+                    <FaSearch style={styles.searchIcon} />
+                    <input
+                      type="text"
+                      placeholder="ค้นหารายชื่อผู้เล่น..."
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1);
                       }}
-                      aria-label={`Page ${i + 1}`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={nextPage}
-                    disabled={currentPage === totalPages}
-                    style={styles.paginationButton}
-                    aria-label="Next Page"
-                  >
-                    ถัดไป
-                  </button>
+                      style={styles.searchInput}
+                      aria-label="Search Player Name"
+                    />
+                  </div>
+                  {/* Total Members - Center */}
+                  <div style={styles.totalMembers}>
+                    สมาชิกทั้งหมด:{" "}
+                    <span style={styles.totalCount}>
+                      {filteredRankings.length}
+                    </span>{" "}
+                    คน
+                  </div>
+                  {/* Pagination Controls - Right */}
+                  {totalPages > 1 && (
+                    <div style={styles.pagination}>
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        style={styles.paginationButton}
+                        aria-label="Previous Page"
+                      >
+                        {" "}
+                        ย้อนกลับ{" "}
+                      </button>
+                      {Array.from({ length: totalPages }, (_, i) => (
+                        <button
+                          key={i + 1}
+                          onClick={() => paginate(i + 1)}
+                          style={{
+                            ...styles.paginationButton,
+                            ...(currentPage === i + 1
+                              ? styles.paginationButtonActive
+                              : {}),
+                          }}
+                          aria-label={`Page ${i + 1}`}
+                        >
+                          {" "}
+                          {i + 1}{" "}
+                        </button>
+                      ))}
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        style={styles.paginationButton}
+                        aria-label="Next Page"
+                      >
+                        {" "}
+                        ถัดไป{" "}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+
+              {/* --- Other Rankings Table --- */}
+              {currentOtherRankings.length > 0 ? (
+                <div style={styles.rankingTableWrapper}>
+                  <table style={styles.rankingTable}>
+                    <thead>
+                      <tr>
+                        <th style={styles.tableHeader}>Rank</th>
+                        <th style={styles.tableHeader}>Name</th>
+                        <th style={styles.tableHeader}>Skill Level</th>
+                        <th style={styles.tableHeader}>Games Lost</th>
+                        <th style={styles.tableHeader}>Games Tied</th>
+                        <th style={styles.tableHeader}>Games Won</th>
+                        <th style={styles.tableHeader}>Total Score</th>
+                        <th style={styles.tableHeader}>Win Rate (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentOtherRankings.map((player, index) => (
+                        <tr key={player.name} style={styles.tableRow}>
+                          <td style={styles.tableCell}>
+                            <span style={styles.tableRankNumber}>
+                              {indexOfFirstItem + index + 1 + top3Rankings.length}{" "}
+                            </span>
+                          </td>
+                          <td style={styles.tableCell}>{player.name}</td>
+                          <td style={styles.tableCell}>{player.level}</td>
+                          <td style={styles.tableCell}>{player.losses}</td>
+                          <td style={styles.tableCell}>{player.draws}</td>
+                          <td style={styles.tableCell}>{player.wins}</td>
+                          <td style={styles.tableCell}>{player.score}</td>
+                          <td style={styles.tableCell}>{player.winRate}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={styles.messageBoxInfo}>
+                  <p>ไม่มีผู้เล่นอื่นในอันดับ</p>
+                </div>
+              )}
+            </>
           )}
 
-          {/* --- Other Rankings Table --- */}
-          {currentOtherRankings.length > 0 ? (
-            <div style={styles.rankingTableWrapper}>
-              <table style={styles.rankingTable}>
-                <thead>
-                  <tr>
-                    <th style={styles.tableHeader}>Rank</th>
-                    <th style={styles.tableHeader}>Name</th>
-                    <th style={styles.tableHeader}>Skill Level</th>
-                    <th style={styles.tableHeader}>Games Lost</th>
-                    <th style={styles.tableHeader}>Games Tied</th>
-                    <th style={styles.tableHeader}>Games Won</th>
-                    <th style={styles.tableHeader}>Total Score</th>
-                    <th style={styles.tableHeader}>Win Rate (%)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentOtherRankings.map((player, index) => (
-                    <tr key={player.name} style={styles.tableRow}>
-                      <td style={styles.tableCell}>
-                        <span style={styles.tableRankNumber}>
-                          {indexOfFirstItem + index + 1 + top3Rankings.length}{" "}
-                        </span>
-                      </td>
-                      <td style={styles.tableCell}>{player.name}</td>
-                      <td style={styles.tableCell}>{player.level || "-"}</td>
-                      <td style={styles.tableCell}>{player.losses || 0}</td>
-                      <td style={styles.tableCell}>{player.draws || 0}</td>
-                      <td style={styles.tableCell}>{player.wins || 0}</td>
-                      <td style={styles.tableCell}>{player.score || 0}</td> {/* Add score column as per image */}
-                      <td style={styles.tableCell}>{player.winRate || "0.00"}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={styles.messageBoxInfo}>
-              <p>ไม่พบผู้เล่นที่ตรงกับคำค้นหาของคุณในเดือนนี้</p>
-            </div>
+          {displayMode === "fullTable" && (
+            <>
+              {/* --- Full Table Rankings Table Controls (Search, Pagination, Total) --- */}
+              {filteredRankings.length > 0 && (
+                <div style={styles.tableControlsWrapper}>
+                  {/* Search Bar - Left */}
+                  <div style={styles.searchBar}>
+                    <FaSearch style={styles.searchIcon} />
+                    <input
+                      type="text"
+                      placeholder="ค้นหารายชื่อผู้เล่น..."
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      style={styles.searchInput}
+                      aria-label="Search Player Name"
+                    />
+                  </div>
+                  {/* Total Members - Center */}
+                  <div style={styles.totalMembers}>
+                    สมาชิกทั้งหมด:{" "}
+                    <span style={styles.totalCount}>
+                      {filteredRankings.length}
+                    </span>{" "}
+                    คน
+                  </div>
+                  {/* Pagination Controls - Right */}
+                  {totalPagesFullTable > 1 && (
+                    <div style={styles.pagination}>
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        style={styles.paginationButton}
+                        aria-label="Previous Page"
+                      >
+                        {" "}
+                        ย้อนกลับ{" "}
+                      </button>
+                      {Array.from({ length: totalPagesFullTable }, (_, i) => (
+                        <button
+                          key={i + 1}
+                          onClick={() => paginate(i + 1)}
+                          style={{
+                            ...styles.paginationButton,
+                            ...(currentPage === i + 1
+                              ? styles.paginationButtonActive
+                              : {}),
+                          }}
+                          aria-label={`Page ${i + 1}`}
+                        >
+                          {" "}
+                          {i + 1}{" "}
+                        </button>
+                      ))}
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPagesFullTable}
+                        style={styles.paginationButton}
+                        aria-label="Next Page"
+                      >
+                        {" "}
+                        ถัดไป{" "}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* --- Full Ranking Table --- */}
+              {currentFullTableRankings.length > 0 ? (
+                <div style={styles.rankingTableWrapper}>
+                  <table style={styles.rankingTable}>
+                    <thead>
+                      <tr>
+                        <th style={styles.tableHeader}>Rank</th>
+                        <th style={styles.tableHeader}>Name</th>
+                        <th style={styles.tableHeader}>Skill Level</th>
+                        <th style={styles.tableHeader}>Games Lost</th>
+                        <th style={styles.tableHeader}>Games Tied</th>
+                        <th style={styles.tableHeader}>Games Won</th>
+                        <th style={styles.tableHeader}>Total Score</th>
+                        <th style={styles.tableHeader}>Win Rate (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentFullTableRankings.map((player, index) => {
+                        const rank =
+                          indexOfFirstItemFullTable + index + 1;
+                        const isTop3 = rank <= 3;
+                        return (
+                          <tr
+                            key={player.name}
+                            style={
+                              isTop3
+                                ? { ...styles.tableRow, ...styles.top3TableRow }
+                                : styles.tableRow
+                            }
+                          >
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              <span
+                                style={
+                                  isTop3
+                                    ? {
+                                        ...styles.tableRankNumber,
+                                        color:
+                                          rank === 1
+                                            ? "#ffd700"
+                                            : rank === 2
+                                            ? "#c0c0c0"
+                                            : "#cd7f32",
+                                      }
+                                    : styles.tableRankNumber
+                                }
+                              >
+                                {rank}
+                              </span>
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.name}
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.level}
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.losses}
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.draws}
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.wins}
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.score}
+                            </td>
+                            <td
+                              style={
+                                isTop3
+                                  ? {
+                                      ...styles.tableCell,
+                                      ...styles.top3TableCell,
+                                    }
+                                  : styles.tableCell
+                              }
+                            >
+                              {player.winRate}%
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={styles.messageBoxInfo}>
+                  <p>ไม่มีข้อมูลผู้เล่นในตาราง</p>
+                </div>
+              )}
+            </>
           )}
         </>
       ) : (
-        // --- No data or not logged in message ---
         <div style={styles.messageBoxInfo}>
-          {!loggedInUserId ? (
-            <p>โปรดเข้าสู่ระบบเพื่อดูข้อมูลอันดับผู้เล่น</p>
-          ) : selectedMonth && selectedYear ? (
-            <p>
-              ไม่พบข้อมูล Ranking สำหรับเดือน{" "}
-              {getMonthName(selectedMonth)} ปี{" "}
-              {parseInt(selectedYear) + 543}
-            </p>
-          ) : (
-            <p>กรุณาเลือกเดือนและปีเพื่อดูข้อมูล Ranking</p>
-          )}
+          <p>ไม่มีข้อมูลการจัดอันดับสำหรับเดือนและปีที่เลือก</p>
         </div>
       )}
     </div>
   );
 };
 
+// --- Styles ---
 const styles = {
   container: {
-    fontFamily: 'Arial, sans-serif',
-    backgroundColor: '#1C1C28', // Dark background as in the image
-    color: '#E0E0E0',
-    padding: '30px 20px',
-    minHeight: '100vh',
-    boxSizing: 'border-box',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    // backgroundImage: 'url("/path/to/your/background-pattern.png")', // If you have a background pattern
+    padding: "20px",
+    backgroundColor: "#1a1d24",
+    color: "#e0e0e0",
+    minHeight: "100vh",
+    fontFamily: "'Kanit', sans-serif",
   },
   rankingHeroSection: {
-    textAlign: 'center',
-    marginBottom: '40px',
-    width: '100%',
-    maxWidth: '1200px',
+    textAlign: "center",
+    padding: "15px 20px", // ลด padding บน-ล่าง
+    backgroundColor: "#242831",
+    borderRadius: "12px",
+    marginBottom: "30px",
+    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.3)",
+    border: "1px solid #333",
+    position: "relative",
+    overflow: "hidden",
   },
   rankingPageTitle: {
-    fontSize: '2.5rem',
-    fontWeight: 'bold',
-    color: '#F0F0F0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '10px',
-    marginBottom: '10px',
+    margin: "0 0 8px 0",
+    fontSize: "2rem", // ลดขนาดตัวอักษร
+    fontWeight: "600",
+    color: "#ffffff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+    textShadow: "0 0 10px rgba(77, 181, 255, 0.5)",
   },
   titleIcon: {
-    color: '#FFD700', // Gold color for trophy
-    fontSize: '2.8rem',
+    color: "#ffd700",
+    fontSize: "2.3rem", // ลดขนาดไอคอน
+    filter: "drop-shadow(0 0 8px rgba(255, 215, 0, 0.8))",
   },
   rankingSubtitle: {
-    fontSize: '1.2rem',
-    color: '#B0B0B0',
-    marginBottom: '20px',
+    margin: "0 0 15px 0", // ลด margin
+    fontSize: "1rem", // ลดขนาดตัวอักษร
+    color: "#b0b8c4",
   },
   highlightText: {
-    color: '#FFD700', // Gold highlight
-    fontWeight: 'bold',
+    color: "#4db5ff",
+    fontWeight: "500",
+    textShadow: "0 0 5px rgba(77, 181, 255, 0.3)",
   },
   filterControls: {
-    display: 'flex',
-    gap: '15px',
-    justifyContent: 'center',
-    marginBottom: '30px',
+    display: "flex",
+    justifyContent: "center",
+    gap: "20px",
+    flexWrap: "wrap",
   },
   filterItem: {
-    display: 'flex',
-    alignItems: 'center',
+    display: "flex",
+    alignItems: "center",
   },
   selectControl: {
-    padding: '10px 15px',
-    borderRadius: '8px',
-    border: '1px solid #444',
-    backgroundColor: '#2A2A3A',
-    color: '#E0E0E0',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    appearance: 'none', // Remove default dropdown arrow
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23E0E0E0'%3E%3Cpath fillRule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clipRule='evenodd'%3E%3C/path%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 10px center',
-    backgroundSize: '1.2em',
-    transition: 'border-color 0.3s ease, background-color 0.3s ease',
-    '&:hover': {
-      borderColor: '#666',
-      backgroundColor: '#3A3A4A',
+    padding: "10px 15px",
+    backgroundColor: "#2c313a",
+    color: "#e0e0e0",
+    border: "1px solid #444",
+    borderRadius: "8px",
+    fontSize: "1rem",
+    cursor: "pointer",
+    minWidth: "200px",
+    textAlign: "center",
+    transition: "all 0.3s ease",
+    appearance: "none",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23b0b8c4' class='bi bi-chevron-down' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 10px center",
+  },
+  displayModeButtons: {
+    display: "flex",
+    gap: "10px",
+    marginLeft: "20px", // เพิ่มระยะห่างจาก dropdowns
+  },
+  displayModeButton: {
+    padding: "10px",
+    backgroundColor: "#333842",
+    color: "#e0e0e0",
+    border: "1px solid #555",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "background-color 0.3s ease, transform 0.2s ease",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    "&:hover": {
+      backgroundColor: "#444c5a",
+      transform: "translateY(-1px)",
     },
-    '&:focus': {
-      outline: 'none',
-      borderColor: '#FFD700',
-      boxShadow: '0 0 0 2px rgba(255, 215, 0, 0.3)',
+  },
+  displayModeButtonActive: {
+    backgroundColor: "#4db5ff",
+    color: "#1a1d24",
+    borderColor: "#4db5ff",
+    boxShadow: "0 0 8px rgba(77, 181, 255, 0.4)",
+  },
+  displayLimitButtons: {
+    display: "flex",
+    gap: "10px",
+    marginLeft: "20px", // เพิ่มระยะห่างจาก display mode buttons
+  },
+  displayLimitButton: {
+    padding: "10px 15px",
+    backgroundColor: "#333842",
+    color: "#e0e0e0",
+    border: "1px solid #555",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "background-color 0.3s ease, transform 0.2s ease",
+    fontSize: "0.95rem",
+    "&:hover": {
+      backgroundColor: "#444c5a",
+      transform: "translateY(-1px)",
     },
+    "&:disabled": {
+      backgroundColor: "#2c313a",
+      color: "#666",
+      cursor: "not-allowed",
+      transform: "none",
+    },
+  },
+  displayLimitButtonActive: {
+    backgroundColor: "#4db5ff",
+    color: "#1a1d24",
+    borderColor: "#4db5ff",
+    fontWeight: "bold",
+    boxShadow: "0 0 8px rgba(77, 181, 255, 0.4)",
   },
   loadingState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '200px',
-    color: '#B0B0B0',
+    textAlign: "center",
+    padding: "50px",
+    fontSize: "1.2rem",
+    color: "#b0b8c4",
   },
   loadingSpinner: {
-    border: '4px solid rgba(255, 255, 255, 0.3)',
-    borderTop: '4px solid #FFD700',
-    borderRadius: '50%',
-    width: '40px',
-    height: '40px',
-    animation: 'spin 1s linear infinite',
-    marginBottom: '15px',
-  },
-  '@keyframes spin': {
-    '0%': { transform: 'rotate(0deg)' },
-    '100%': { transform: 'rotate(360deg)' },
+    border: "4px solid rgba(255, 255, 255, 0.2)",
+    borderTop: "4px solid #4db5ff",
+    borderRadius: "50%",
+    width: "40px",
+    height: "40px",
+    animation: "spin 1s linear infinite",
+    margin: "0 auto 20px auto",
   },
   messageBoxError: {
-    backgroundColor: '#D32F2F',
-    color: '#FFFFFF',
-    padding: '15px',
-    borderRadius: '8px',
-    textAlign: 'center',
-    width: '100%',
-    maxWidth: '600px',
-    margin: '20px auto',
+    textAlign: "center",
+    padding: "20px",
+    backgroundColor: "#4a2a2a",
+    color: "#ffc0c0",
+    borderRadius: "8px",
+    border: "1px solid #8B0000",
   },
   messageBoxInfo: {
-    backgroundColor: '#2196F3',
-    color: '#FFFFFF',
-    padding: '15px',
-    borderRadius: '8px',
-    textAlign: 'center',
-    width: '100%',
-    maxWidth: '600px',
-    margin: '20px auto',
+    textAlign: "center",
+    padding: "20px",
+    backgroundColor: "#2c313a",
+    color: "#b0b8c4",
+    borderRadius: "8px",
   },
   top3CardsWrapper: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'flex-end', // Align cards at the bottom for podium effect
-    gap: '8px', // ลด gap ลงไปอีก
-    marginBottom: '40px',
-    flexWrap: 'wrap',
-    width: '100%',
-    maxWidth: '1200px',
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-end",
+    gap: "10px",
+    marginBottom: "20px",
+    flexWrap: "wrap",
+    marginTop: "20px",
   },
-  playerCardElite: { // เปลี่ยนชื่อจาก Slim เป็น Elite เพื่อสื่อถึงความพรีเมียม
-    borderRadius: '18px', // เพิ่มความโค้งมนเล็กน้อย
-    padding: '25px 12px', // เพิ่ม padding แนวตั้ง ลดแนวนอนอีก
-    width: 'calc(20% - 8px)', // ลดความกว้างลงอย่างมาก
-    minWidth: '160px', // ปรับ min-width ให้รองรับการ์ดที่แคบลง
-    boxSizing: 'border-box',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255,255,255,0.15)', // เพิ่มเงา
-    transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease, filter 0.4s ease',
-    cursor: 'pointer',
-    zIndex: 1, // กำหนด zIndex พื้นฐาน
-    '&:hover': {
-      transform: 'translateY(-12px) scale(1.03) rotateZ(1.5deg)', // Hover effect ที่โดดเด่นขึ้น
-      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7), inset 0 0 25px rgba(255,255,255,0.3)',
-      filter: 'brightness(1.2)', // เพิ่มความสว่างชัดเจน
+  playerCardElite: {
+    backgroundColor: "#2c313a",
+    borderRadius: "16px",
+    padding: "8px 12px", // ลด padding บน-ล่าง
+    textAlign: "center",
+    color: "#fff",
+    border: "2px solid transparent",
+    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    cursor: "pointer",
+    "&:hover": {
+      transform: "translateY(-5px) scale(1.01)",
+      boxShadow: "0 8px 20px rgba(0, 0, 0, 0.4)",
     },
-    // เพิ่มเอฟเฟกต์แสงวิบวับรอบการ์ด
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      top: '-50%',
-      left: '-50%',
-      width: '200%',
-      height: '200%',
-      background: 'radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-      opacity: 0,
-      transition: 'opacity 0.4s ease',
-      zIndex: 0,
-    },
-    '&:hover::before': {
-      opacity: 1,
-      animation: 'cardLightSweep 2s infinite linear',
-    }
   },
-  '@keyframes cardLightSweep': {
-    '0%': { transform: 'rotate(0deg)' },
-    '100%': { transform: 'rotate(360deg)' },
-  },
-  cardGlowEffect: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 'inherit',
-    boxShadow: '0 0 30px rgba(255,215,0,0.5), inset 0 0 15px rgba(255,215,0,0.3)', // Default glow
-    opacity: 0,
-    transition: 'opacity 0.4s ease',
-    zIndex: 0,
-  },
-  'playerCardElite:hover .cardGlowEffect': {
-    opacity: 1,
-  },
-  cardPatternIconElite: { // ไอคอนตกแต่งด้านบน
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    fontSize: '35px',
-    opacity: '0.25',
-    zIndex: 0,
-    pointerEvents: 'none',
-    textShadow: '0 0 5px rgba(255,255,255,0.5)',
-  },
-  goldCard: {
-    background: 'linear-gradient(160deg, #FFD700 0%, #DAA520 60%, #B8860B 100%)', // Gradient ที่เข้มขึ้น
-    color: '#3A2B00', // สีตัวอักษรเข้มขึ้น
-    border: '2px solid #FFECB3', // ขอบหนาขึ้น
-    boxShadow: '0 12px 30px rgba(255,215,0,0.4), inset 0 0 20px rgba(255,215,0,0.2)', // เงาสีทอง
-  },
-  silverCard: {
-    background: 'linear-gradient(160deg, #C0C0C0 0%, #A9A9A9 60%, #7F8C8D 100%)',
-    color: '#303030',
-    border: '2px solid #E0E0E0',
-    boxShadow: '0 12px 30px rgba(192,192,192,0.4), inset 0 0 20px rgba(192,192,192,0.2)',
-  },
-  bronzeCard: {
-    background: 'linear-gradient(160deg, #CD7F32 0%, #8B4513 60%, #603E19 100%)',
-    color: '#402000',
-    border: '2px solid #FFCC99',
-    boxShadow: '0 12px 30px rgba(205,127,50,0.4), inset 0 0 20px rgba(205,127,50,0.2)',
-  },
-  // Podium specific sizes (Elite)
   rank1CardElite: {
-    width: 'calc(24% - 8px)', // อันดับ 1 กว้างขึ้นเล็กน้อย แต่ยังคง "แคบ"
-    height: '320px', // กำหนดความสูงให้ชัดเจน
-    transform: 'translateY(-25px)', // ยกสูงขึ้นมาก
-    zIndex: 3,
-    boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255,215,0,0.7), inset 0 0 30px rgba(255,215,0,0.4)', // เงาอลังการ
-    animation: 'pulseGold 2s infinite ease-in-out', // เพิ่ม animation
-    '&:hover': {
-        transform: 'translateY(-35px) scale(1.05) rotateZ(0deg)', // Hover effect ที่โดดเด่นขึ้น
-    }
-  },
-  '@keyframes pulseGold': {
-    '0%': { transform: 'translateY(-25px) scale(1)', boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255,215,0,0.7), inset 0 0 30px rgba(255,215,0,0.4)' },
-    '50%': { transform: 'translateY(-28px) scale(1.005)', boxShadow: '0 30px 60px rgba(0, 0, 0, 0.9), 0 0 50px rgba(255,215,0,0.9), inset 0 0 35px rgba(255,215,0,0.5)' },
-    '100%': { transform: 'translateY(-25px) scale(1)', boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255,215,0,0.7), inset 0 0 30px rgba(255,215,0,0.4)' },
+    width: "200px",
+    height: "auto",
+    order: 2,
+    transform: "scale(1.02)",
+    zIndex: 2,
+    borderColor: "#ffd700",
+    boxShadow: "0 0 15px rgba(255, 215, 0, 0.4)",
+    background: "linear-gradient(145deg, #2c313a, #3a404a)",
   },
   rank2CardElite: {
-    height: '280px', // กำหนดความสูง
-    transform: 'translateY(-15px)', // ยกสูงขึ้น
-    zIndex: 2,
-    '&:hover': {
-        transform: 'translateY(-20px) scale(1.03) rotateZ(1.5deg)',
-    }
+    width: "180px",
+    height: "auto",
+    order: 1,
+    zIndex: 1,
+    borderColor: "#c0c0c0",
+    boxShadow: "0 0 12px rgba(192, 192, 192, 0.3)",
+    background: "linear-gradient(145deg, #2c313a, #353b42)",
   },
   rank3CardElite: {
-    height: '280px', // ปรับความสูงให้เท่ากับอันดับ 2 เพื่อให้ข้อมูลแสดงครบถ้วน
-    transform: 'translateY(-5px)', // ยกสูงขึ้นเล็กน้อย
+    width: "180px",
+    height: "auto",
+    order: 3,
     zIndex: 1,
-    '&:hover': {
-        transform: 'translateY(-10px) scale(1.03) rotateZ(1.5deg)',
-    }
+    borderColor: "#cd7f32",
+    boxShadow: "0 0 12px rgba(205, 127, 50, 0.3)",
+    background: "linear-gradient(145deg, #2c313a, #353b42)",
   },
-  playerRankIconOnly: { // New style for icon without a large background circle
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: '10px',
-    position: 'relative',
-    // No explicit width/height or background for a large circle
+  cardGlowEffect: {
+    position: "absolute",
+    top: "-50%",
+    left: "-50%",
+    width: "200%",
+    height: "200%",
+    background:
+      "radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)",
+    animation: "glow-rotate 10s linear infinite",
+    opacity: 0.2,
   },
-  rankIconElite: { // ไอคอนเหรียญสำหรับอันดับ 2, 3
-    fontSize: '3.5rem', // Increased size to be more prominent without circle
-    filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.6))',
+  cardPatternIconElite: {
+    position: "absolute",
+    top: "5px",
+    right: "5px",
+    fontSize: "1.2rem",
+    opacity: "0.4",
+    pointerEvents: "none",
+  },
+  playerRankIconOnly: {
+    marginBottom: "5px",
   },
   crownIconElite: {
-    fontSize: '4rem', // ขยายขนาดมงกุฎให้ใหญ่ขึ้นอีก
-    color: '#FFD700',
-    zIndex: 2,
-    filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.7))', // เพิ่มเงา
+    fontSize: "1.8rem", // ลดขนาดมงกุฎ
+    color: "#ffd700",
+    filter: "drop-shadow(0 0 7px rgba(255, 215, 0, 0.6))",
+  },
+  rankIconElite: {
+    fontSize: "1.6rem", // ลดขนาดเหรียญ
+    filter: "drop-shadow(0 0 6px rgba(0, 0, 0, 0.4))",
   },
   playerCardNameElite: {
-    fontSize: '1.6rem', // ขยายชื่อ
-    fontWeight: 'bold',
-    marginBottom: '8px',
-    color: 'inherit',
-    zIndex: 1,
-    textShadow: '1px 1px 2px rgba(0,0,0,0.25)',
+    fontSize: "1rem", // ลดขนาด
+    fontWeight: "700",
+    margin: "2px 0",
+    textShadow: "0 0 3px rgba(0, 0, 0, 0.4)",
   },
   playerCardLevelElite: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)', // เข้มขึ้นเล็กน้อย
-    padding: '8px 15px', // เพิ่ม padding
-    borderRadius: '20px',
-    fontSize: '1.1rem', // ขยายขนาด
-    fontWeight: 'bold',
-    color: 'inherit',
-    textShadow: '0.5px 0.5px 1px rgba(0,0,0,0.15)',
-    marginBottom: '12px',
-  },
-  playerCardScoreLargeElite: {
-    fontSize: '2rem', // ขยายขนาดคะแนน
-    fontWeight: 'extrabold',
-    color: 'inherit',
-    textShadow: '2px 2px 3px rgba(0,0,0,0.35)',
-    marginTop: 'auto',
+    fontSize: "0.7rem", // ลดขนาด
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    padding: "2px 6px", // ลด padding
+    borderRadius: "12px",
+    margin: "2px 0 6px 0",
+    color: "#e0e0e0",
   },
   playerCardScoreLargestElite: {
-    fontSize: '3rem', // ขยายขนาดคะแนนอันดับ 1
-    fontWeight: 'extrabold',
-    color: 'inherit',
-    textShadow: '3px 3px 5px rgba(0,0,0,0.5)',
-    marginTop: 'auto',
+    fontSize: "1.7rem", // ลดขนาด
+    fontWeight: "bold",
+    margin: "0",
+    color: "#ffd700",
+    textShadow: "0 0 8px rgba(255, 215, 0, 0.6)",
   },
-  sparkleOverlay: { // เอฟเฟกต์ประกายสำหรับ Rank 1
-    position: 'absolute',
+  playerCardScoreLargeElite: {
+    fontSize: "1.4rem", // ลดขนาด
+    fontWeight: "bold",
+    margin: "0",
+    color: "#fff",
+    textShadow: "0 0 6px rgba(0, 0, 0, 0.5)",
+  },
+  sparkleOverlay: {
+    position: "absolute",
     top: 0,
     left: 0,
-    width: '100%',
-    height: '100%',
-    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'%3E%3Cdefs%3E%3CradialGradient id=\'grad1\' cx=\'50%\' cy=\'50%\' r=\'50%\'%3E%3Cstop offset=\'0%\' stop-color=\'%23FFFFFF\' stop-opacity=\'1\'/%3E%3Cstop offset=\'100%\' stop-color=\'%23FFFFFF\' stop-opacity=\'0\'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cg opacity=\'0.2\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'80\' cy=\'20\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'50\' cy=\'50\' r=\'15\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'20\' cy=\'80\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3Ccircle cx=\'80\' cy=\'80\' r=\'10\' fill=\'url(%23grad1)\'/%3E%3C/g%3E%3C/svg%3E")',
-    backgroundSize: '150% 150%',
-    backgroundRepeat: 'repeat',
+    width: "100%",
+    height: "100%",
+    pointerEvents: "none",
+    background: "url(/sparkle.gif) center center / cover no-repeat",
     opacity: 0.15,
-    animation: 'sparkleMove 15s infinite linear',
-    zIndex: 0,
-    pointerEvents: 'none',
+    zIndex: 1,
   },
-  '@keyframes sparkleMove': {
-    '0%': { backgroundPosition: '0% 0%' },
-    '100%': { backgroundPosition: '100% 100%' },
+  playerCardStatsElite: {
+    marginTop: "6px", // ลด margin
+    width: "90%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px", // ลดระยะห่าง
+    color: "rgba(255, 255, 255, 0.9)",
+    fontSize: "0.75rem", // ลดขนาดตัวอักษร
   },
-
+  statItemElite: {
+    display: "flex",
+    justifyContent: "space-between",
+    margin: 0,
+    padding: "2px 6px", // ลด padding
+    borderRadius: "6px",
+    backgroundColor: "rgba(0, 0, 0, 0.25)",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)",
+  },
+  statItemEliteFull: {
+    display: "flex",
+    justifyContent: "space-between",
+    margin: "3px 0 0 0", // ลด margin ด้านบน
+    padding: "3px 8px", // ลด padding
+    backgroundColor: "#4db5ff",
+    color: "#1a1d24",
+    fontWeight: "bold",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+  },
   tableControlsWrapper: {
-    backgroundColor: '#282838',
-    borderRadius: '12px',
-    padding: '20px 30px',
-    marginBottom: '25px',
-    width: '100%',
-    maxWidth: '1200px',
-    boxSizing: 'border-box',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '20px',
-    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.3)',
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "15px 0",
+    flexWrap: "wrap",
+    gap: "15px",
+    backgroundColor: "#242831",
+    borderRadius: "12px",
+    marginBottom: "15px",
+    padding: "15px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
   },
   searchBar: {
-    display: 'flex',
-    alignItems: 'center',
-    backgroundColor: '#3A3A4A',
-    borderRadius: '8px',
-    padding: '8px 15px',
-    flexGrow: 1,
-    maxWidth: '350px',
+    display: "flex",
+    alignItems: "center",
+    backgroundColor: "#333842",
+    borderRadius: "8px",
+    padding: "6px 12px",
+    flex: "1 1 250px",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.2)",
   },
   searchIcon: {
-    color: '#A0A0B0',
-    marginRight: '10px',
-    fontSize: '1.1rem',
+    color: "#8892b0",
+    marginRight: "10px",
+    fontSize: "1.1rem",
   },
   searchInput: {
-    background: 'none',
-    border: 'none',
-    color: '#E0E0E0',
-    fontSize: '1rem',
-    width: '100%',
-    '&:focus': {
-      outline: 'none',
-    },
-    '::placeholder': {
-      color: '#A0A0B0',
+    backgroundColor: "transparent",
+    border: "none",
+    color: "#e0e0e0",
+    outline: "none",
+    width: "100%",
+    fontSize: "0.95rem",
+    "&::placeholder": {
+      color: "#8892b0",
     },
   },
   totalMembers: {
-    fontSize: '1.1rem',
-    color: '#B0B0C0',
-    whiteSpace: 'nowrap',
+    color: "#b0b8c4",
+    flex: "1 1 auto",
+    textAlign: "center",
+    fontSize: "1rem",
   },
   totalCount: {
-    fontWeight: 'bold',
-    color: '#FFD700',
+    fontWeight: "bold",
+    color: "#4db5ff",
+    fontSize: "1.1rem",
   },
   pagination: {
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    display: "flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: "6px",
+    flex: "1 1 250px",
   },
   paginationButton: {
-    background: '#4A4A5A',
-    color: '#E0E0E0',
-    border: 'none',
-    padding: '8px 15px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '0.95rem',
-    transition: 'background-color 0.3s ease',
-    '&:hover': {
-      backgroundColor: '#5A5A6A',
+    padding: "8px 14px",
+    backgroundColor: "#333842",
+    color: "#e0e0e0",
+    border: "1px solid #555",
+    borderRadius: "6px",
+    cursor: "pointer",
+    transition: "background-color 0.3s ease, transform 0.2s ease",
+    fontSize: "0.9rem",
+    "&:hover": {
+      backgroundColor: "#444c5a",
+      transform: "translateY(-1px)",
     },
-    '&:disabled': {
-      opacity: '0.5',
-      cursor: 'not-allowed',
+    "&:disabled": {
+      backgroundColor: "#2c313a",
+      color: "#666",
+      cursor: "not-allowed",
+      transform: "none",
     },
   },
   paginationButtonActive: {
-    background: '#FFD700',
-    color: '#333',
-    fontWeight: 'bold',
-    '&:hover': {
-      backgroundColor: '#FFC800',
-    },
+    backgroundColor: "#4db5ff",
+    color: "#1a1d24",
+    borderColor: "#4db5ff",
+    fontWeight: "bold",
+    boxShadow: "0 0 8px rgba(77, 181, 255, 0.4)",
   },
   rankingTableWrapper: {
-    backgroundColor: '#282838',
-    borderRadius: '12px',
-    overflowX: 'auto',
-    width: '100%',
-    maxWidth: '1200px',
-    boxSizing: 'border-box',
-    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.3)',
+    overflowX: "auto",
+    backgroundColor: "#242831",
+    borderRadius: "12px",
+    padding: "10px",
+    boxShadow: "0 8px 20px rgba(0, 0, 0, 0.25)",
   },
   rankingTable: {
-    width: '100%',
-    borderCollapse: 'separate',
-    borderSpacing: '0 8px',
-    padding: '0 15px',
+    width: "100%",
+    borderCollapse: "collapse",
   },
   tableHeader: {
-    backgroundColor: '#3A3A4A',
-    padding: '15px 10px',
-    textAlign: 'left',
-    color: '#A0A0B0',
-    fontSize: '0.9rem',
-    textTransform: 'uppercase',
-    fontWeight: 'bold',
-    borderBottom: '1px solid #4A4A5A',
-    whiteSpace: 'nowrap',
-    '&:first-child': {
-      borderTopLeftRadius: '8px',
-    },
-    '&:last-child': {
-      borderTopRightRadius: '8px',
-    },
+    padding: "14px 12px",
+    textAlign: "left",
+    borderBottom: "2px solid #4db5ff",
+    color: "#ffffff",
+    textTransform: "uppercase",
+    fontSize: "0.9rem",
+    fontWeight: "600",
+    backgroundColor: "#2c313a",
   },
   tableRow: {
-    backgroundColor: '#2F2F3F',
-    transition: 'background-color 0.2s ease',
-    '&:hover': {
-      backgroundColor: '#3A3A4A',
+    borderBottom: "1px solid #333",
+    transition: "background-color 0.2s ease",
+    "&:last-child": {
+      borderBottom: "none",
     },
-    marginBottom: '8px',
+    "&:hover": {
+      backgroundColor: "rgba(77, 181, 255, 0.08)",
+    },
+  },
+  top3TableRow: {
+    backgroundColor: "rgba(77, 181, 255, 0.15)", // พื้นหลังสีอ่อนๆ
+    border: "1px solid #4db5ff", // ขอบสีไฮไลท์
+    boxShadow: "0 0 5px rgba(77, 181, 255, 0.2)",
   },
   tableCell: {
-    padding: '12px 10px',
-    color: '#E0E0E0',
-    fontSize: '0.95rem',
-    borderBottom: '1px solid #3A3A4A',
-    whiteSpace: 'nowrap',
+    padding: "12px",
+    color: "#b0b8c4",
+    fontSize: "0.85rem",
+  },
+  top3TableCell: {
+    color: "#ffffff", // ตัวอักษรสีขาว
+    fontWeight: "bold",
   },
   tableRankNumber: {
-    fontWeight: 'bold',
-    color: '#FFD700',
-  },
-
-  // Responsive adjustments
-  '@media (max-width: 1024px)': {
-    playerCardElite: {
-      width: 'calc(40% - 8px)', // ปรับความกว้างสำหรับการ์ด 2 ใบต่อแถว
-      minWidth: '170px',
-      padding: '20px 10px',
-    },
-    rank1CardElite: {
-      width: 'calc(50% - 8px)', // อันดับ 1 กว้างขึ้นเล็กน้อย
-      height: '300px',
-    },
-    rank2CardElite: {
-        width: 'calc(40% - 8px)',
-        height: '260px',
-    },
-    rank3CardElite: {
-        width: 'calc(40% - 8px)',
-        height: '260px', // ปรับความสูงให้เท่ากับอันดับ 2
-    },
-    top3CardsWrapper: {
-        flexDirection: 'column',
-        alignItems: 'center',
-    },
-    rank2CardElite: {
-        order: 2,
-    },
-    rank1CardElite: {
-        order: 1,
-    },
-    rank3CardElite: {
-        order: 3,
-    },
-    playerRankIconOnly: {
-        // Adjusted for smaller screens if needed
-    },
-    crownIconElite: {
-      fontSize: '3.5rem', // Adjusted size
-    },
-    rankIconElite: { // Adjusted size
-      fontSize: '3rem',
-    },
-    playerCardNameElite: {
-      fontSize: '1.4rem',
-    },
-    playerCardLevelElite: {
-      fontSize: '1rem',
-    },
-    playerCardScoreLargeElite: {
-      fontSize: '1.8rem',
-    },
-    playerCardScoreLargestElite: {
-      fontSize: '2.5rem',
-    },
-  },
-  '@media (max-width: 768px)': {
-    rankingPageTitle: {
-      fontSize: '2rem',
-    },
-    titleIcon: {
-      fontSize: '2.2rem',
-    },
-    rankingSubtitle: {
-      fontSize: '1rem',
-    },
-    filterControls: {
-      flexDirection: 'column',
-      alignItems: 'stretch',
-    },
-    selectControl: {
-      width: '100%',
-    },
-    top3CardsWrapper: {
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '15px',
-    },
-    playerCardElite: {
-      width: '90%',
-      padding: '18px 10px',
-      minWidth: 'unset',
-      transform: 'none !important',
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.3), inset 0 0 8px rgba(255,255,255,0.08)',
-      '&:hover': {
-        transform: 'scale(1.01) !important',
-        boxShadow: '0 10px 20px rgba(0, 0, 0, 0.4), inset 0 0 12px rgba(255,255,255,0.1)',
-      },
-      animation: 'none',
-      '&::before': { display: 'none' }, // ซ่อน light sweep
-    },
-    rank1CardElite: {
-        width: '95%',
-        height: '280px',
-        marginBottom: '10px',
-    },
-    rank2CardElite: {
-        width: '90%',
-        height: '240px',
-        marginBottom: '10px',
-    },
-    rank3CardElite: {
-        width: '90%',
-        height: '240px', // ปรับความสูงให้เท่ากับอันดับ 2
-        marginBottom: '10px',
-    },
-    playerRankIconOnly: {
-        // Adjusted for smaller screens if needed
-    },
-    crownIconElite: {
-      fontSize: '3rem', // Adjusted size
-    },
-    rankIconElite: { // Adjusted size
-      fontSize: '2.5rem',
-    },
-    playerCardNameElite: {
-      fontSize: '1.2rem',
-    },
-    playerCardLevelElite: {
-      fontSize: '0.9rem',
-      padding: '6px 10px',
-    },
-    playerCardScoreLargeElite: {
-      fontSize: '1.6rem',
-    },
-    playerCardScoreLargestElite: {
-      fontSize: '2.2rem',
-    },
-    tableControlsWrapper: {
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      padding: '15px 20px',
-    },
-    searchBar: {
-      maxWidth: '100%',
-    },
-    pagination: {
-      justifyContent: 'center',
-    },
-    tableHeader: {
-      padding: '10px 8px',
-      fontSize: '0.8rem',
-    },
-    tableCell: {
-      padding: '10px 8px',
-      fontSize: '0.85rem',
-    },
-  },
-  '@media (max-width: 480px)': {
-    container: {
-      padding: '15px 10px',
-    },
-    rankingPageTitle: {
-      fontSize: '1.6rem',
-    },
-    titleIcon: {
-      fontSize: '1.8rem',
-    },
-    rankingSubtitle: {
-      fontSize: '0.9rem',
-    },
-    playerCardElite: {
-      width: '100%',
-      padding: '15px 10px',
-    },
-    rank1CardElite: {
-        width: '100%',
-        height: '260px',
-    },
-    rank2CardElite: {
-        width: '100%',
-        height: '220px',
-    },
-    rank3CardElite: {
-        width: '100%',
-        height: '220px', // ปรับความสูงให้เท่ากับอันดับ 2
-    },
-    playerRankIconOnly: {
-        // Adjusted for smaller screens if needed
-    },
-    crownIconElite: {
-      fontSize: '2.5rem', // Adjusted size
-    },
-    rankIconElite: { // Adjusted size
-      fontSize: '2rem',
-    },
-    playerCardNameElite: {
-      fontSize: '1rem',
-    },
-    playerCardLevelElite: {
-      fontSize: '0.75rem',
-      padding: '5px 8px',
-    },
-    playerCardScoreLargeElite: {
-      fontSize: '1.4rem',
-    },
-    playerCardScoreLargestElite: {
-      fontSize: '1.9rem',
-    },
-    rankingTableWrapper: {
-        padding: '0',
-    },
-    rankingTable: {
-        padding: '0 5px',
-        borderSpacing: '0 5px',
-    },
-    tableHeader: {
-      fontSize: '0.7rem',
-      padding: '6px 4px',
-    },
-    tableCell: {
-      fontSize: '0.72rem',
-      padding: '6px 4px',
-    },
-    paginationButton: {
-      padding: '6px 10px',
-      fontSize: '0.8rem',
-    },
+    fontWeight: "bold",
+    color: "#e0e0e0",
+    fontSize: "1rem",
+    textShadow: "0 0 3px rgba(0, 0, 0, 0.2)",
   },
 };
+
+// Removed the direct document access outside of useEffect.
+// Keyframes are typically defined in a global CSS file or a styled-components library for Next.js.
+// If you must inject them this way, ensure it's within a useEffect.
+// However, the cleaner solution for Next.js is to define these keyframes in a global CSS file
+// (e.g., globals.css) and import it in _app.js.
 
 export default Ranking;
