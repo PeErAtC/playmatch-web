@@ -135,6 +135,10 @@ const Match = () => {
   const [selectedRegion, setSelectedRegion] = useState(() =>
     isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน"
   );
+  // New states for coupons
+  const [coupons, setCoupons] = useState([]);
+  const [selectedCoupon, setSelectedCoupon] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
 
   const currentLevelOrder =
     selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
@@ -209,6 +213,39 @@ const Match = () => {
     }
   };
 
+  // New useEffect to fetch coupons
+  useEffect(() => {
+    const fetchCoupons = async () => {
+      if (!loggedInEmail) return;
+      try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", loggedInEmail));
+        const userSnap = await getDocs(q);
+        let userId = null;
+        userSnap.forEach((doc) => {
+          userId = doc.id;
+        });
+
+        if (!userId) return;
+
+        const couponsRef = collection(db, `users/${userId}/Coupons`);
+        const couponSnap = await getDocs(
+          query(couponsRef, where("status", "==", "ACTIVE"))
+        );
+        const couponList = [];
+        couponSnap.forEach((doc) => {
+          couponList.push({ id: doc.id, ...doc.data() });
+        });
+        setCoupons(couponList);
+      } catch (error) {
+        console.error("Error fetching coupons:", error);
+        setCoupons([]);
+      }
+    };
+    fetchCoupons();
+  }, [loggedInEmail]);
+
+
   useEffect(() => {
     fetchMembers(false);
   }, [loggedInEmail, isBrowser, selectedRegion]);
@@ -268,6 +305,8 @@ const Match = () => {
     );
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
+    setSelectedCoupon(null); // Reset selected coupon
+    setDiscountAmount(0); // Reset discount amount
 
     if (isBrowser) {
       localStorage.removeItem("isOpen");
@@ -586,6 +625,8 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
     setMatchCount(0);
+    setSelectedCoupon(null); // Reset selected coupon on new session
+    setDiscountAmount(0); // Reset discount amount on new session
 
     await fetchMembers(true);
   };
@@ -829,11 +870,12 @@ const Match = () => {
     if (
         (courtFee === 0 && courtFeePerGame === 0 && fixedCourtFeePerPerson === 0) &&
         ballPrice === 0 &&
-        organizeFee === 0
+        organizeFee === 0 &&
+        discountAmount === 0 // Check discountAmount
       ) {
         Swal.fire(
           "ข้อมูลไม่ครบถ้วน",
-          "กรุณากรอกข้อมูลค่าลูก, ค่าจัดก๊วน หรือค่าสนาม ให้ครบถ้วนก่อนคำนวณ",
+          "กรุณากรอกข้อมูลค่าลูก, ค่าจัดก๊วน หรือค่าสนาม หรือเลือกส่วนลด ให้ครบถ้วนก่อนคำนวณ",
           "warning"
         );
         return;
@@ -867,8 +909,14 @@ const Match = () => {
         totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
 
-    const estimatedTotalCost =
+    let estimatedTotalCost =
       Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
+
+    // Apply discount if a coupon is selected
+    if (discountAmount > 0) {
+        estimatedTotalCost = Math.max(0, estimatedTotalCost - discountAmount);
+    }
+
 
     const result = {
       name: player.name,
@@ -878,6 +926,7 @@ const Match = () => {
       ballCost: Math.ceil(ballCost),
       courtCost: Math.ceil(courtCostPerPerson),
       organizeFee: Math.ceil(parsedOrganizeFee),
+      discount: discountAmount, // Include discount in result
     };
 
     setEarlyExitCalculationResult(result);
@@ -892,18 +941,60 @@ const Match = () => {
           <p style="margin-bottom: 8px;"><strong>ค่าลูก:</strong> <span style="float: right; color: #007bff;">${result.ballCost} บาท</span></p>
           <p style="margin-bottom: 8px;"><strong>ค่าสนาม:</strong> <span style="float: right; color: #007bff;">${result.courtCost} บาท</span></p>
           <p style="margin-bottom: 8px;"><strong>ค่าจัดก๊วน:</strong> <span style="float: right; color: #007bff;">${result.organizeFee} บาท</span></p>
-          <hr style="margin: 15px 0; border-top: 2px solid #5cb85c;">
-          <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมโดยประมาณ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
+          ${result.discount > 0 ? `<p style="margin-bottom: 8px;"><strong>ส่วนลด (คูปอง):</strong> <span style="float: right; color: #dc3545;">-${result.discount} บาท</span></p><hr style="margin: 15px 0; border-top: 2px solid #5cb85c;">` : '<hr style="margin: 15px 0; border-top: 2px solid #5cb85c;">'}
+          <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมสุทธิ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
         </div>
       `,
       icon: "info",
-      confirmButtonText: "รับทราบ",
+      confirmButtonText: "บันทึกการชำระ", // Changed from "รับทราบ" to "บันทึกการชำระ"
+    }).then(async (swalResult) => {
+        if (swalResult.isConfirmed) {
+            // Update coupon status if a coupon was used
+            if (selectedCoupon && loggedInEmail) {
+                try {
+                    const usersRef = collection(db, "users");
+                    const q = query(usersRef, where("email", "==", loggedInEmail));
+                    const userSnap = await getDocs(q);
+                    let userId = null;
+                    userSnap.forEach((doc) => {
+                        userId = doc.id;
+                    });
+                    if (userId) {
+                        await updateDoc(doc(db, `users/${userId}/Coupons`, selectedCoupon.id), {
+                            status: "USED",
+                            usedAt: serverTimestamp(),
+                            usedBy: loggedInEmail,
+                            usedForMatchDate: matchDate, // Optional: record when it was used
+                            usedForTopic: topic, // Optional: record for which topic
+                        });
+                        Swal.fire("บันทึกการชำระและใช้คูปองเรียบร้อย!", "", "success");
+                        setSelectedCoupon(null); // Clear selected coupon
+                        setDiscountAmount(0); // Clear discount amount
+                        // Re-fetch coupons to update the list (remove the used one)
+                        const couponsRef = collection(db, `users/${userId}/Coupons`);
+                        const couponSnap = await getDocs(
+                          query(couponsRef, where("status", "==", "ACTIVE"))
+                        );
+                        const couponList = [];
+                        couponSnap.forEach((doc) => {
+                          couponList.push({ id: doc.id, ...doc.data() });
+                        });
+                        setCoupons(couponList);
+                    }
+                } catch (error) {
+                    console.error("Error updating coupon status:", error);
+                    Swal.fire("เกิดข้อผิดพลาดในการอัปเดตสถานะคูปอง", error.message, "error");
+                }
+            }
+        }
     });
   };
 
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
+    setSelectedCoupon(null); // Clear selected coupon
+    setDiscountAmount(0); // Clear discount amount
   };
 
   const isCourtFeeActive = courtFee > 0;
@@ -954,57 +1045,29 @@ const Match = () => {
         setCourtFeePerGame(0);
         setFixedCourtFeePerPerson(0);
         setOrganizeFee(0);
+        setSelectedCoupon(null); // Also clear coupon selection
+        setDiscountAmount(0); // Also clear discount amount
         Swal.fire("ล้างค่าสำเร็จ!", "ค่าใช้จ่ายทั้งหมดถูกรีเซ็ตเป็น 0 แล้ว", "success");
       }
     });
   };
 
-
   return (
-    <div
-      style={{
-        padding: "15px",
-        backgroundColor: "#f0f2f5",
-        minHeight: "100vh",
-        fontFamily: "'Kanit', sans-serif",
-      }}
-    >
+    <div style={{ padding: "15px", backgroundColor: "#f0f2f5", minHeight: "100vh", fontFamily: "'Kanit', sans-serif", }} >
       <div className="card control-panel-card">
         <div className="control-panel">
           <div className="date-topic-group">
             <div className="input-group">
               <label htmlFor="matchDate" className="control-label"></label>
-              <input
-                type="date"
-                id="matchDate"
-                value={matchDate}
-                onChange={(e) => setMatchDate(e.target.value)}
-                className="control-input"
-                style={{ minWidth: "160px" }}
-                disabled={isOpen}
-              />
+              <input type="date" id="matchDate" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} className="control-input" style={{ minWidth: "160px" }} disabled={isOpen} />
             </div>
             <div className="input-group">
               <label htmlFor="topic" className="control-label"></label>
-              <input
-                type="text"
-                id="topic"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="เช่น ก๊วนตอนเย็น, ก๊วนพิเศษ"
-                className="control-input"
-                style={{
-                  border: topic ? "1px solid #ccc" : "1px solid #f44336",
-                }}
-                disabled={isOpen}
-              />
+              <input type="text" id="topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="เช่น ก๊วนตอนเย็น, ก๊วนพิเศษ" className="control-input" style={{ border: topic ? "1px solid #ccc" : "1px solid #f44336", }} disabled={isOpen} />
             </div>
           </div>
           <div className="action-time-group">
-            <button
-              onClick={isOpen ? handleEndGroup : handleStartGroup}
-              className={`action-button ${isOpen ? "end-group" : "start-group"}`}
-            >
+            <button onClick={isOpen ? handleEndGroup : handleStartGroup} className={`action-button ${isOpen ? "end-group" : "start-group"}`} >
               {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
             </button>
             <div className="activity-time-display">
@@ -1012,9 +1075,7 @@ const Match = () => {
                 {" "}
                 Total Activity Time{" "}
               </span>
-              <span
-                style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}
-              >
+              <span style={{ fontWeight: 600, color: "#222", fontSize: "15px" }} >
                 {" "}
                 - {formatTime(activityTime)}{" "}
               </span>
@@ -1022,179 +1083,82 @@ const Match = () => {
           </div>
         </div>
       </div>
-
       <div className="card financial-summary-card">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-            borderBottom: isCostSettingsOpen ? "1px solid #eee" : "none",
-            paddingBottom: isCostSettingsOpen ? "10px" : "0",
-            cursor: "pointer",
-          }}
-          onClick={() => setIsCostSettingsOpen(!isCostSettingsOpen)}
-        >
-          <h3
-            style={{
-              fontSize: "15px",
-              margin: 0,
-              color: "#222",
-            }}
-          >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", borderBottom: isCostSettingsOpen ? "1px solid #eee" : "none", paddingBottom: isCostSettingsOpen ? "10px" : "0", cursor: "pointer", }} onClick={() => setIsCostSettingsOpen(!isCostSettingsOpen)} >
+          <h3 style={{ fontSize: "15px", margin: 0, color: "#222", }} >
             ตั้งค่าค่าใช้จ่าย (จะบันทึกอัตโนมัติ)
           </h3>
-          <span
-            style={{
-              fontSize: "20px",
-              fontWeight: "bold",
-              transition: "transform 0.3s ease",
-              transform: isCostSettingsOpen ? "rotate(45deg)" : "rotate(0deg)",
-              color: "#222",
-            }}
-          >
+          <span style={{ fontSize: "20px", fontWeight: "bold", transition: "transform 0.3s ease", transform: isCostSettingsOpen ? "rotate(45deg)" : "rotate(0deg)", color: "#222", }} >
             +
           </span>
         </div>
-
-        <div
-          ref={contentRef}
-          style={{
-            maxHeight: isCostSettingsOpen
-              ? contentRef.current
-                ? contentRef.current.scrollHeight + "px"
-                : "500px"
-              : "0",
-            overflow: "hidden",
-            transition: "max-height 0.4s ease-in-out",
-          }}
-        >
+        <div ref={contentRef} style={{ maxHeight: isCostSettingsOpen ? contentRef.current ? contentRef.current.scrollHeight + "px" : "500px" : "0", overflow: "hidden", transition: "max-height 0.4s ease-in-out", }} >
           <div>
-            <div
-              style={{
-                display: "flex",
-                gap: "20px",
-                flexWrap: "wrap",
-                marginBottom: "25px",
-              }}
-            >
+            <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "25px", }} >
               <div className="cost-input-group">
                 <h4 className="cost-input-heading">
                   ค่าสนาม: (เลือกเพียง 1 รูปแบบ)
                 </h4>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", }} >
                   <div>
                     <label className="cost-label">ค่าสนามรวม (บาท):</label>
-                    <input
-                      type="number"
-                      value={courtFee === 0 ? "" : courtFee}
-                      onChange={handleCourtFeeChange}
-                      placeholder="ค่าสนามรวม"
-                      className="cost-input"
-                      style={{
-                        backgroundColor:
-                          isCourtFeePerGameActive || isFixedCourtFeePerPersonActive
-                            ? "#e9e9e9"
-                            : "#fff",
-                      }}
-                      disabled={isCourtFeePerGameActive || isFixedCourtFeePerPersonActive}
-                    />
+                    <input type="number" value={courtFee === 0 ? "" : courtFee} onChange={handleCourtFeeChange} placeholder="ค่าสนามรวม" className="cost-input" style={{ backgroundColor: isCourtFeePerGameActive || isFixedCourtFeePerPersonActive ? "#e9e9e9" : "#fff", }} disabled={isCourtFeePerGameActive || isFixedCourtFeePerPersonActive} />
                   </div>
                   <div>
                     <label className="cost-label">ค่าสนามต่อเกม (บาท/เกม):</label>
-                    <input
-                      type="number"
-                      value={courtFeePerGame === 0 ? "" : courtFeePerGame}
-                      onChange={handleCourtFeePerGameChange}
-                      placeholder="ค่าสนามต่อเกม"
-                      className="cost-input"
-                      style={{
-                        backgroundColor:
-                          isCourtFeeActive || isFixedCourtFeePerPersonActive
-                            ? "#e9e9e9"
-                            : "#fff",
-                      }}
-                      disabled={isCourtFeeActive || isFixedCourtFeePerPersonActive}
-                    />
+                    <input type="number" value={courtFeePerGame === 0 ? "" : courtFeePerGame} onChange={handleCourtFeePerGameChange} placeholder="ค่าสนามต่อเกม" className="cost-input" style={{ backgroundColor: isCourtFeeActive || isFixedCourtFeePerPersonActive ? "#e9e9e9" : "#fff", }} disabled={isCourtFeeActive || isFixedCourtFeePerPersonActive} />
                   </div>
                   <div>
                     <label className="cost-label">ค่าสนามคงที่ต่อคน (บาท/คน):</label>
-                    <input
-                      type="number"
-                      value={fixedCourtFeePerPerson === 0 ? "" : fixedCourtFeePerPerson}
-                      onChange={handleFixedCourtFeePerPersonChange}
-                      placeholder="ค่าสนามคงที่ต่อคน"
-                      className="cost-input"
-                      style={{
-                        backgroundColor:
-                          isCourtFeeActive || isCourtFeePerGameActive
-                            ? "#e9e9e9"
-                            : "#fff",
-                      }}
-                      disabled={isCourtFeeActive || isCourtFeePerGameActive}
-                    />
+                    <input type="number" value={fixedCourtFeePerPerson === 0 ? "" : fixedCourtFeePerPerson} onChange={handleFixedCourtFeePerPersonChange} placeholder="ค่าสนามคงที่ต่อคน" className="cost-input" style={{ backgroundColor: isCourtFeeActive || isCourtFeePerGameActive ? "#e9e9e9" : "#fff", }} disabled={isCourtFeeActive || isCourtFeePerGameActive} />
                   </div>
                 </div>
               </div>
               <div className="cost-input-group">
                 <h4 className="cost-input-heading">ค่าลูกและค่าจัดก๊วน:</h4>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", }} >
                   <div>
                     <label className="cost-label">ราคาลูกละ (บาท):</label>
-                    <input
-                      type="number"
-                      value={ballPrice === 0 ? "" : ballPrice}
-                      onChange={(e) => setBallPrice(parseFloat(e.target.value) || 0)}
-                      placeholder="ราคาลูกละ"
-                      className="cost-input"
-                      style={{ width: "120px" }}
-                    />
+                    <input type="number" value={ballPrice === 0 ? "" : ballPrice} onChange={(e) => setBallPrice(parseFloat(e.target.value) || 0)} placeholder="ราคาลูกละ" className="cost-input" style={{ width: "120px" }} />
                   </div>
                   <div>
                     <label className="cost-label">ค่าจัดก๊วน (บาท/คน):</label>
-                    <input
-                      type="number"
-                      value={organizeFee === 0 ? "" : organizeFee}
-                      onChange={(e) => setOrganizeFee(parseFloat(e.target.value) || 0)}
-                      placeholder="ค่าจัดก๊วน"
-                      className="cost-input"
-                      style={{ width: "120px" }}
-                    />
+                    <input type="number" value={organizeFee === 0 ? "" : organizeFee} onChange={(e) => setOrganizeFee(parseFloat(e.target.value) || 0)} placeholder="ค่าจัดก๊วน" className="cost-input" style={{ width: "120px" }} />
                   </div>
                 </div>
-                <button
-                  onClick={handleClearCostSettings}
-                  className="action-button clear-settings-button"
-                  style={{ marginTop: "20px", backgroundColor: "#dc3545" }}
-                >
+                {/* New Coupon Dropdown */}
+                <div style={{ marginTop: "20px" }}>
+                    <label className="cost-label">เลือกส่วนลด:</label>
+                    <select
+                        value={selectedCoupon ? selectedCoupon.id : ""}
+                        onChange={(e) => {
+                            const couponId = e.target.value;
+                            const coupon = coupons.find(c => c.id === couponId);
+                            setSelectedCoupon(coupon || null);
+                            setDiscountAmount(coupon ? parseFloat(coupon.amount) : 0);
+                        }}
+                        className="cost-input"
+                        style={{ width: "100%", maxWidth: "200px" }}
+                    >
+                        <option value="">ไม่มีส่วนลด</option>
+                        {coupons.map(coupon => (
+                            <option key={coupon.id} value={coupon.id}>
+                                {coupon.reason} ({coupon.amount} บาท)
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <button onClick={handleClearCostSettings} className="action-button clear-settings-button" style={{ marginTop: "20px", backgroundColor: "#dc3545" }} >
                   ล้างการตั้งค่าทั้งหมด
                 </button>
               </div>
             </div>
           </div>
         </div>
-
         <div className="early-exit-section">
           <h4 className="early-exit-heading">คำนวณยอดสำหรับสมาชิกที่ต้องการออกก่อน</h4>
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              value={selectedMemberForEarlyExit}
-              onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)}
-              className="early-exit-select"
-            >
+            <select value={selectedMemberForEarlyExit} onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)} className="early-exit-select" >
               <option value="">เลือกสมาชิก</option>
               {members.map((mem) => (
                 <option key={mem.memberId} value={mem.name}>
@@ -1202,72 +1166,31 @@ const Match = () => {
                 </option>
               ))}
             </select>
-            <button
-              onClick={calculatePlayerSummary}
-              className="action-button calculate-button"
-              disabled={!isOpen || !selectedMemberForEarlyExit}
-            >
+            <button onClick={calculatePlayerSummary} className="action-button calculate-button" disabled={!isOpen || !selectedMemberForEarlyExit} >
               คำนวณยอด
             </button>
-            <button
-              onClick={handleClearEarlyExitSelection}
-              className="action-button clear-button"
-              disabled={!selectedMemberForEarlyExit && !earlyExitCalculationResult}
-            >
+            <button onClick={handleClearEarlyExitSelection} className="action-button clear-button" disabled={!selectedMemberForEarlyExit && !earlyExitCalculationResult} >
               ล้างตัวเลือก
             </button>
           </div>
         </div>
       </div>
-
       <div className="card match-table-card">
-        <div
-          style={{
-            textAlign: "left",
-            marginBottom: "15px",
-            fontSize: "14px",
-            fontWeight: "600",
-            color: "#333",
-            padding: "10px 0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "20px"
-          }}
-        >
+        <div style={{ textAlign: "left", marginBottom: "15px", fontSize: "14px", fontWeight: "600", color: "#333", padding: "10px 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "20px" }} >
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span>จำนวน Match ทั้งหมด: {matchCount}</span>
             <span style={{color: '#007bff'}}>จำนวนลูกทั้งหมดที่ใช้: {totalBallsInSession}</span>
           </div>
           <div className="region-selector-inline">
-            <label
-              htmlFor="region-select"
-              style={{ margin: 0, fontSize: "14px", color: "#555" }}
-            >
+            <label htmlFor="region-select" style={{ margin: 0, fontSize: "14px", color: "#555" }} >
               เลือกภาค:
             </label>
-            <select
-              id="region-select"
-              value={selectedRegion}
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              style={{
-                minWidth: "100px",
-                padding: "6px 8px",
-                border: "1px solid #ccc",
-                borderRadius: "5px",
-                fontSize: "13px",
-                width: "auto",
-                marginLeft: "8px",
-              }}
-              disabled={isOpen}
-            >
+            <select id="region-select" value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} style={{ minWidth: "100px", padding: "6px 8px", border: "1px solid #ccc", borderRadius: "5px", fontSize: "13px", width: "auto", marginLeft: "8px", }} disabled={isOpen} >
               <option value="ภาคอีสาน">ภาคอีสาน</option>
               <option value="ภาคกลาง">ภาคกลาง</option>
             </select>
           </div>
         </div>
-
         {matches.length === 0 && isOpen && (
           <div className="no-matches-message">
             <p>ยังไม่มี Match เพิ่ม "Add New Match" เพื่อเริ่มต้น</p>
@@ -1296,18 +1219,7 @@ const Match = () => {
                   <tr key={match.matchId}>
                     <td data-label="Match ID">{match.matchId}</td>
                     <td data-label="สนาม">
-                      <select
-                        value={match.court}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "court",
-                            e.target.value
-                          )
-                        }
-                        style={{ border: match.court ? "1px solid #ddd" : "1px solid #f44336" }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
+                      <select value={match.court} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "court", e.target.value ) } style={{ border: match.court ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
                         <option value="">เลือกสนาม</option>
                         {getAvailableCourts(match).map((court) => (
                           <option key={court} value={court}>
@@ -1317,114 +1229,41 @@ const Match = () => {
                       </select>
                     </td>
                     <td data-label="ทีม A (ผู้เล่น 1)">
-                      <select
-                        value={match.A1}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "A1",
-                            e.target.value
-                          )
-                        }
-                        style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #f44336" }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
+                      <select value={match.A1} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "A1", e.target.value ) } style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
                         <option value="">เลือกผู้เล่น A1</option>
                         {renderMemberOptions(match, "A1")}
                       </select>
                     </td>
                     <td data-label="ทีม A (ผู้เล่น 2)">
-                      <select
-                        value={match.A2}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "A2",
-                            e.target.value
-                          )
-                        }
-                        style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #f44336" }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
+                      <select value={match.A2} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "A2", e.target.value ) } style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
                         <option value="">เลือกผู้เล่น A2</option>
                         {renderMemberOptions(match, "A2")}
                       </select>
                     </td>
                     <td data-label="ทีม B (ผู้เล่น 1)">
-                      <select
-                        value={match.B1}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "B1",
-                            e.target.value
-                          )
-                        }
-                        style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #f44336" }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
+                      <select value={match.B1} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "B1", e.target.value ) } style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
                         <option value="">เลือกผู้เล่น B1</option>
                         {renderMemberOptions(match, "B1")}
                       </select>
                     </td>
                     <td data-label="ทีม B (ผู้เล่น 2)">
-                      <select
-                        value={match.B2}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "B2",
-                            e.target.value
-                          )
-                        }
-                        style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #f44336" }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
+                      <select value={match.B2} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "B2", e.target.value ) } style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
                         <option value="">เลือกผู้เล่น B2</option>
                         {renderMemberOptions(match, "B2")}
                       </select>
                     </td>
                     <td data-label="ลูก">
-                      <select
-                        value={match.balls}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "balls",
-                            e.target.value
-                          )
-                        }
-                        className="balls-select"
-                        style={{
-                          backgroundColor: match.balls ? "#e6f7ff" : "#fff",
-                          border: match.balls ? "1px solid #ddd" : "1px solid #f44336",
-                        }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
-                        <option value="">เลือกลูก</option>
-                        {balls.map((ball) => (
-                          <option key={ball} value={ball}>
-                            {ball}
+                      <select value={match.balls} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "balls", e.target.value ) } style={{ border: match.balls ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
+                        <option value="">ลูก</option>
+                        {balls.map((ballCount) => (
+                          <option key={ballCount} value={ballCount}>
+                            {ballCount}
                           </option>
                         ))}
                       </select>
                     </td>
                     <td data-label="ผล">
-                      <select
-                        value={match.result}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "result",
-                            e.target.value
-                          )
-                        }
-                        className="result-select"
-                        style={{
-                          backgroundColor: match.result ? "#e6f7ff" : "#fff",
-                        }}
-                        disabled={match.status === "จบการแข่งขัน"}
-                      >
+                      <select value={match.result} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "result", e.target.value ) } style={{ border: match.result ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"} >
                         {RESULT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
@@ -1433,46 +1272,26 @@ const Match = () => {
                       </select>
                     </td>
                     <td data-label="คะแนน">
-                      <span className="score-display">{match.score}</span>
+                      <div className="score-display">
+                        {match.score || "-"}
+                      </div>
                     </td>
                     <td data-label="สถานะ">
-                      <select
-                        value={match.status}
-                        onChange={(e) =>
-                          handleChangeMatch(
-                            (currentPage - 1) * ITEMS_PER_PAGE + idx,
-                            "status",
-                            e.target.value
-                          )
-                        }
-                        className="status-select"
-                        style={{
-                          backgroundColor: STATUS_COLORS[match.status] || "#fff",
-                          color: match.status === "จบการแข่งขัน" ? "#fff" : "#333",
-                        }}
-                      >
-                        {Object.keys(STATUS_COLORS).map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
+                      <select value={match.status} onChange={(e) => handleChangeMatch( (currentPage - 1) * ITEMS_PER_PAGE + idx, "status", e.target.value ) } className="status-select" style={{ backgroundColor: STATUS_COLORS[match.status] || "#f0f2f5", border: match.status ? "1px solid #ddd" : "1px solid #f44336", }} >
+                        <option value="">เลือกสถานะ</option>
+                        <option value="เตรียมพร้อม">เตรียมพร้อม</option>
+                        <option value="กำลังแข่งขัน">กำลังแข่งขัน</option>
+                        <option value="จบการแข่งขัน">จบการแข่งขัน</option>
                       </select>
                     </td>
                     <td data-label="Action">
-                      <div className="action-menu">
-                        <button
-                          className="action-menu-button"
-                          onClick={() =>
-                            setShowMenuId(
-                              showMenuId === match.matchId ? null : match.matchId
-                            )
-                          }
-                        >
-                          &#x22EF;
+                      <div className="action-menu-container">
+                        <button className="action-menu-button" onClick={() => setShowMenuId(showMenuId === match.matchId ? null : match.matchId)} >
+                          ...
                         </button>
                         {showMenuId === match.matchId && (
                           <div className="action-menu-dropdown">
-                            <button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)}>
+                            <button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)} >
                               ลบ
                             </button>
                           </div>
@@ -1483,39 +1302,28 @@ const Match = () => {
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="pagination-controls">
+                <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} >
+                  ก่อนหน้า
+                </button>
+                <span>
+                  หน้า {currentPage} จาก {totalPages}
+                </span>
+                <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} >
+                  ถัดไป
+                </button>
+              </div>
+            )}
           </div>
         )}
-
-        <div className="pagination-controls">
-          <button
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-          >
-            ก่อนหน้า
+        {isOpen && (
+          <button onClick={handleAddMatch} className="add-match-button" >
+            Add New Match
           </button>
-          <span>
-            หน้า {currentPage} จาก {totalPages}
-          </span>
-          <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-            }
-            disabled={currentPage === totalPages}
-          >
-            ถัดไป
-          </button>
-        </div>
-
-        <button
-          onClick={handleAddMatch}
-          className="add-match-button"
-          disabled={!isOpen}
-        >
-          + Add New Match
-        </button>
+        )}
       </div>
-
-      <style jsx>{`
+       <style jsx>{`
         .card {
           background-color: #ffffff;
           padding: 25px;
@@ -1942,6 +1750,48 @@ const Match = () => {
           .match-table td:before {
             width: 40%;
           }
+          /* Styles for the new discount selection dropdown */
+
+      .cost-input-group .cost-label {
+          display: block; /* Make label take full width */
+          margin-bottom: 5px; /* Space between label and select box */
+          font-size: 14px;
+          color: #555;
+          font-weight: 500;
+      }
+
+      .cost-input-group select.cost-input {
+          width: 100%; /* Ensure it takes full width of its container */
+          max-width: 250px; /* Limit max width for better appearance */
+          padding: 10px 15px; /* Ample padding for better touch/click area */
+          border: 1px solid #ccc;
+          border-radius: 8px; /* Slightly rounded corners */
+          background-color: #fff;
+          font-size: 16px;
+          color: #333;
+          -webkit-appearance: none; /* Remove default browser styling for dropdown */
+          -moz-appearance: none;
+          appearance: none;
+          background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.9a14.7%2014.7%200%200%200-20.8%200L146.2%20190.9%2026.2%2069.9a14.7%2014.7%200%200%200-20.8%200%2014.7%2014.7%200%200%000%2020.8l120.8%20120.8c5.7%205.7%2014.7%205.7%2020.4%200L287%2090.7a14.7%2014.7%200%200%200%200-20.8z%22%2F%3E%3C%2Fsvg%3E'); /* Custom arrow for dropdown */
+          background-repeat: no-repeat;
+          background-position: right 15px center;
+          background-size: 12px;
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Subtle shadow for depth */
+          transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .cost-input-group select.cost-input:focus {
+          border-color: #007bff; /* Highlight on focus */
+          box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); /* Focus ring */
+          outline: none;
+      }
+
+      .cost-input-group select.cost-input option {
+          padding: 10px; /* Padding for options (may not work in all browsers) */
+          background-color: #fff;
+          color: #333;
+      }
         }
       `}</style>
     </div>
