@@ -39,58 +39,33 @@ const STATUS_COLORS = {
   จบการแข่งขัน: "#f44336", // Red for "Finished"
 };
 
-// Colors for member levels - UPDATED WITH ALL YOUR LEVELS (Darker and cool to warm)
+// Colors for member levels
 const LEVEL_COLORS = {
-  // Cool tones (lower levels)
-  C: "#6a3d9a", // Darker Blue
-  "P-": "#6a3d9a", // Lighter Blue (distinct from C)
-  P: "#6a3d9a", // Darker Green
-  "N-": "#1f78b4", // Lighter Green (distinct from P)
-  N: "#1f78b4", // Darker Purple
+  C: "#6a3d9a",
+  "P-": "#6a3d9a",
+  P: "#6a3d9a",
+  "N-": "#1f78b4",
+  N: "#1f78b4",
   "BG": "#1f78b4",
   "BG-": "#1f78b4",
   "Rookie": "#1f78b4",
-
-  // Warmer tones (higher levels)
-  "S-": "#f44336", // Orange-Yellow
-  S: "#f44336", // Darker Orange
+  "S-": "#f44336",
+  S: "#f44336",
   "S+": "#f44336",
   "P+": "#6a3d9a",
-
-  มือหน้าบ้าน: "#33a02c", // Darker Red
-  มือหน้าบ้าน1: "#33a02c", // Lighter Red (distinct from มือหน้าบ้าน)
-  มือหน้าบ้าน2: "#33a02c", // Lavender (distinct, but still warm-ish)
-  มือหน้าบ้าน3: "#33a02c", // Darker Red/Maroon
+  มือหน้าบ้าน: "#33a02c",
+  มือหน้าบ้าน1: "#33a02c",
+  มือหน้าบ้าน2: "#33a02c",
+  มือหน้าบ้าน3: "#33a02c",
 };
 
-// Define the order of levels EXACTLY as provided by the user (from high to low, or specific display order)
+// Define the order of levels
 const LEVEL_ORDER_NORTHEAST = [
-  "มือหน้าบ้าน",
-  "มือหน้าบ้าน1",
-  "มือหน้าบ้าน2",
-  "มือหน้าบ้าน3",
-  "BG",
-  "S-",
-  "S",
-  "N-",
-  "N",
-  "P-",
-  "P",
-  "C",
+  "มือหน้าบ้าน", "มือหน้าบ้าน1", "มือหน้าบ้าน2", "มือหน้าบ้าน3", "BG", "S-", "S", "N-", "N", "P-", "P", "C",
 ];
 
 const LEVEL_ORDER_CENTRAL = [
-  "Rookie",
-  "BG-",
-  "BG",
-  "N-",
-  "N",
-  "S",
-  "S+",
-  "P-",
-  "P",
-  "P+",
-  "C",
+  "Rookie", "BG-", "BG", "N-", "N", "S", "S+", "P-", "P", "P+", "C",
 ];
 
 // Helper function to get the index of a level in the defined order
@@ -127,18 +102,13 @@ const Match = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showMenuId, setShowMenuId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
-  // เพิ่ม gamesPlayed และ ballsUsed ใน state ของสมาชิกแต่ละคน
-  // gamesPlayed and ballsUsed are for the CURRENT session
-  // totalGamesPlayed and totalBallsUsed will be fetched from Firebase and are cumulative
   const [members, setMembers] = useState([]);
   const [balls] = useState(
-    Array.from({ length: 10 }, (_, i) => (i + 1).toString())
+    Array.from({ length: 11 }, (_, i) => i.toString())
   );
-  // NEW: State for match count
   const [matchCount, setMatchCount] = useState(0);
-
-  // NEW: States for cost parameters
-  const isBrowser = typeof window !== "undefined"; //
+  const [totalBallsInSession, setTotalBallsInSession] = useState(0);
+  const isBrowser = typeof window !== "undefined";
   const [ballPrice, setBallPrice] = useState(() =>
     isBrowser ? parseFloat(localStorage.getItem("ballPrice")) || 0 : 0
   );
@@ -156,18 +126,12 @@ const Match = () => {
   const [organizeFee, setOrganizeFee] = useState(() =>
     isBrowser ? parseFloat(localStorage.getItem("organizeFee")) || 0 : 0
   );
-
-  // NEW: State for early exit calculation
   const [selectedMemberForEarlyExit, setSelectedMemberForEarlyExit] =
     useState("");
   const [earlyExitCalculationResult, setEarlyExitCalculationResult] =
     useState(null);
-
-  // NEW: State for cost settings collapse
   const [isCostSettingsOpen, setIsCostSettingsOpen] = useState(false);
-  const contentRef = useRef(null); // Ref for the collapsible content
-
-  // NEW: State for regional level order
+  const contentRef = useRef(null);
   const [selectedRegion, setSelectedRegion] = useState(() =>
     isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน"
   );
@@ -175,16 +139,10 @@ const Match = () => {
   const currentLevelOrder =
     selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
 
-
-  // ดึงข้อมูลอีเมลผู้ใช้
   useEffect(() => {
     setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
   }, []);
 
-  // ดึงสมาชิกที่สถานะเป็น "มา" และจัดเรียงตามระดับฝีมือ
-  // This function is now standalone and can be called with a flag
-  // ส่วนที่ 1: ฟังก์ชัน fetchMembers
-// โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
   const fetchMembers = async (isNewSessionStart = false) => {
     try {
       if (!loggedInEmail) return;
@@ -209,21 +167,18 @@ const Match = () => {
             level: data.level,
             score: data.score || 0,
             wins: data.wins || 0,
-            gamesPlayed: 0, // Initialize gamesPlayed for current session (จะถูก recalculate ด้านล่างหากไม่ใช่ new session)
-            ballsUsed: 0,   // Initialize ballsUsed for current session (จะถูก recalculate ด้านล่างหากไม่ใช่ new session)
-            totalGamesPlayed: data.totalGamesPlayed || 0, // Load cumulative games from Firebase
-            totalBallsUsed: data.totalBallsUsed || 0,     // Load cumulative balls from Firebase
+            gamesPlayed: 0,
+            ballsUsed: 0,
+            totalGamesPlayed: data.totalGamesPlayed || 0,
+            totalBallsUsed: data.totalBallsUsed || 0,
           });
         }
       });
 
-      // Sort members by currentLevelOrder
       memberList.sort((a, b) => {
         return getLevelOrderIndex(a.level, currentLevelOrder) - getLevelOrderIndex(b.level, currentLevelOrder);
       });
 
-      // NEW LOGIC: Only restore session-specific games/balls if it's NOT a new session start
-      // AND a session is currently marked as open in localStorage.
       if (!isNewSessionStart && isBrowser && localStorage.getItem("isOpen") === "true") {
         const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
         const tempGamesPlayed = {};
@@ -239,7 +194,7 @@ const Match = () => {
             });
           }
         });
-        // Apply recalculated session data to the memberList
+
         memberList = memberList.map(member => ({
           ...member,
           gamesPlayed: tempGamesPlayed[member.name] || 0,
@@ -254,12 +209,10 @@ const Match = () => {
     }
   };
 
-  // Initial fetch of members when component mounts or loggedInEmail changes
   useEffect(() => {
-    fetchMembers(false); // Not a new session start on initial load
-  }, [loggedInEmail, isBrowser, selectedRegion]); // selectedRegion added as dependency
+    fetchMembers(false);
+  }, [loggedInEmail, isBrowser, selectedRegion]);
 
-  // NEW: Save cost parameters to localStorage
   useEffect(() => {
     if (isBrowser) {
       localStorage.setItem("ballPrice", ballPrice.toString());
@@ -286,12 +239,21 @@ const Match = () => {
     }
   }, [topic, isBrowser]);
 
-  // Save selected region to localStorage
   useEffect(() => {
     if (isBrowser) {
       localStorage.setItem("selectedRegion", selectedRegion);
     }
   }, [selectedRegion, isBrowser]);
+
+  useEffect(() => {
+    const total = matches.reduce((sum, match) => {
+      if (match.status === "จบการแข่งขัน") {
+        return sum + (parseInt(match.balls, 10) || 0);
+      }
+      return sum;
+    }, 0);
+    setTotalBallsInSession(total);
+  }, [matches]);
 
   const resetSession = () => {
     setMatches([]);
@@ -299,12 +261,11 @@ const Match = () => {
     setIsOpen(false);
     setCurrentPage(1);
     clearInterval(timerRef.current);
-    setMatchCount(0); // Reset match count
-    // Reset gamesPlayed and ballsUsed for current session only in state
+    setMatchCount(0);
+    setTotalBallsInSession(0);
     setMembers((prevMembers) =>
       prevMembers.map((member) => ({ ...member, gamesPlayed: 0, ballsUsed: 0 }))
     );
-    // NEW: Reset early exit calculation result
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
 
@@ -312,32 +273,25 @@ const Match = () => {
       localStorage.removeItem("isOpen");
       localStorage.removeItem("matches");
       localStorage.removeItem("activityTime");
-      localStorage.removeItem("sessionMembers"); // NEW: Clear session members from localStorage
+      localStorage.removeItem("sessionMembers");
     }
   };
 
-  // 1. useEffect for initial loading of state from localStorage (runs once on mount)
   useEffect(() => {
     if (!isBrowser) return;
-
     const savedIsOpen = localStorage.getItem("isOpen") === "true";
     const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
     const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
-
     setIsOpen(savedIsOpen);
     setMatches(savedMatches);
     setActivityTime(savedActivityTime);
-    setMatchCount(savedMatches.length); // Initialize match count from saved matches
-
+    setMatchCount(savedMatches.length);
   }, [isBrowser]);
 
-  // 2. useEffect for managing the timer (runs when `isOpen` changes)
   useEffect(() => {
     if (!isBrowser) return;
-
-    clearInterval(timerRef.current); // Clear any previous timer
-
-    if (isOpen) { // This `isOpen` is the current, up-to-date state
+    clearInterval(timerRef.current);
+    if (isOpen) {
       timerRef.current = setInterval(() => {
         setActivityTime((prev) => {
           const newTime = prev + 1;
@@ -346,10 +300,8 @@ const Match = () => {
         });
       }, 1000);
     }
-
-    return () => clearInterval(timerRef.current); // Cleanup function
+    return () => clearInterval(timerRef.current);
   }, [isOpen, isBrowser]);
-
 
   const handleAddMatch = () => {
     setMatches((prev) => {
@@ -371,7 +323,7 @@ const Match = () => {
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(newMatches));
       }
-      setMatchCount(newMatches.length); // Update match count
+      setMatchCount(newMatches.length);
       return newMatches;
     });
     setShowMenuId(null);
@@ -382,27 +334,22 @@ const Match = () => {
   };
 
   const getAvailableMembers = (currentMatch, currentField) => {
-    // Players already selected in the CURRENT match being edited
     const selectedPlayersInCurrentMatch = new Set(
       Object.entries(currentMatch)
         .filter(
           ([key, value]) =>
             ["A1", "A2", "B1", "B2"].includes(key) &&
-            key !== currentField && // Exclude the field being changed itself
+            key !== currentField &&
             value
         )
         .map(([, value]) => value)
     );
 
-    // Players currently in "playing" status in ANY OTHER match
     const playersInPlayingMatches = new Set();
     matches.forEach((match) => {
-      // Ensure we don't consider the current match itself for "playing" status exclusion
-      // if it's the one currently being edited and its status is being changed.
-      // This is primarily to prevent self-exclusion issues.
       if (
         match.matchId !== currentMatch.matchId &&
-        match.status === "กำลังแข่งขัน" // Use Thai for "playing"
+        match.status === "กำลังแข่งขัน"
       ) {
         [match.A1, match.A2, match.B1, match.B2]
           .filter(Boolean)
@@ -412,20 +359,12 @@ const Match = () => {
       }
     });
 
-    // Filter available members:
-    // 1. Must not be already selected in the current match (unless it's the current field's existing value).
-    // 2. Must not be playing in another match.
     return members.filter((mem) => {
       const isCurrentlySelectedInThisField =
         mem.name === currentMatch[currentField];
       const isSelectedInOtherFieldInCurrentMatch =
         selectedPlayersInCurrentMatch.has(mem.name);
       const isPlayingInAnotherMatch = playersInPlayingMatches.has(mem.name);
-
-      // A member is available if:
-      // - They are the player currently selected in this field (so they remain in the dropdown)
-      // OR
-      // - They are NOT selected in another field in the current match AND they are NOT playing in another match.
       return (
         isCurrentlySelectedInThisField ||
         (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherMatch)
@@ -433,36 +372,112 @@ const Match = () => {
     });
   };
 
+  const getAvailableCourts = (currentMatch) => {
+    const courtsInPlayingMatches = new Set();
+    matches.forEach((match) => {
+      if (
+        match.matchId !== currentMatch.matchId &&
+        match.status === "กำลังแข่งขัน" &&
+        match.court
+      ) {
+        courtsInPlayingMatches.add(match.court);
+      }
+    });
+    return courts.filter((court) => {
+      const isCurrentlySelectedInThisField = court === currentMatch.court;
+      const isPlayingInAnotherMatch = courtsInPlayingMatches.has(court);
+      return isCurrentlySelectedInThisField || !isPlayingInAnotherMatch;
+    });
+  };
+
+  const showIncompleteForPlayingToast = () => {
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 3500,
+      timerProgressBar: true,
+      icon: 'error',
+      title: 'กรุณากรอก ผู้เล่น, สนาม, และลูก ก่อนเริ่มการแข่งขัน',
+      didOpen: (toast) => {
+        toast.onmouseenter = Swal.stopTimer;
+        toast.onmouseleave = Swal.resumeTimer;
+      }
+    });
+  };
+
+  const showIncompleteForFinishingToast = () => {
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 3500,
+      timerProgressBar: true,
+      icon: 'error',
+      title: 'กรุณากรอกข้อมูลทั้งหมด รวมถึงผลการแข่งขันให้ครบถ้วน',
+      didOpen: (toast) => {
+        toast.onmouseenter = Swal.stopTimer;
+        toast.onmouseleave = Swal.resumeTimer;
+      }
+    });
+  };
+
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
       const updated = [...prev];
-      const oldStatus = updated[idx].status;
-      const oldBalls = parseInt(updated[idx].balls) || 0; // Capture old balls for decrement
+      const matchBeingUpdated = { ...updated[idx] };
 
-      updated[idx][field] = value;
-      let newStatus = updated[idx].status; // Current status after update
-
-      if (field === "result") {
-        updated[idx].score = getScoreByResult(value);
-        if (value && newStatus !== "จบการแข่งขัน") { // Set status to 'finished' if result is selected
-          newStatus = "จบการแข่งขัน";
-          updated[idx].status = newStatus;
-        } else if (!value && newStatus === "จบการแข่งขัน") {
-          newStatus = ""; // Revert status if result is cleared from a finished game
-          updated[idx].status = newStatus;
+      // --- REVISED VALIDATION LOGIC ---
+      if (field === "status" && value === "กำลังแข่งขัน") {
+        const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
+        if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
+          showIncompleteForPlayingToast();
+          return prev;
         }
       }
 
-      // Logic to update gamesPlayed and ballsUsed for the *current session*
-      const playersInCurrentMatch = [
-        updated[idx].A1,
-        updated[idx].A2,
-        updated[idx].B1,
-        updated[idx].B2,
-      ].filter(Boolean);
-      const ballsInCurrentGame = parseInt(updated[idx].balls) || 0;
+      if (field === "status" && value === "จบการแข่งขัน") {
+        const { A1, A2, B1, B2, court, balls, result } = matchBeingUpdated;
+        if (!A1 || !A2 || !B1 || !B2 || !court || !balls || !result) {
+          showIncompleteForFinishingToast();
+          return prev;
+        }
+      }
 
-      // Handle status change from non-finished to finished
+      if (field === "result" && value) {
+        const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
+        if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
+          showIncompleteForFinishingToast();
+          return prev;
+        }
+      }
+      // --- END OF REVISED VALIDATION LOGIC ---
+
+      const oldStatus = matchBeingUpdated.status;
+      const oldBalls = parseInt(matchBeingUpdated.balls) || 0;
+
+      matchBeingUpdated[field] = value;
+      let newStatus = matchBeingUpdated.status;
+
+      if (field === "result") {
+        matchBeingUpdated.score = getScoreByResult(value);
+        if (value && newStatus !== "จบการแข่งขัน") {
+          newStatus = "จบการแข่งขัน";
+          matchBeingUpdated.status = newStatus;
+        } else if (!value && newStatus === "จบการแข่งขัน") {
+          newStatus = "";
+          matchBeingUpdated.status = newStatus;
+        }
+      }
+
+      const playersInCurrentMatch = [
+        matchBeingUpdated.A1,
+        matchBeingUpdated.A2,
+        matchBeingUpdated.B1,
+        matchBeingUpdated.B2,
+      ].filter(Boolean);
+      const ballsInCurrentGame = parseInt(matchBeingUpdated.balls) || 0;
+
       if (newStatus === "จบการแข่งขัน" && oldStatus !== "จบการแข่งขัน") {
         setMembers((prevMembers) =>
           prevMembers.map((member) =>
@@ -476,7 +491,6 @@ const Match = () => {
           )
         );
       }
-      // Handle status change from finished to non-finished
       else if (newStatus !== "จบการแข่งขัน" && oldStatus === "จบการแข่งขัน") {
         setMembers((prevMembers) =>
           prevMembers.map((member) =>
@@ -490,11 +504,10 @@ const Match = () => {
           )
         );
       }
-      // Handle balls change for an already finished match
       else if (
         field === "balls" &&
-        updated[idx].status === "จบการแข่งขัน" &&
-        updated[idx].result
+        matchBeingUpdated.status === "จบการแข่งขัน" &&
+        matchBeingUpdated.result
       ) {
         const newBalls = parseInt(value) || 0;
         setMembers((prevMembers) =>
@@ -502,7 +515,7 @@ const Match = () => {
             if (playersInCurrentMatch.includes(member.name)) {
               return {
                 ...member,
-                ballsUsed: member.ballsUsed - oldBalls + newBalls, // Adjust ballsUsed
+                ballsUsed: member.ballsUsed - oldBalls + newBalls,
               };
             }
             return member;
@@ -510,16 +523,12 @@ const Match = () => {
         );
       }
 
-      // Ensure status is reset if balls or result are cleared from a previously finished game
       if (
         oldStatus === "จบการแข่งขัน" &&
-        newStatus === "จบการแข่งขัน" && // was finished, still finished (not changed by direct status dropdown)
-        (!updated[idx].balls || !updated[idx].result)
+        newStatus === "จบการแข่งขัน" &&
+        (!matchBeingUpdated.balls || !matchBeingUpdated.result)
       ) {
-        // but content became empty
-        updated[idx].status = ""; // Force status to be empty
-        // Need to decrement gamesPlayed and ballsUsed here because the above "newStatus !== 'finished' && oldStatus === 'finished'" block
-        // wouldn't have caught this internal status change.
+        matchBeingUpdated.status = "";
         setMembers((prevMembers) =>
           prevMembers.map((member) =>
             playersInCurrentMatch.includes(member.name)
@@ -533,6 +542,7 @@ const Match = () => {
         );
       }
 
+      updated[idx] = matchBeingUpdated;
 
       if (isBrowser) {
         localStorage.setItem("matches", JSON.stringify(updated));
@@ -553,9 +563,7 @@ const Match = () => {
       </option>
     ));
 
-  // ส่วนที่ 2: ฟังก์ชัน handleStartGroup
-  // โค้ดที่คุณให้มาถูกต้องสำหรับฟังก์ชันนี้
-  const handleStartGroup = async () => { // Made async
+  const handleStartGroup = async () => {
     if (!topic) {
       Swal.fire({
         title: "กรุณาระบุหัวเรื่อง",
@@ -563,27 +571,23 @@ const Match = () => {
         icon:"warning"});
       return;
     }
-    // Set localStorage items first, including clearing matches
     if (isBrowser) {
       localStorage.setItem("isOpen", "true");
-      localStorage.setItem("matches", JSON.stringify([])); // Explicitly clear matches in localStorage <<< สำคัญมากสำหรับรีเซ็ต!
+      localStorage.setItem("matches", JSON.stringify([]));
       localStorage.setItem("activityTime", "0");
       localStorage.removeItem("sessionMembers");
-      localStorage.setItem("topic", topic); // Ensure topic is saved here
+      localStorage.setItem("topic", topic);
     }
 
-    // Update local state variables
     setIsOpen(true);
     setActivityTime(0);
-    setMatches([]); // Clear matches state
+    setMatches([]);
     setCurrentPage(1);
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
-    setMatchCount(0); // Reset match count when starting new session
+    setMatchCount(0);
 
-    // Then, fetch members. This *will* set `members` state, ensuring session games/balls are 0.
-    // Await it to ensure state is set before the function completes.
-    await fetchMembers(true); // <<< ถูกต้อง: เรียก fetchMembers พร้อม `true` เพื่อระบุว่าเป็นการเริ่มเซสชันใหม่
+    await fetchMembers(true);
   };
 
   const handleEndGroup = async () => {
@@ -593,7 +597,7 @@ const Match = () => {
             "กรุณาเพิ่ม Match ก่อนปิดก๊วน หรือกด 'ยกเลิก' เพื่อกลับไปจัดการ Match",
             "info"
         );
-        resetSession(); // Still reset the session state even if no matches to save
+        resetSession();
         return;
     }
 
@@ -633,21 +637,19 @@ const Match = () => {
             throw new Error("User data not found. Please log in again.");
           }
 
-          // Aggregate scores and wins for members
-          const memberUpdates = {}; // For score and wins
-          const memberSessionStats = {}; // For current session games and balls
+          const memberUpdates = {};
+          const memberSessionStats = {};
 
           matches.forEach((match) => {
-            if (match.status === "จบการแข่งขัน") { // Use Thai for "finished"
+            if (match.status === "จบการแข่งขัน") {
               const playersInMatch = [
                 match.A1,
                 match.A2,
                 match.B1,
-                match.B2, // Corrected: removed duplicate B1
+                match.B2,
               ].filter(Boolean);
-              const ballsInGame = parseInt(match.balls) || 0; // Get balls for this specific match
+              const ballsInGame = parseInt(match.balls) || 0;
 
-              // Aggregate scores and wins
               if (match.result === "A") {
                 playersInMatch.forEach((player) => {
                   if (!memberUpdates[player])
@@ -674,7 +676,6 @@ const Match = () => {
                 });
               }
 
-              // Aggregate current session gamesPlayed and ballsUsed
               playersInMatch.forEach(player => {
                   if (!memberSessionStats[player]) {
                       memberSessionStats[player] = { games: 0, balls: 0 };
@@ -685,8 +686,7 @@ const Match = () => {
             }
           });
 
-          // Update member scores, wins, totalGamesPlayed, and totalBallsUsed in Firebase
-          for (const playerName of members.map(m => m.name)) { // Iterate through all active members
+          for (const playerName of members.map(m => m.name)) {
             const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
             const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
 
@@ -708,8 +708,8 @@ const Match = () => {
                 {
                   score: currentScore + data.scoreToAdd,
                   wins: currentWins + data.winsToAdd,
-                  totalGamesPlayed: currentTotalGamesPlayed + sessionStats.games, // Update cumulative
-                  totalBallsUsed: currentTotalBallsUsed + sessionStats.balls,     // Update cumulative
+                  totalGamesPlayed: currentTotalGamesPlayed + sessionStats.games,
+                  totalBallsUsed: currentTotalBallsUsed + sessionStats.balls,
                 }
               );
             }
@@ -721,11 +721,11 @@ const Match = () => {
             matchDate,
             totalTime: activityTime,
             matches,
-            ballPrice, // Save cost parameters with the match
-            courtFee, //
-            courtFeePerGame, //
-            fixedCourtFeePerPerson, //
-            organizeFee, //
+            ballPrice,
+            courtFee,
+            courtFeePerGame,
+            fixedCourtFeePerPerson,
+            organizeFee,
             savedAt: serverTimestamp(),
           });
           Swal.fire(
@@ -734,7 +734,7 @@ const Match = () => {
             "success"
           );
           resetSession();
-          fetchMembers(false); // Call fetchMembers after session reset to get latest cumulative totals
+          fetchMembers(false);
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
           Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
@@ -756,22 +756,18 @@ const Match = () => {
     }).then((result) => {
       if (result.isConfirmed) {
         setMatches((prevMatches) => {
-          const matchToDelete = prevMatches[idxToDelete];
           const updatedMatches = prevMatches.filter(
             (_, idx) => idx !== idxToDelete
           );
-          // Adjust matchId for remaining matches to keep them sequential
           const reIndexedMatches = updatedMatches.map((match, idx) => ({
             ...match,
             matchId: padId(idx + 1, 4),
           }));
 
-          // Recalculate gamesPlayed and ballsUsed for the *current session* after deletion
-          // This must re-evaluate all finished matches in the *remaining* list
           const tempGamesPlayed = {};
           const tempBallsUsed = {};
           reIndexedMatches.forEach((match) => {
-            if (match.status === "จบการแข่งขัน") { // Use Thai for "finished"
+            if (match.status === "จบการแข่งขัน") {
               const playersInMatch = [
                 match.A1,
                 match.A2,
@@ -790,15 +786,15 @@ const Match = () => {
           setMembers((prevMembers) =>
             prevMembers.map((member) => ({
               ...member,
-              gamesPlayed: tempGamesPlayed[member.name] || 0, // Update current session games
-              ballsUsed: tempBallsUsed[member.name] || 0,     // Update current session balls
+              gamesPlayed: tempGamesPlayed[member.name] || 0,
+              ballsUsed: tempBallsUsed[member.name] || 0,
             }))
           );
 
           if (isBrowser) {
             localStorage.setItem("matches", JSON.stringify(reIndexedMatches));
           }
-          setMatchCount(reIndexedMatches.length); // Update match count after deletion
+          setMatchCount(reIndexedMatches.length);
           Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
           return reIndexedMatches;
         });
@@ -810,9 +806,7 @@ const Match = () => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = seconds % 60;
-
     const pad = (num) => String(num).padStart(2, "0");
-
     if (hours > 0) {
       return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
     } else {
@@ -820,17 +814,12 @@ const Match = () => {
     }
   };
 
-  // Pagination Logic
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
   const paginatedMatches = matches.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  // Determine if there are unfinished matches for disabling "ปิดก๊วน"
-  const cannotFinish = matches.some((m) => m.status !== "จบการแข่งขัน");
-
-  // NEW: Function to calculate summary for a specific player
   const calculatePlayerSummary = () => {
     if (!selectedMemberForEarlyExit) {
       Swal.fire("กรุณาเลือกสมาชิกที่ต้องการคำนวณ", "", "warning");
@@ -851,7 +840,6 @@ const Match = () => {
       }
 
     const player = members.find((mem) => mem.name === selectedMemberForEarlyExit);
-
     if (!player) {
       Swal.fire("ไม่พบข้อมูลสมาชิก", "กรุณาลองใหม่อีกครั้ง", "error");
       return;
@@ -862,22 +850,19 @@ const Match = () => {
     const parsedCourtFeePerGame = parseFloat(courtFeePerGame) || 0;
     const parsedFixedCourtFeePerPerson =
       parseFloat(fixedCourtFeePerPerson) || 0;
-    const parsedOrganizeFee = parseFloat(organizeFee) || 0; // Can be 0
+    const parsedOrganizeFee = parseFloat(organizeFee) || 0;
 
-    // Use current session's gamesPlayed and ballsUsed for early exit calculation
     const gamesPlayed = player.gamesPlayed;
     const ballsUsed = player.ballsUsed || 0;
-
     const ballCost = ballsUsed * parsedBallPrice;
     let courtCostPerPerson = 0;
 
-    // Logic for court cost, similar to MatchDetails.js
     if (parsedFixedCourtFeePerPerson > 0) {
       courtCostPerPerson = parsedFixedCourtFeePerPerson;
     } else if (parsedCourtFeePerGame > 0) {
       courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
     } else if (parsedCourtFee > 0) {
-      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0).length; // Members who have played at least one game in this session
+      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0).length;
       courtCostPerPerson =
         totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
@@ -916,18 +901,15 @@ const Match = () => {
     });
   };
 
-  // NEW: Function to clear early exit selection and result
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
   };
 
-  // Determine which court fee input is currently active/filled for display purposes
   const isCourtFeeActive = courtFee > 0;
   const isCourtFeePerGameActive = courtFeePerGame > 0;
   const isFixedCourtFeePerPersonActive = fixedCourtFeePerPerson > 0;
 
-  // Handlers for court fee changes, ensuring only one is active
   const handleCourtFeeChange = (e) => {
     const value = parseFloat(e.target.value) || 0;
     setCourtFee(value);
@@ -955,7 +937,6 @@ const Match = () => {
     }
   };
 
-  // NEW: Function to clear all cost settings
   const handleClearCostSettings = () => {
     Swal.fire({
       title: "คุณแน่ใจหรือไม่?",
@@ -983,12 +964,11 @@ const Match = () => {
     <div
       style={{
         padding: "15px",
-        backgroundColor: "#f0f2f5", // Lighter background for the entire page
+        backgroundColor: "#f0f2f5",
         minHeight: "100vh",
         fontFamily: "'Kanit', sans-serif",
       }}
     >
-      {/* Control Panel Card */}
       <div className="card control-panel-card">
         <div className="control-panel">
           <div className="date-topic-group">
@@ -1001,7 +981,7 @@ const Match = () => {
                 onChange={(e) => setMatchDate(e.target.value)}
                 className="control-input"
                 style={{ minWidth: "160px" }}
-                disabled={isOpen} // Disable if group is open
+                disabled={isOpen}
               />
             </div>
             <div className="input-group">
@@ -1014,9 +994,9 @@ const Match = () => {
                 placeholder="เช่น ก๊วนตอนเย็น, ก๊วนพิเศษ"
                 className="control-input"
                 style={{
-                  border: topic ? "1px solid #ccc" : "1px solid #FFD700",
-                }} // Conditional border
-                disabled={isOpen} // Disable if group is open
+                  border: topic ? "1px solid #ccc" : "1px solid #f44336",
+                }}
+                disabled={isOpen}
               />
             </div>
           </div>
@@ -1043,7 +1023,6 @@ const Match = () => {
         </div>
       </div>
 
-      {/* NEW: Input Section for Cost Parameters & Early Exit - Combined Card */}
       <div className="card financial-summary-card">
         <div
           style={{
@@ -1051,16 +1030,16 @@ const Match = () => {
             justifyContent: "space-between",
             alignItems: "center",
             marginBottom: "15px",
-            borderBottom: isCostSettingsOpen ? "1px solid #eee" : "none", // Add border only when open
+            borderBottom: isCostSettingsOpen ? "1px solid #eee" : "none",
             paddingBottom: isCostSettingsOpen ? "10px" : "0",
-            cursor: "pointer", // Indicate clickability
+            cursor: "pointer",
           }}
           onClick={() => setIsCostSettingsOpen(!isCostSettingsOpen)}
         >
           <h3
             style={{
-              fontSize: "15px", // Slightly larger font for main heading
-              margin: 0, // Remove default margin
+              fontSize: "15px",
+              margin: 0,
               color: "#222",
             }}
           >
@@ -1068,7 +1047,7 @@ const Match = () => {
           </h3>
           <span
             style={{
-              fontSize: "20px", // Larger plus sign
+              fontSize: "20px",
               fontWeight: "bold",
               transition: "transform 0.3s ease",
               transform: isCostSettingsOpen ? "rotate(45deg)" : "rotate(0deg)",
@@ -1079,17 +1058,16 @@ const Match = () => {
           </span>
         </div>
 
-        {/* Collapsible content wrapper for cost settings */}
         <div
           ref={contentRef}
           style={{
             maxHeight: isCostSettingsOpen
               ? contentRef.current
                 ? contentRef.current.scrollHeight + "px"
-                : "500px" // Fallback large height
-              : "0", // Dynamic height for smooth transition
+                : "500px"
+              : "0",
             overflow: "hidden",
-            transition: "max-height 0.4s ease-in-out", // Smooth transition
+            transition: "max-height 0.4s ease-in-out",
           }}
         >
           <div>
@@ -1098,10 +1076,9 @@ const Match = () => {
                 display: "flex",
                 gap: "20px",
                 flexWrap: "wrap",
-                marginBottom: "25px", // Increased margin for separation
+                marginBottom: "25px",
               }}
             >
-              {/* Court Fee Inputs */}
               <div className="cost-input-group">
                 <h4 className="cost-input-heading">
                   ค่าสนาม: (เลือกเพียง 1 รูปแบบ)
@@ -1166,7 +1143,6 @@ const Match = () => {
                   </div>
                 </div>
               </div>
-              {/* Ball Price and Organize Fee Inputs */}
               <div className="cost-input-group">
                 <h4 className="cost-input-heading">ค่าลูกและค่าจัดก๊วน:</h4>
                 <div
@@ -1199,11 +1175,10 @@ const Match = () => {
                     />
                   </div>
                 </div>
-                {/* NEW: Clear Settings Button */}
                 <button
                   onClick={handleClearCostSettings}
                   className="action-button clear-settings-button"
-                  style={{ marginTop: "20px", backgroundColor: "#dc3545" }} // Added margin-top for spacing
+                  style={{ marginTop: "20px", backgroundColor: "#dc3545" }}
                 >
                   ล้างการตั้งค่าทั้งหมด
                 </button>
@@ -1212,7 +1187,6 @@ const Match = () => {
           </div>
         </div>
 
-        {/* Early Exit Calculation Section - Now always visible within Financial Summary Card */}
         <div className="early-exit-section">
           <h4 className="early-exit-heading">คำนวณยอดสำหรับสมาชิกที่ต้องการออกก่อน</h4>
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -1231,7 +1205,7 @@ const Match = () => {
             <button
               onClick={calculatePlayerSummary}
               className="action-button calculate-button"
-              disabled={!isOpen || !selectedMemberForEarlyExit} // Disable if group not open or no member selected
+              disabled={!isOpen || !selectedMemberForEarlyExit}
             >
               คำนวณยอด
             </button>
@@ -1246,25 +1220,26 @@ const Match = () => {
         </div>
       </div>
 
-      {/* Match Table Card */}
       <div className="card match-table-card">
-        {/* NEW: Display Match Count & Region Selector - Moved here into match-table-card */}
         <div
           style={{
             textAlign: "left",
             marginBottom: "15px",
-            fontSize: "14px", // Adjusted font size
+            fontSize: "14px",
             fontWeight: "600",
             color: "#333",
             padding: "10px 0",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            flexWrap: "wrap", // Added flex-wrap for responsiveness
-            gap: "10px" // Added gap for spacing
+            flexWrap: "wrap",
+            gap: "20px"
           }}
         >
-          <span>จำนวน Match ทั้งหมด: {matchCount}</span>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>จำนวน Match ทั้งหมด: {matchCount}</span>
+            <span style={{color: '#007bff'}}>จำนวนลูกทั้งหมดที่ใช้: {totalBallsInSession}</span>
+          </div>
           <div className="region-selector-inline">
             <label
               htmlFor="region-select"
@@ -1285,7 +1260,7 @@ const Match = () => {
                 width: "auto",
                 marginLeft: "8px",
               }}
-              disabled={isOpen} // Disable if group is open
+              disabled={isOpen}
             >
               <option value="ภาคอีสาน">ภาคอีสาน</option>
               <option value="ภาคกลาง">ภาคกลาง</option>
@@ -1299,7 +1274,7 @@ const Match = () => {
           </div>
         )}
         {matches.length > 0 && (
-          <div className="match-table-wrapper"> {/* New wrapper for overflow-x */}
+          <div className="match-table-wrapper">
             <table className="match-table">
               <thead>
                 <tr>
@@ -1330,11 +1305,11 @@ const Match = () => {
                             e.target.value
                           )
                         }
-                        style={{ border: match.court ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        style={{ border: match.court ? "1px solid #ddd" : "1px solid #f44336" }}
                         disabled={match.status === "จบการแข่งขัน"}
                       >
                         <option value="">เลือกสนาม</option>
-                        {courts.map((court) => (
+                        {getAvailableCourts(match).map((court) => (
                           <option key={court} value={court}>
                             {court}
                           </option>
@@ -1351,7 +1326,7 @@ const Match = () => {
                             e.target.value
                           )
                         }
-                        style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        style={{ border: match.A1 ? "1px solid #ddd" : "1px solid #f44336" }}
                         disabled={match.status === "จบการแข่งขัน"}
                       >
                         <option value="">เลือกผู้เล่น A1</option>
@@ -1368,7 +1343,7 @@ const Match = () => {
                             e.target.value
                           )
                         }
-                        style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        style={{ border: match.A2 ? "1px solid #ddd" : "1px solid #f44336" }}
                         disabled={match.status === "จบการแข่งขัน"}
                       >
                         <option value="">เลือกผู้เล่น A2</option>
@@ -1385,7 +1360,7 @@ const Match = () => {
                             e.target.value
                           )
                         }
-                        style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        style={{ border: match.B1 ? "1px solid #ddd" : "1px solid #f44336" }}
                         disabled={match.status === "จบการแข่งขัน"}
                       >
                         <option value="">เลือกผู้เล่น B1</option>
@@ -1402,7 +1377,7 @@ const Match = () => {
                             e.target.value
                           )
                         }
-                        style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #FFD700" }}
+                        style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #f44336" }}
                         disabled={match.status === "จบการแข่งขัน"}
                       >
                         <option value="">เลือกผู้เล่น B2</option>
@@ -1422,7 +1397,7 @@ const Match = () => {
                         className="balls-select"
                         style={{
                           backgroundColor: match.balls ? "#e6f7ff" : "#fff",
-                          border: match.balls ? "1px solid #ddd" : "1px solid #FFD700", // Conditional border
+                          border: match.balls ? "1px solid #ddd" : "1px solid #f44336",
                         }}
                         disabled={match.status === "จบการแข่งขัน"}
                       >
@@ -1448,7 +1423,7 @@ const Match = () => {
                         style={{
                           backgroundColor: match.result ? "#e6f7ff" : "#fff",
                         }}
-                        disabled={match.status === "จบการแข่งขัน"} // Disable if finished
+                        disabled={match.status === "จบการแข่งขัน"}
                       >
                         {RESULT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -1541,20 +1516,13 @@ const Match = () => {
       </div>
 
       <style jsx>{`
-        /* General Card Styling */
         .card {
           background-color: #ffffff;
           padding: 25px;
           border-radius: 10px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-          margin-bottom: 30px; /* Space between cards */
+          margin-bottom: 30px;
         }
-
-        /* Control Panel Specific Adjustments */
-        .control-panel-card {
-          /* No additional styling needed here, .control-panel already defines flex behavior */
-        }
-
         .control-panel {
           display: flex;
           flex-direction: row;
@@ -1563,60 +1531,50 @@ const Match = () => {
           justify-content: space-between;
           align-items: flex-start;
         }
-
-        /* Financial Summary Card Specific Adjustments */
         .financial-summary-card {
-          /* Inherits from .card */
-          padding-top: 15px; /* Adjust padding for collapsible header */
+          padding-top: 15px;
         }
-
         .cost-input-group {
           padding: 15px;
           border: 1px solid #d0d0d0;
           border-radius: 5px;
           background-color: #f9f9f9;
           flex: 1;
-          min-width: 280px; /* Adjusted min-width for inputs */
+          min-width: 280px;
         }
-
         .cost-input-heading {
           font-size: 16px;
           margin-bottom: 10px;
           color: #333;
         }
-
         .cost-label {
           display: block;
           margin-bottom: 5px;
           font-size: 14px;
           color: #555;
         }
-
         .cost-input {
           padding: 8px 12px;
           border-radius: 5px;
           border: 1px solid #ccc;
           font-size: 15px;
-          width: 140px; /* Default width */
+          width: 140px;
           box-sizing: border-box;
         }
-
         .early-exit-section {
           margin-top: 20px;
           padding: 15px;
           border: 1px solid #d0d0d0;
           border-radius: 5px;
-          background-color: #e9f7ef; /* Light green background */
+          background-color: #e9f7ef;
         }
-
         .early-exit-heading {
           font-size: 16px;
           margin-bottom: 10px;
           color: #28a745;
         }
-
         .early-exit-select {
-          width: 15%; /* Initial width */
+          width: 15%;
           padding: 10px 15px;
           border: 1px solid #ccc;
           border-radius: 6px;
@@ -1626,7 +1584,6 @@ const Match = () => {
           background-color: #fff;
           cursor: pointer;
         }
-
         .action-button.calculate-button {
             background-color: #28a745;
             color: white;
@@ -1638,9 +1595,8 @@ const Match = () => {
             opacity: var(--button-opacity, 1);
             pointer-events: var(--button-pointer-events, auto);
         }
-
         .action-button.clear-button {
-            background-color: #6c757d; /* Gray color for clear button */
+            background-color: #6c757d;
             color: white;
             padding: 8px 15px;
             border-radius: 5px;
@@ -1650,8 +1606,8 @@ const Match = () => {
             opacity: var(--button-opacity, 1);
             pointer-events: var(--button-pointer-events, auto);
         }
-        .action-button.clear-settings-button { /* Style for the new clear settings button */
-            background-color: #dc3545; /* Red color */
+        .action-button.clear-settings-button {
+            background-color: #dc3545;
             color: white;
             padding: 8px 15px;
             border-radius: 5px;
@@ -1660,29 +1616,22 @@ const Match = () => {
             font-size: 15px;
             opacity: var(--button-opacity, 1);
             pointer-events: var(--button-pointer-events, auto);
-            width: fit-content; /* Adjust width to content */
+            width: fit-content;
         }
         .action-button.clear-settings-button:hover {
             background-color: #c82333;
         }
-
-        /* Match Table Card Specific Adjustments */
         .match-table-card {
-          /* Inherits from .card */
-          overflow-x: auto; /* Ensure table scrolling still works */
+          overflow-x: auto;
         }
-
         .match-table-wrapper {
-            overflow-x: auto; /* Ensure the table itself can scroll horizontally if needed */
+            overflow-x: auto;
         }
-
-
         .match-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 15px; /* Add some space above the table */
+          margin-top: 15px;
         }
-
         .match-table th,
         .match-table td {
           border: 1px solid #eee;
@@ -1691,22 +1640,17 @@ const Match = () => {
           font-size: 12px;
           white-space: nowrap;
         }
-
         .match-table th {
           background-color: #323943;
           font-weight: 600;
           color: #fff;
         }
-
-        /* Table Row Striping */
         .match-table tbody tr:nth-child(even) {
-          background-color: #f8f8f8; /* Light gray for even rows */
+          background-color: #f8f8f8;
         }
-
         .match-table tbody tr:hover {
-          background-color: #eaf6ff; /* Highlight on hover */
+          background-color: #eaf6ff;
         }
-
         .match-table td select,
         .match-table td input {
           width: 100%;
@@ -1716,19 +1660,15 @@ const Match = () => {
           font-size: 12px;
           box-sizing: border-box;
         }
-
         .no-matches-message {
           text-align: center;
           padding: 20px;
           color: #777;
-          background-color: #fdfdfd; /* Lighter background for message */
+          background-color: #fdfdfd;
           border-radius: 8px;
           margin-bottom: 20px;
-          border: 1px dashed #e0e0e0; /* Dashed border for visual cue */
+          border: 1px dashed #e0e0e0;
         }
-
-
-        /* Existing Styles (modified/copied below for context) */
         .date-topic-group,
         .action-time-group {
           display: flex;
@@ -1736,19 +1676,16 @@ const Match = () => {
           gap: 20px;
           align-items: center;
         }
-
         .input-group {
           display: flex;
           flex-direction: column;
         }
-
         .control-label {
           font-weight: 600;
           margin-bottom: 8px;
           color: #333;
           font-size: 15px;
         }
-
         .control-input {
           padding: 10px 15px;
           border: 1px solid #ccc;
@@ -1758,7 +1695,6 @@ const Match = () => {
           max-width: 100%;
           box-sizing: border-box;
         }
-
         .action-button {
           padding: 10px 25px;
           border: none;
@@ -1770,23 +1706,18 @@ const Match = () => {
           transition: background-color 0.3s ease;
           min-width: 120px;
         }
-
         .action-button.start-group {
           background-color: #4bf196;
         }
-
         .action-button.start-group:hover {
           background-color: #3fc57b;
         }
-
         .action-button.end-group {
           background-color: #f44336;
         }
-
         .action-button.end-group:hover {
           background-color: #d32f2f;
         }
-
         .activity-time-display {
           background-color: #e3f2fd;
           padding: 10px 15px;
@@ -1796,12 +1727,10 @@ const Match = () => {
           align-items: center;
           gap: 10px;
         }
-
         .match-table td select:disabled {
           background-color: #f0f0f0;
           cursor: not-allowed;
         }
-
         .match-table td select.status-select {
           -webkit-appearance: none;
           -moz-appearance: none;
@@ -1812,7 +1741,6 @@ const Match = () => {
           background-size: 12px auto;
           padding-right: 30px;
         }
-
         .score-display {
           display: block;
           padding: 8px 5px;
@@ -1820,12 +1748,10 @@ const Match = () => {
           border-radius: 4px;
           min-width: 40px;
         }
-
         .action-menu {
           position: relative;
           display: inline-block;
         }
-
         .action-menu-button {
           background: none;
           border: none;
@@ -1834,7 +1760,6 @@ const Match = () => {
           padding: 5px;
           line-height: 1;
         }
-
         .action-menu-dropdown {
           position: absolute;
           background-color: #f9f9f9;
@@ -1846,7 +1771,6 @@ const Match = () => {
           top: 100%;
           margin-top: 5px;
         }
-
         .action-menu-dropdown button {
           color: black;
           padding: 8px 12px;
@@ -1859,11 +1783,9 @@ const Match = () => {
           cursor: pointer;
           font-size: 14px;
         }
-
         .action-menu-dropdown button:hover {
           background-color: #f1f1f1;
         }
-
         .pagination-controls {
           display: flex;
           justify-content: center;
@@ -1874,7 +1796,6 @@ const Match = () => {
           background-color: #f2f2f2;
           border-radius: 8px;
         }
-
         .pagination-controls button {
           background-color: #007bff;
           color: white;
@@ -1885,22 +1806,18 @@ const Match = () => {
           font-size: 12px;
           transition: background-color 0.3s ease;
         }
-
         .pagination-controls button:hover:not(:disabled) {
           background-color: #0056b3;
         }
-
         .pagination-controls button:disabled {
           background-color: #cccccc;
           cursor: not-allowed;
         }
-
         .pagination-controls span {
           font-size: 15px;
           color: #333;
           font-weight: 500;
         }
-
         .add-match-button {
           display: block;
           width: fit-content;
@@ -1915,41 +1832,32 @@ const Match = () => {
           cursor: pointer;
           transition: background-color 0.3s ease;
         }
-
         .add-match-button:hover:not(:disabled) {
           background-color: #0056b3;
         }
-
         .add-match-button:disabled {
           background-color: #cccccc;
           cursor: not-allowed;
         }
-
-        /* Mobile Responsiveness */
         @media (max-width: 768px) {
           .control-panel {
             flex-direction: column;
             align-items: stretch;
           }
-
           .date-topic-group,
           .action-time-group {
             flex-direction: column;
             align-items: stretch;
           }
-
           .control-input {
             width: 100%;
           }
-
           .action-button {
             width: 100%;
           }
-
           .match-table thead {
             display: none;
           }
-
           .match-table,
           .match-table tbody,
           .match-table tr,
@@ -1957,7 +1865,6 @@ const Match = () => {
             display: block;
             width: 100%;
           }
-
           .match-table tr {
             margin-bottom: 15px;
             border: 1px solid #ddd;
@@ -1965,14 +1872,12 @@ const Match = () => {
             background-color: #fff;
             padding: 10px;
           }
-
           .match-table td {
             text-align: right;
             padding-left: 50%;
             position: relative;
             border: none;
           }
-
           .match-table td:before {
             content: attr(data-label);
             position: absolute;
@@ -1983,42 +1888,17 @@ const Match = () => {
             color: #555;
             font-size: 13px;
           }
-
-          /* Specific data-labels for clarity */
-          .match-table td:nth-of-type(1):before {
-            content: "Match ID";
-          }
-          .match-table td:nth-of-type(2):before {
-            content: "สนาม";
-          }
-          .match-table td:nth-of-type(3):before {
-            content: "ทีม A (ผู้เล่น 1)";
-          }
-          .match-table td:nth-of-type(4):before {
-            content: "ทีม A (ผู้เล่น 2)";
-          }
-          .match-table td:nth-of-type(5):before {
-            content: "ทีม B (ผู้เล่น 1)";
-          }
-          .match-table td:nth-of-type(6):before {
-            content: "ทีม B (ผู้เล่น 2)";
-          }
-          .match-table td:nth-of-type(7):before {
-            content: "ลูก";
-          }
-          .match-table td:nth-of-type(8):before {
-            content: "ผล";
-          }
-          .match-table td:nth-of-type(9):before {
-            content: "คะแนน";
-          }
-          .match-table td:nth-of-type(10):before {
-            content: "สถานะ";
-          }
-          .match-table td:nth-of-type(11):before {
-            content: "Action";
-          }
-
+          .match-table td:nth-of-type(1):before { content: "Match ID"; }
+          .match-table td:nth-of-type(2):before { content: "สนาม"; }
+          .match-table td:nth-of-type(3):before { content: "ทีม A (ผู้เล่น 1)"; }
+          .match-table td:nth-of-type(4):before { content: "ทีม A (ผู้เล่น 2)"; }
+          .match-table td:nth-of-type(5):before { content: "ทีม B (ผู้เล่น 1)"; }
+          .match-table td:nth-of-type(6):before { content: "ทีม B (ผู้เล่น 2)"; }
+          .match-table td:nth-of-type(7):before { content: "ลูก"; }
+          .match-table td:nth-of-type(8):before { content: "ผล"; }
+          .match-table td:nth-of-type(9):before { content: "คะแนน"; }
+          .match-table td:nth-of-type(10):before { content: "สถานะ"; }
+          .match-table td:nth-of-type(11):before { content: "Action"; }
           .match-table td select,
           .match-table td input {
             width: 100%;
@@ -2029,33 +1909,29 @@ const Match = () => {
           .match-table td select.status-select {
             background-position: right 10px center;
           }
-
           .match-table td .score-display {
             width: 100%;
             text-align: right;
           }
-
           .action-menu-dropdown {
             right: auto;
             left: 50%;
             transform: translateX(-50%);
             min-width: 150px;
           }
-
           .region-selector-inline {
             width: 100%;
             justify-content: flex-start;
           }
-
           .cost-input-group {
-            min-width: unset; /* Remove min-width on small screens */
-            width: 100%; /* Make it full width */
+            min-width: unset;
+            width: 100%;
           }
           .cost-input {
-            width: 100%; /* Make inputs full width on small screens */
+            width: 100%;
           }
           .early-exit-select {
-            width: 100%; /* Make select full width on small screens */
+            width: 100%;
             min-width: unset;
           }
         }
