@@ -304,33 +304,37 @@ const Match = () => {
   }, [isOpen, isBrowser]);
 
   const handleAddMatch = () => {
-    setMatches((prev) => {
-      const newMatches = [
-        ...prev,
-        {
-          matchId: padId(prev.length + 1, 4),
-          court: "",
-          A1: "",
-          A2: "",
-          B1: "",
-          B2: "",
-          balls: "",
-          result: "",
-          score: "",
-          status: "",
-        },
-      ];
-      if (isBrowser) {
-        localStorage.setItem("matches", JSON.stringify(newMatches));
-      }
-      setMatchCount(newMatches.length);
-      return newMatches;
-    });
-    setShowMenuId(null);
-    setTimeout(() => {
-      const newTotal = matches.length + 1;
-      setCurrentPage(Math.ceil(newTotal / ITEMS_PER_PAGE));
-    }, 100);
+      setMatches((prev) => {
+          const newMatches = [
+              ...prev,
+              {
+                  matchId: padId(prev.length + 1, 4),
+                  court: "",
+                  A1: "",
+                  A1Level: "", // เพิ่มฟิลด์สำหรับ Level ของ A1
+                  A2: "",
+                  A2Level: "", // เพิ่มฟิลด์สำหรับ Level ของ A2
+                  B1: "",
+                  B1Level: "", // เพิ่มฟิลด์สำหรับ Level ของ B1
+                  B2: "",
+                  B2Level: "", // เพิ่มฟิลด์สำหรับ Level ของ B2
+                  balls: "",
+                  result: "",
+                  score: "",
+                  status: "",
+              },
+          ];
+          if (isBrowser) {
+              localStorage.setItem("matches", JSON.stringify(newMatches));
+          }
+          setMatchCount(newMatches.length);
+          return newMatches;
+      });
+      setShowMenuId(null);
+      setTimeout(() => {
+          const newTotal = matches.length + 1;
+          setCurrentPage(Math.ceil(newTotal / ITEMS_PER_PAGE));
+      }, 100);
   };
 
   const getAvailableMembers = (currentMatch, currentField) => {
@@ -424,130 +428,146 @@ const Match = () => {
 
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
-      const updated = [...prev];
-      const matchBeingUpdated = { ...updated[idx] };
+        const updated = [...prev];
+        const matchBeingUpdated = { ...updated[idx] };
 
-      // --- REVISED VALIDATION LOGIC ---
-      if (field === "status" && value === "กำลังแข่งขัน") {
-        const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
-        if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
-          showIncompleteForPlayingToast();
-          return prev;
-        }
-      }
-
-      if (field === "status" && value === "จบการแข่งขัน") {
-        const { A1, A2, B1, B2, court, balls, result } = matchBeingUpdated;
-        if (!A1 || !A2 || !B1 || !B2 || !court || !balls || !result) {
-          showIncompleteForFinishingToast();
-          return prev;
-        }
-      }
-
-      if (field === "result" && value) {
-        const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
-        if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
-          showIncompleteForFinishingToast();
-          return prev;
-        }
-      }
-      // --- END OF REVISED VALIDATION LOGIC ---
-
-      const oldStatus = matchBeingUpdated.status;
-      const oldBalls = parseInt(matchBeingUpdated.balls) || 0;
-
-      matchBeingUpdated[field] = value;
-      let newStatus = matchBeingUpdated.status;
-
-      if (field === "result") {
-        matchBeingUpdated.score = getScoreByResult(value);
-        if (value && newStatus !== "จบการแข่งขัน") {
-          newStatus = "จบการแข่งขัน";
-          matchBeingUpdated.status = newStatus;
-        } else if (!value && newStatus === "จบการแข่งขัน") {
-          newStatus = "";
-          matchBeingUpdated.status = newStatus;
-        }
-      }
-
-      const playersInCurrentMatch = [
-        matchBeingUpdated.A1,
-        matchBeingUpdated.A2,
-        matchBeingUpdated.B1,
-        matchBeingUpdated.B2,
-      ].filter(Boolean);
-      const ballsInCurrentGame = parseInt(matchBeingUpdated.balls) || 0;
-
-      if (newStatus === "จบการแข่งขัน" && oldStatus !== "จบการแข่งขัน") {
-        setMembers((prevMembers) =>
-          prevMembers.map((member) =>
-            playersInCurrentMatch.includes(member.name)
-              ? {
-                  ...member,
-                  gamesPlayed: member.gamesPlayed + 1,
-                  ballsUsed: member.ballsUsed + ballsInCurrentGame,
-                }
-              : member
-          )
-        );
-      }
-      else if (newStatus !== "จบการแข่งขัน" && oldStatus === "จบการแข่งขัน") {
-        setMembers((prevMembers) =>
-          prevMembers.map((member) =>
-            playersInCurrentMatch.includes(member.name)
-              ? {
-                  ...member,
-                  gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                  ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
-                }
-              : member
-          )
-        );
-      }
-      else if (
-        field === "balls" &&
-        matchBeingUpdated.status === "จบการแข่งขัน" &&
-        matchBeingUpdated.result
-      ) {
-        const newBalls = parseInt(value) || 0;
-        setMembers((prevMembers) =>
-          prevMembers.map((member) => {
-            if (playersInCurrentMatch.includes(member.name)) {
-              return {
-                ...member,
-                ballsUsed: member.ballsUsed - oldBalls + newBalls,
-              };
+        // --- REVISED VALIDATION LOGIC ---
+        if (field === "status" && value === "กำลังแข่งขัน") {
+            const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
+            if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
+                showIncompleteForPlayingToast();
+                return prev;
             }
-            return member;
-          })
-        );
-      }
+        }
 
-      if (
-        oldStatus === "จบการแข่งขัน" &&
-        newStatus === "จบการแข่งขัน" &&
-        (!matchBeingUpdated.balls || !matchBeingUpdated.result)
-      ) {
-        matchBeingUpdated.status = "";
-        setMembers((prevMembers) =>
-          prevMembers.map((member) =>
-            playersInCurrentMatch.includes(member.name)
-              ? {
-                  ...member,
-                  gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                  ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
-                }
-              : member
-          )
-        );
-      }
+        if (field === "status" && value === "จบการแข่งขัน") {
+            const { A1, A2, B1, B2, court, balls, result } = matchBeingUpdated;
+            if (!A1 || !A2 || !B1 || !B2 || !court || !balls || !result) {
+                showIncompleteForFinishingToast();
+                return prev;
+            }
+        }
 
-      updated[idx] = matchBeingUpdated;
+        if (field === "result" && value) {
+            const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
+            if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
+                showIncompleteForFinishingToast();
+                return prev;
+            }
+        }
+        // --- END OF REVISED VALIDATION LOGIC ---
 
-      if (isBrowser) {
-        localStorage.setItem("matches", JSON.stringify(updated));
-      }
-      return updated;
+        const oldStatus = matchBeingUpdated.status;
+        const oldBalls = parseInt(matchBeingUpdated.balls) || 0;
+
+        // --- เพิ่มโค้ดส่วนนี้เพื่อบันทึก level ของผู้เล่น ---
+        // ตรวจสอบว่า field ที่กำลังเปลี่ยนเป็นชื่อผู้เล่นหรือไม่ (A1, A2, B1, B2)
+        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
+            matchBeingUpdated[field] = value; // กำหนดชื่อผู้เล่น
+            
+            // ค้นหา level ของผู้เล่นจาก members state
+            // (สมมติว่าคุณมี state 'members' ที่เก็บข้อมูลสมาชิกทั้งหมดรวมถึง 'level')
+            const member = members.find(m => m.name === value);
+            // กำหนด level ให้กับฟิลด์ Level ที่เกี่ยวข้อง เช่น A1Level, A2Level
+            matchBeingUpdated[`${field}Level`] = member ? member.level : ''; 
+        } else {
+            // สำหรับ field อื่นๆ ที่ไม่ใช่ผู้เล่น (court, balls, result, status)
+            matchBeingUpdated[field] = value;
+        }
+        // --- สิ้นสุดการเพิ่มโค้ด ---
+
+
+        let newStatus = matchBeingUpdated.status;
+
+        if (field === "result") {
+            matchBeingUpdated.score = getScoreByResult(value);
+            if (value && newStatus !== "จบการแข่งขัน") {
+                newStatus = "จบการแข่งขัน";
+                matchBeingUpdated.status = newStatus;
+            } else if (!value && newStatus === "จบการแข่งขัน") {
+                newStatus = "";
+                matchBeingUpdated.status = newStatus;
+            }
+        }
+
+        const playersInCurrentMatch = [
+            matchBeingUpdated.A1,
+            matchBeingUpdated.A2,
+            matchBeingUpdated.B1,
+            matchBeingUpdated.B2,
+        ].filter(Boolean);
+        const ballsInCurrentGame = parseInt(matchBeingUpdated.balls) || 0;
+
+        if (newStatus === "จบการแข่งขัน" && oldStatus !== "จบการแข่งขัน") {
+            setMembers((prevMembers) =>
+                prevMembers.map((member) =>
+                    playersInCurrentMatch.includes(member.name)
+                        ? {
+                            ...member,
+                            gamesPlayed: member.gamesPlayed + 1,
+                            ballsUsed: member.ballsUsed + ballsInCurrentGame,
+                        }
+                        : member
+                )
+            );
+        }
+        else if (newStatus !== "จบการแข่งขัน" && oldStatus === "จบการแข่งขัน") {
+            setMembers((prevMembers) =>
+                prevMembers.map((member) =>
+                    playersInCurrentMatch.includes(member.name)
+                        ? {
+                            ...member,
+                            gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                            ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
+                        }
+                        : member
+                )
+            );
+        }
+        else if (
+            field === "balls" &&
+            matchBeingUpdated.status === "จบการแข่งขัน" &&
+            matchBeingUpdated.result
+        ) {
+            const newBalls = parseInt(value) || 0;
+            setMembers((prevMembers) =>
+                prevMembers.map((member) => {
+                    if (playersInCurrentMatch.includes(member.name)) {
+                        return {
+                            ...member,
+                            ballsUsed: member.ballsUsed - oldBalls + newBalls,
+                        };
+                    }
+                    return member;
+                })
+            );
+        }
+
+        if (
+            oldStatus === "จบการแข่งขัน" &&
+            newStatus === "จบการแข่งขัน" &&
+            (!matchBeingUpdated.balls || !matchBeingUpdated.result)
+        ) {
+            matchBeingUpdated.status = "";
+            setMembers((prevMembers) =>
+                prevMembers.map((member) =>
+                    playersInCurrentMatch.includes(member.name)
+                        ? {
+                            ...member,
+                            gamesPlayed: Math.max(0, member.gamesPlayed - 1),
+                            ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
+                        }
+                        : member
+                )
+            );
+        }
+
+        updated[idx] = matchBeingUpdated;
+
+        if (isBrowser) {
+            localStorage.setItem("matches", JSON.stringify(updated));
+        }
+        return updated;
     });
   };
 
