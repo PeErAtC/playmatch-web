@@ -57,6 +57,7 @@ const MatchDetails = () => {
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
 
   const tableRef = useRef(null);
+  const gameDetailsTableRef = useRef(null);
 
   // Define a Toast mixin for subtle notifications
   const Toast = Swal.mixin({
@@ -532,12 +533,33 @@ const MatchDetails = () => {
     }
   };
 
+  const handleDownloadGameDetailsImage = async () => {
+    if (!gameDetailsTableRef.current || !matchData?.matches?.length) {
+      Swal.fire("ไม่มีข้อมูล", "ไม่มีข้อมูลเกมสำหรับดาวน์โหลดรูปภาพ", "warning");
+      return;
+    }
+    try {
+        const canvas = await html2canvas(gameDetailsTableRef.current, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+        });
+        const fileName = `GameDetails_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
+        saveAs(canvas.toDataURL("image/png"), fileName);
+        Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพรายละเอียดเกมสำเร็จ!' });
+    } catch (error) {
+        console.error("Error generating game details image:", error);
+        Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพรายละเอียดเกมได้", "error");
+    }
+  };
+
 
   if (loading) { return (<div style={{ textAlign: "center", padding: "50px" }}>Loading Match Details...</div>); }
   if (error) { return (<div style={{ textAlign: "center", padding: "50px", color: "red" }}>{error}</div>); }
   if (!matchData) { return (<div style={{ textAlign: "center", padding: "50px" }}>No Match Data Found.</div>); }
 
   const sortedMembers = Object.values(memberCalculations).sort((a, b) => b.score - a.score);
+  const totalBallsUsedInGames = matchData.matches?.reduce((sum, game) => sum + (parseInt(game.balls, 10) || 0), 0) || 0;
 
   return (
     <div style={{ padding: "30px", backgroundColor: "#f7f7f7", minHeight: "100vh", fontFamily: "'Kanit', sans-serif" }}>
@@ -617,7 +639,6 @@ const MatchDetails = () => {
         </div>
       </div>
 
-      {/* MODIFIED: ย้ายปุ่มดาวน์โหลดมาไว้ข้างบนตาราง */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
           {isDataCalculated && (
             <button
@@ -654,7 +675,7 @@ const MatchDetails = () => {
           )}
       </div>
 
-      <div ref={tableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '8px' }}>
+      <div ref={tableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '12px' }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
           <thead>
             <tr style={{ backgroundColor: "#323943", color: "white" }}>
@@ -668,7 +689,6 @@ const MatchDetails = () => {
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>จำนวนชนะ</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>คะแนน</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>Total (บาท)</th>
-              {/* MODIFIED: ลบ borderRight ของ th สุดท้ายออก */}
               <th style={{ padding: "12px 10px", textAlign: "center" }}>จ่ายแล้ว</th>
             </tr>
           </thead>
@@ -707,40 +727,102 @@ const MatchDetails = () => {
         </table>
       </div>
 
-      <h3 style={{ fontSize: "18px", marginBottom: "15px", borderBottom: "1px solid #eee", paddingBottom: "10px", marginTop: "30px" }}>รายละเอียดเกม:</h3>
-      <div style={{ overflowX: "auto", marginBottom: "30px", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
-          <thead>
-            <tr style={{ backgroundColor: "#323943", color: "white" }}>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>No.</th>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>Match ID</th>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>สนาม</th>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ทีม A</th>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ทีม B</th>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ลูกที่ใช้</th>
-              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ผล</th>
-              <th style={{ padding: "12px 10px", textAlign: "center" }}>Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matchData.matches && matchData.matches.length > 0 ? (
-              matchData.matches.map((game, index) => (
-                <tr key={index} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{index + 1}</td>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.matchId || ""}</td>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.court || ""}</td>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.A1 || ""}, {game.A2 || ""}</td>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.B1 || ""}, {game.B2 || ""}</td>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.balls || ""}</td>
-                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.result || ""}</td>
-                  <td style={{ padding: "10px", textAlign: "center" }}>{game.score || ""}</td>
+      {/* CORRECTED: New layout for Game Details Header */}
+      <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '30px',
+          borderBottom: '1px solid #eee',
+          paddingBottom: '10px',
+          marginBottom: '15px'
+      }}>
+        <h3 style={{ fontSize: "18px", margin: 0 }}>รายละเอียดเกม:</h3>
+        <div>
+          {matchData.matches && matchData.matches.length > 0 && (
+            <button
+              onClick={handleDownloadGameDetailsImage}
+              title="Download Game Details as Image"
+              style={{
+                background: '#ffffff',
+                border: '1px solid #ddd',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+                transition: 'all 0.2s ease-in-out',
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.backgroundColor = '#f5f5f5';
+                e.currentTarget.style.transform = 'scale(1.1)';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.backgroundColor = '#ffffff';
+                e.currentTarget.style.transform = 'scale(1.0)';
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+      
+      <div style={{ marginBottom: "30px" }}>
+        <div ref={gameDetailsTableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '12px' }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#323943", color: "white" }}>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>No.</th>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>Match ID</th>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>สนาม</th>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ทีม A</th>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ทีม B</th>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ลูกที่ใช้</th>
+                <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ผล</th>
+                <th style={{ padding: "12px 10px", textAlign: "center" }}>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matchData.matches && matchData.matches.length > 0 ? (
+                matchData.matches.map((game, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #eee" }}>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{index + 1}</td>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.matchId || ""}</td>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.court || ""}</td>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.A1 || ""}, {game.A2 || ""}</td>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.B1 || ""}, {game.B2 || ""}</td>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.balls || ""}</td>
+                    <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{game.result || ""}</td>
+                    <td style={{ padding: "10px", textAlign: "center" }}>{game.score || ""}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan="8" style={{ textAlign: "center", padding: "20px", color: "#777" }}>ไม่มีรายละเอียดเกมใน Match นี้.</td></tr>
+              )}
+            </tbody>
+            {matchData.matches && matchData.matches.length > 0 && (
+              <tfoot>
+                <tr style={{ backgroundColor: "#f0f0f0", fontWeight: "bold" }}>
+                  <td colSpan={5} style={{ padding: "10px", textAlign: "right", borderRight: "1px solid #eee" }}>
+                    รวมลูกที่ใช้ทั้งหมด:
+                  </td>
+                  <td style={{ padding: "10px", textAlign: "center", color: "#e63946" }}>
+                    {totalBallsUsedInGames}
+                  </td>
+                  <td colSpan={2} style={{ padding: "10px" }}></td>
                 </tr>
-              ))
-            ) : (
-              <tr><td colSpan="8" style={{ textAlign: "center", padding: "20px", color: "#777" }}>ไม่มีรายละเอียดเกมใน Match นี้.</td></tr>
+              </tfoot>
             )}
-          </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       <style jsx>{`
