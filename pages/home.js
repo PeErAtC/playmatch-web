@@ -210,7 +210,7 @@ const Home = () => {
   const [currentUserId, setCurrentUserId] = useState(null); // Added State to store userId
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [membersPerPage] = useState(30);
+  const [membersPerPage, setMembersPerPage] = useState(30); // <<< *** UPDATED ***
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [isResettingStatus, setIsResettingStatus] = useState(false); // New state for reset status button
 
@@ -632,7 +632,7 @@ const Home = () => {
         setHasMoreNext(false);
         setHasMorePrev(false);
     }
-}, [currentUserId, membersPerPage, sortConfig, levelOrder, search]); // Add search to dependencies
+  }, [currentUserId, membersPerPage, sortConfig, levelOrder, search]); // <<< *** UPDATED ***
 
 useEffect(() => {
     fetchUserData(); // Fetch username and userId on first component load
@@ -1123,24 +1123,45 @@ useEffect(() => {
           <span>จำนวนสมาชิกในหน้านี้: {members.length}</span> {/* Display count of members on current page */}
         </div>
 
-        <div className="pagination-controls">
-          <button
-            onClick={goToPrevPage}
-            className="pagination-button"
-            disabled={!hasMorePrev}
-          >
-            ย้อนกลับ
-          </button>
-          {/* Removed numeric page buttons for true cursor-based pagination */}
-          <span className="current-page-display">หน้า {currentPage}</span>
-          <button
-            onClick={goToNextPage}
-            className="pagination-button"
-            disabled={!hasMoreNext}
-          >
-            ถัดไป
-          </button>
+        {/* <<< *** MODIFIED UI: Swapped pagination and per-page controls *** >>> */}
+        <div className="table-controls-container">
+          <div className="pagination-controls">
+            <button
+              onClick={goToPrevPage}
+              className="pagination-button"
+              disabled={!hasMorePrev}
+            >
+              ย้อนกลับ
+            </button>
+            <span className="current-page-display">หน้า {currentPage}</span>
+            <button
+              onClick={goToNextPage}
+              className="pagination-button"
+              disabled={!hasMoreNext}
+            >
+              ถัดไป
+            </button>
+          </div>
+          <div className="per-page-selector">
+            <label htmlFor="members-per-page">แสดง:</label>
+            <select
+              id="members-per-page"
+              className="modern-input"
+              value={membersPerPage}
+              onChange={(e) => {
+                const newSize = Number(e.target.value);
+                setMembersPerPage(newSize);
+                setCurrentPage(1); // กลับไปหน้า 1 เสมอเมื่อเปลี่ยนจำนวนแสดงผล
+              }}
+            >
+              <option value="10">10 รายชื่อ</option>
+              <option value="20">20 รายชื่อ</option>
+              <option value="30">30 รายชื่อ</option>
+              <option value="50">50 รายชื่อ</option>
+            </select>
+          </div>
         </div>
+
 
         <div className="table-responsive-container">
           <table className="user-table">
@@ -1234,6 +1255,7 @@ useEffect(() => {
         .main-content {
           flex-grow: 1; /* This is the key: makes it fill remaining space */
           padding: 20px; /* Adjust as needed */
+          padding-bottom: 50px;
           margin-left: 0; /* Ensure no leftover margin from where sidebar used to be */
           width: auto; /* Reset any fixed width */
           max-width: 100%; /* Ensure it doesn't exceed 100% of parent */
@@ -1521,13 +1543,39 @@ useEffect(() => {
           color: var(--text-color, #555); /* Use theme variable */
         }
 
+        /* <<< *** NEW CSS *** >>> */
+        .table-controls-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap; 
+            gap: 15px;
+        }
+
+        .per-page-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .per-page-selector label {
+            font-size: 12px;
+            color: var(--text-color, #555);
+            white-space: nowrap;
+        }
+
+        .per-page-selector .modern-input {
+            width: auto; 
+            min-width: 120px;
+        }
+
         /* Pagination Controls */
         .pagination-controls {
           display: flex;
           justify-content: flex-start;
           align-items: center;
           gap: 8px;
-          margin-bottom: 20px;
         }
 
         .pagination-button {
