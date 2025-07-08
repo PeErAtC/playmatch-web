@@ -1,3 +1,5 @@
+// sidebar.jsx
+
 import { useState, useEffect } from "react";
 import {
   Users,
@@ -12,8 +14,8 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
-  Lock, // Import the Lock icon
-  CreditCard
+  Lock, 
+  Wallet  
 } from "lucide-react";
 import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
@@ -54,7 +56,7 @@ const allMenuList = [
   {
     label: "Payment",
     path: "/PaymentHistory",
-    icon: <CreditCard  size={20} strokeWidth={1.7} />,
+    icon: <Wallet   size={20} strokeWidth={1.7} />,
   },
 ];
 
@@ -68,6 +70,8 @@ export default function Sidebar({
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [groupName, setGroupName] = useState("");
   const [activePath, setActivePath] = useState("");
+  // <<< 1. เพิ่ม State เพื่อเก็บค่าการตั้งค่าการแจ้งเตือนวันเกิด
+  const [showBirthdayBadge, setShowBirthdayBadge] = useState(true);
 
   useEffect(() => {
     setActivePath(window.location.pathname);
@@ -79,6 +83,13 @@ export default function Sidebar({
       const group = localStorage.getItem("groupName");
       if (username) setLoggedInUsername(username);
       if (group) setGroupName(group);
+
+      // <<< 2. อ่านค่าการตั้งค่าจาก localStorage ตอน Sidebar โหลด
+      const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
+      // ถ้ามีค่าที่บันทึกไว้ ให้ใช้ค่านั้น, ถ้าไม่มี (โหลดครั้งแรก) ให้แสดงเป็น default (true)
+      if (savedBirthdayNotifications !== null) {
+        setShowBirthdayBadge(JSON.parse(savedBirthdayNotifications));
+      }
     }
   }, []);
 
@@ -91,10 +102,9 @@ export default function Sidebar({
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      // ตรวจสอบว่าคลิกอยู่นอก user-info และ dropdown-menu
       if (
         isDropdownOpen &&
-        !event.target.closest(".user-info") && // ต้องไม่คลิกที่ user-info
+        !event.target.closest(".user-info") &&
         !event.target.closest(".user-dropdown-menu")
       ) {
         setIsDropdownOpen(false);
@@ -107,21 +117,12 @@ export default function Sidebar({
     };
   }, [isDropdownOpen]);
 
-  // *** ลบส่วน filter นี้ออกไป เพราะเราต้องการแสดงทุกเมนูและใช้ logic การ disabled แทน ***
-  // const filteredMenuList = allMenuList.filter((item) => {
-  //   if (packageType === "Basic") {
-  //     return item.label !== "Ranking" && item.label !== "BirthDay";
-  //   }
-  //   return true;
-  // });
-
   return (
     <aside className={`sidebar ${isSidebarOpen ? "open" : "collapsed"}`}>
       <button className="sidebar-mobile-close-button" onClick={toggleSidebar}>
         <X size={24} />
       </button>
       <div className="sidebar-logo" onClick={toggleSidebar}>
-        {/* เปลี่ยนจาก div.logo-icon เป็น img แทรกเข้ามา */}
         <img
           src="/images/Logo-iconnew.png"
           alt="Company Logo"
@@ -134,18 +135,17 @@ export default function Sidebar({
       <hr className="sidebar-divider" />
       <nav className="sidebar-menu">
         {allMenuList.map((item) => {
-          // ตรวจสอบว่าเมนูควรจะถูก disabled หรือไม่
           const isDisabled = item.access && !item.access.includes(packageType);
           return (
             <a
               key={item.path}
-              href={isDisabled ? "#" : item.path} // ถ้า disabled ให้ลิงก์ไปที่ '#'
+              href={isDisabled ? "#" : item.path}
               className={`sidebar-menu-item ${
                 activePath === item.path ? "active" : ""
-              } ${isDisabled ? "disabled" : ""}`} // เพิ่ม class 'disabled'
+              } ${isDisabled ? "disabled" : ""}`}
               onClick={(e) => {
                 if (isDisabled) {
-                  e.preventDefault(); // ป้องกันการเปลี่ยนหน้า
+                  e.preventDefault();
                 }
               }}
             >
@@ -153,24 +153,23 @@ export default function Sidebar({
               {isSidebarOpen && (
                 <span className="menu-label">{item.label}</span>
               )}
+              {/* <<< 3. เพิ่มเงื่อนไข `&& showBirthdayBadge` เพื่อเช็คการตั้งค่าก่อนแสดง */}
               {item.label === "BirthDay" &&
                 birthDayCount > 0 &&
                 isSidebarOpen &&
-                !isDisabled && ( // แสดง badge เมื่อไม่ disabled
+                !isDisabled &&
+                showBirthdayBadge && ( // <<< เงื่อนไขใหม่
                   <span className="birthday-badge">{birthDayCount}</span>
                 )}
               {isDisabled && isSidebarOpen && (
-                <Lock size={16} className="lock-icon" /> // แสดงไอคอนล็อค
+                <Lock size={16} className="lock-icon" />
               )}
             </a>
           );
         })}
       </nav>
 
-      {/* ย้าย sidebar-user ออกมาด้านนอกของโครงสร้างก่อนหน้า sidebar-menu แต่ยังคงอยู่ใน aside */}
       <div className="sidebar-user-wrapper">
-        {" "}
-        {/* เพิ่ม wrapper เพื่อจัดตำแหน่ง dropdown ได้ง่ายขึ้น */}
         <div
           className="user-info"
           onClick={() => setIsDropdownOpen((p) => !p)}
@@ -199,8 +198,6 @@ export default function Sidebar({
         </div>
         {isDropdownOpen && isSidebarOpen && (
           <div className="user-dropdown-menu">
-            {" "}
-            {/* Drodown อยู่ใน wrapper เดียวกับ user-info */}
             <button
               className="dropdown-item"
               onClick={() => {
@@ -220,7 +217,7 @@ export default function Sidebar({
       </div>
 
       <style jsx>{`
-        /* Global font */
+        /* --- CSS styles remain the same --- */
         * {
           font-family: "Kanit", sans-serif;
           box-sizing: border-box;
@@ -232,23 +229,20 @@ export default function Sidebar({
           color: #fff;
           display: flex;
           flex-direction: column;
-          position: relative; /* สำคัญ: ต้องมี position เพื่อให้ z-index ทำงานกับ child elements */
+          position: relative;
           box-shadow: 1px 0 12px rgba(20, 28, 37, 0.04);
           z-index: 100;
           transition: width 0.3s ease-in-out;
         }
 
-        /* Desktop state: Open */
         .sidebar.open {
           width: 240px;
         }
 
-        /* Desktop state: Collapsed */
         .sidebar.collapsed {
           width: 70px;
         }
 
-        /* Mobile specific styles */
         @media (max-width: 768px) {
           .sidebar {
             position: fixed;
@@ -309,15 +303,14 @@ export default function Sidebar({
           background-color: #2a2e33;
         }
 
-        /* CSS สำหรับรูปภาพโลโก้ */
         .logo-image {
-          width: 38px; /* กำหนดขนาดตามที่ต้องการ */
-          height: 38px; /* กำหนดขนาดตามที่ต้องการ */
-          border-radius: 10px; /* หากต้องการให้มีมุมโค้งมนเหมือนเดิม */
-          object-fit: contain; /* ปรับขนาดรูปภาพให้พอดีโดยไม่ยืด */
-          flex-shrink: 0; /* ป้องกันไม่ให้รูปภาพหดตัวเมื่อพื้นที่น้อย */
-          background: #fff; /* สีพื้นหลังเหมือนเดิม อาจปรับตามโลโก้จริง */
-          padding: 5px; /* เพิ่ม padding เพื่อให้รูปภาพไม่ชิดขอบวงกลมเกินไป */
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          object-fit: contain;
+          flex-shrink: 0;
+          background: #fff;
+          padding: 5px;
         }
 
         .sidebar-logo .logo-text {
@@ -403,28 +396,26 @@ export default function Sidebar({
           pointer-events: none;
         }
 
-        /* Disabled menu item styles */
         .sidebar-menu-item.disabled {
-          color: #6c757d; /* สีเทาสำหรับ disabled */
+          color: #6c757d;
           cursor: not-allowed;
-          pointer-events: none; /* ป้องกันการคลิก */
-          background-color: transparent; /* ลบ background เมื่อ disabled */
+          pointer-events: none;
+          background-color: transparent;
         }
         .sidebar-menu-item.disabled .menu-icon {
-          color: #6c757d; /* สีไอคอนเป็นสีเทา */
+          color: #6c757d;
         }
         .sidebar-menu-item.disabled:hover {
-          background: transparent; /* ป้องกัน hover effect */
+          background: transparent;
           color: #6c757d;
         }
 
-        /* Lock icon style */
         .lock-icon {
           position: absolute;
           right: 15px;
           top: 50%;
           transform: translateY(-50%);
-          color: #6c757d; /* สีของไอคอนล็อค */
+          color: #6c757d;
           transition: opacity 0.3s ease-in-out;
         }
         .sidebar.collapsed .lock-icon {
@@ -432,7 +423,6 @@ export default function Sidebar({
           pointer-events: none;
         }
 
-        /* Birthday Badge Styles */
         .birthday-badge {
           background-color: #dc3545;
           color: white;
@@ -455,12 +445,11 @@ export default function Sidebar({
           pointer-events: none;
         }
 
-        /* New wrapper for user info and dropdown */
         .sidebar-user-wrapper {
-          margin-top: auto; /* Push to bottom */
-          padding: 22px 16px 24px 22px; /* same padding as before */
-          position: relative; /* ทำให้ child dropdown อ้างอิงตำแหน่งได้ */
-          z-index: 101; /* ให้สูงกว่า menuList (ถ้า menuList มี z-index) */
+          margin-top: auto;
+          padding: 22px 16px 24px 22px;
+          position: relative;
+          z-index: 101;
         }
         .sidebar.collapsed .sidebar-user-wrapper {
           padding-left: 17px;
@@ -561,7 +550,6 @@ export default function Sidebar({
           color: #fff;
         }
 
-        /* Mobile specific close button (hidden on desktop) */
         .sidebar-mobile-close-button {
           position: absolute;
           top: 15px;
