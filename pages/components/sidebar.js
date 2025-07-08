@@ -13,13 +13,12 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
-  Lock, 
+  Lock,
   Wallet,
   Swords,
 } from "lucide-react";
-import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
-// ไม่ต้องแก้ menuList ตรงนี้ ให้ไปกรองตอน render แทน
+// 1. ปรับโครงสร้างข้อมูล allMenuList
 const allMenuList = [
   {
     label: "Members",
@@ -32,49 +31,73 @@ const allMenuList = [
     icon: <Swords size={20} strokeWidth={1.7} />,
   },
   {
-    label: "History",
-    path: "/history",
+    label: "Category",
     icon: <History size={20} strokeWidth={1.7} />,
+    // path จะถูกลบออก เพราะเมนูนี้จะทำหน้าที่เปิด-ปิดเมนูย่อยแทน
+    subMenu: [
+      {
+        label: "History", // << เพิ่มเมนูย่อยสำหรับลิงก์เดิมของ History
+        path: "/history",
+      },
+      {
+        label: "Payment",
+        path: "/PaymentHistory",
+        // ไม่ต้องใส่ icon ที่นี่เพื่อให้ดูเรียบง่าย หรือจะใส่ก็ได้
+      },
+    ],
   },
   {
     label: "Ranking",
     path: "/ranking",
     icon: <Trophy size={20} strokeWidth={1.7} />,
-    access: ["Pro", "Premium"], // เพิ่ม property 'access'
+    access: ["Pro", "Premium"],
   },
   {
     label: "BirthDay",
     path: "/Birthday",
     icon: <Gift size={20} strokeWidth={1.7} />,
-    access: ["Pro", "Premium"], // เพิ่ม property 'access'
+    access: ["Pro", "Premium"],
   },
   {
     label: "Dashboard",
     path: "/Dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
   },
-  {
-    label: "Payment",
-    path: "/PaymentHistory",
-    icon: <Wallet   size={20} strokeWidth={1.7} />,
-  },
+  // เมนู Payment ถูกย้ายไปเป็นเมนูย่อยของ History แล้ว
 ];
 
 export default function Sidebar({
   birthDayCount = 0,
   isSidebarOpen,
   toggleSidebar,
-  packageType, // รับ packageType เข้ามา
+  packageType,
 }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
   const [groupName, setGroupName] = useState("");
   const [activePath, setActivePath] = useState("");
-  // <<< 1. เพิ่ม State เพื่อเก็บค่าการตั้งค่าการแจ้งเตือนวันเกิด
   const [showBirthdayBadge, setShowBirthdayBadge] = useState(true);
 
+  // 2. เพิ่ม State สำหรับจัดการเมนูย่อยที่กำลังเปิดอยู่
+  const [openSubMenu, setOpenSubMenu] = useState(null);
+
+  // ฟังก์ชันสำหรับเปิด-ปิดเมนูย่อย
+  const handleSubMenuToggle = (label) => {
+    setOpenSubMenu(openSubMenu === label ? null : label);
+  };
+
+
   useEffect(() => {
-    setActivePath(window.location.pathname);
+    const currentPath = window.location.pathname;
+    setActivePath(currentPath);
+
+    // ตรวจสอบว่า path ปัจจุบันอยู่ในเมนูย่อยของเมนูไหนหรือไม่
+    for (const item of allMenuList) {
+      if (item.subMenu && item.subMenu.find(sub => sub.path === currentPath)) {
+        setOpenSubMenu(item.label);
+        break;
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -84,9 +107,7 @@ export default function Sidebar({
       if (username) setLoggedInUsername(username);
       if (group) setGroupName(group);
 
-      // <<< 2. อ่านค่าการตั้งค่าจาก localStorage ตอน Sidebar โหลด
       const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
-      // ถ้ามีค่าที่บันทึกไว้ ให้ใช้ค่านั้น, ถ้าไม่มี (โหลดครั้งแรก) ให้แสดงเป็น default (true)
       if (savedBirthdayNotifications !== null) {
         setShowBirthdayBadge(JSON.parse(savedBirthdayNotifications));
       }
@@ -136,6 +157,41 @@ export default function Sidebar({
       <nav className="sidebar-menu">
         {allMenuList.map((item) => {
           const isDisabled = item.access && !item.access.includes(packageType);
+
+          // 3. แก้ไขการ Render โดยเพิ่มเงื่อนไขสำหรับเมนูที่มีเมนูย่อย
+          if (item.subMenu) {
+            const isSubMenuOpen = openSubMenu === item.label;
+            return (
+              <div key={item.label} className="menu-with-submenu">
+                <div
+                  className={`sidebar-menu-item submenu-toggle ${isDisabled ? "disabled" : ""}`}
+                  onClick={() => !isDisabled && handleSubMenuToggle(item.label)}
+                >
+                  <span className="menu-icon">{item.icon}</span>
+                  {isSidebarOpen && (
+                    <span className="menu-label">{item.label}</span>
+                  )}
+                  {isSidebarOpen && (
+                    isSubMenuOpen ? <ChevronUp size={16} className="submenu-chevron" /> : <ChevronDown size={16} className="submenu-chevron" />
+                  )}
+                </div>
+                {/* Render เมนูย่อย */}
+                <div className={`submenu-container ${isSubMenuOpen && isSidebarOpen ? 'open' : ''}`}>
+                  {item.subMenu.map((subItem) => (
+                    <a
+                      key={subItem.path}
+                      href={isDisabled ? "#" : subItem.path}
+                      className={`submenu-item ${activePath === subItem.path ? "active" : ""}`}
+                    >
+                      {subItem.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          // Render เมนูปกติ (ที่ไม่มีเมนูย่อย)
           return (
             <a
               key={item.path}
@@ -153,12 +209,11 @@ export default function Sidebar({
               {isSidebarOpen && (
                 <span className="menu-label">{item.label}</span>
               )}
-              {/* <<< 3. เพิ่มเงื่อนไข `&& showBirthdayBadge` เพื่อเช็คการตั้งค่าก่อนแสดง */}
               {item.label === "BirthDay" &&
                 birthDayCount > 0 &&
                 isSidebarOpen &&
                 !isDisabled &&
-                showBirthdayBadge && ( // <<< เงื่อนไขใหม่
+                showBirthdayBadge && (
                   <span className="birthday-badge">{birthDayCount}</span>
                 )}
               {isDisabled && isSidebarOpen && (
@@ -173,15 +228,6 @@ export default function Sidebar({
         <div
           className="user-info"
           onClick={() => setIsDropdownOpen((p) => !p)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              setIsDropdownOpen((p) => !p);
-            }
-          }}
-          tabIndex={0}
-          role="button"
-          aria-expanded={isDropdownOpen}
-          aria-haspopup="true"
         >
           <div className="user-avatar">
             <User2 size={21} />
@@ -202,22 +248,19 @@ export default function Sidebar({
               className="dropdown-item"
               onClick={() => {
                 window.location.href = "/settings";
-                setIsDropdownOpen(false);
               }}
             >
-              <Settings size={18} strokeWidth={1.7} className="dropdown-icon" />{" "}
-              Settings
+              <Settings size={18} strokeWidth={1.7} /> Settings
             </button>
             <button className="dropdown-item" onClick={handleLogout}>
-              <LogOut size={18} strokeWidth={1.7} className="dropdown-icon" />{" "}
-              Logout
+              <LogOut size={18} strokeWidth={1.7} /> Logout
             </button>
           </div>
         )}
       </div>
 
+      {/* 4. เพิ่ม CSS สำหรับ Submenu */}
       <style jsx>{`
-        /* --- CSS styles remain the same --- */
         * {
           font-family: "Kanit", sans-serif;
           box-sizing: border-box;
@@ -388,8 +431,9 @@ export default function Sidebar({
           white-space: nowrap;
           opacity: 1;
           transition: opacity 0.3s ease-in-out;
+          flex-grow: 1;
         }
-        .sidebar.collapsed .menu-label {
+        .sidebar.collapsed .menu-label, .sidebar.collapsed .submenu-chevron {
           opacity: 0;
           width: 0;
           overflow: hidden;
@@ -443,6 +487,67 @@ export default function Sidebar({
         .sidebar.collapsed .birthday-badge {
           opacity: 0;
           pointer-events: none;
+        }
+
+        /* --- CSS ใหม่สำหรับเมนูย่อย --- */
+        .submenu-toggle {
+          /* ใช้สไตล์เดียวกับ sidebar-menu-item */
+        }
+        .submenu-chevron {
+          margin-left: auto;
+          transition: transform 0.2s ease-in-out;
+        }
+        .submenu-container {
+          max-height: 0;
+          opacity: 0;
+          overflow: hidden;
+          transition: max-height 0.3s ease-out, opacity 0.2s ease-out, padding 0.3s ease-out;
+          padding-left: 28px; /* ระยะห่างจากขอบซ้าย */
+          position: relative;
+        }
+        .submenu-container.open {
+          max-height: 200px; /* ความสูงสูงสุดพอสำหรับเมนูย่อย */
+          opacity: 1;
+        }
+        /* เส้นแนวตั้ง */
+        .submenu-container::before {
+          content: '';
+          position: absolute;
+          left: 36px; /* จัดตำแหน่งเส้นให้อยู่ตรงกลาง icon */
+          top: 8px; /* เริ่มเส้นให้ต่ำลงมาหน่อย */
+          bottom: 8px; /* จบเส้นให้สูงขึ้นมาหน่อย */
+          width: 2px;
+          background-color: #495057;
+          opacity: 0.5;
+        }
+        .submenu-item {
+          display: block;
+          position: relative;
+          color: #adb5bd;
+          text-decoration: none;
+          padding: 8px 16px 8px 24px;
+          font-size: 0.9rem;
+          transition: color 0.18s;
+        }
+        /* จุดวงกลมหน้าเมนูย่อย */
+        .submenu-item::before {
+          content: '';
+          position: absolute;
+          left: -6px; /* ดึงจุดออกมาทางซ้ายจากตัวหนังสือ */
+          top: 50%;
+          transform: translateY(-50%);
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background-color: #495057;
+          border: 2px solid #212529; /* สร้างเอฟเฟกต์เหมือนในรูป */
+          transition: background-color 0.18s;
+        }
+        .submenu-item:hover, .submenu-item.active {
+          color: #fff;
+        }
+        .submenu-item:hover::before, .submenu-item.active::before {
+          background-color: #146cfa;
         }
 
         .sidebar-user-wrapper {
