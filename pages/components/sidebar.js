@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import {
   Users,
-  Sword,
   History,
   Trophy,
   ChevronDown,
@@ -15,7 +14,8 @@ import {
   Settings,
   LogOut,
   Lock, 
-  Wallet  
+  Wallet,
+  Swords,
 } from "lucide-react";
 import Swal from "sweetalert2"; // ยังคง import ไว้เผื่อใช้งาน
 
@@ -29,7 +29,7 @@ const allMenuList = [
   {
     label: "Match",
     path: "/match",
-    icon: <Sword size={20} strokeWidth={1.7} />,
+    icon: <Swords size={20} strokeWidth={1.7} />,
   },
   {
     label: "History",
