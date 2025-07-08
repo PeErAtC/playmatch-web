@@ -43,7 +43,7 @@ const PaymentHistory = () => {
   const lastVisibleRef = useRef(null);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 25;
+  const [recordsPerPage, setRecordsPerPage] = useState(25); // <<< เปลี่ยนเป็น State
   const detailTableRefs = useRef({}); // Ref to hold refs for each detail table
 
   // Define a Toast mixin for subtle notifications
@@ -157,7 +157,7 @@ const PaymentHistory = () => {
         setLoading(false);
       }
     },
-    [loggedInEmail, recordsPerPage]
+    [loggedInEmail, recordsPerPage] // <<< recordsPerPage อยู่ในนี้แล้ว จะทำงานอัตโนมัติเมื่อค่าเปลี่ยน
   );
 
   useEffect(() => {
@@ -168,7 +168,7 @@ const PaymentHistory = () => {
       setCurrentPage(1);
       fetchPaymentHistory(false, 1);
     }
-  }, [loggedInEmail, fetchPaymentHistory]);
+  }, [loggedInEmail, recordsPerPage, fetchPaymentHistory]); // <<< เพิ่ม recordsPerPage เพื่อให้ re-fetch เมื่อมีการเปลี่ยนค่า
 
   const handleNextPage = () => {
     setCurrentPage((prevPage) => prevPage + 1);
@@ -268,60 +268,80 @@ const PaymentHistory = () => {
           จำนวน Match: {filteredRecords.length}
         </div>
       </div>
-
-      {!loading && filteredRecords.length > 0 && (
+      
+      {/* --- START: ส่วนควบคุมที่ปรับปรุงใหม่ --- */}
+      {!loading && paymentRecords.length > 0 && (
         <div
           style={{
-            textAlign: "left",
-            padding: "10px 0",
-            marginBottom: "15px",
             display: "flex",
-            justifyContent: "flex-start",
+            justifyContent: "space-between",
             alignItems: "center",
-            gap: "10px",
+            marginBottom: "20px",
+            flexWrap: 'wrap',
+            gap: '15px'
           }}
         >
-          <button
-            onClick={handlePrevPage}
-            disabled={currentPage === 1 || loading}
+          {/* Left Side: Pagination */}
+          <div
             style={{
-              backgroundColor: "#f8f9fa",
-              color: "#495057",
-              padding: "6px 12px",
-              borderRadius: "5px",
-              border: "1px solid #ced4da",
-              cursor: "pointer",
-              fontSize: "12px",
-              opacity: currentPage === 1 || loading ? 0.7 : 1,
-              transition: "background-color 0.2s, border-color 0.2s",
+              display: "flex",
+              justifyContent: "flex-start",
+              alignItems: "center",
+              gap: "10px",
             }}
           >
-            ย้อนกลับ
-          </button>
-          <span style={{ fontSize: "12px", fontWeight: "bold" }}>
-            หน้า {currentPage}
-          </span>
-          <button
-            onClick={handleNextPage}
-            disabled={!hasMore || loading}
-            style={{
-              backgroundColor: "#f8f9fa",
-              color: "#495057",
-              padding: "6px 12px",
-              borderRadius: "5px",
-              border: "1px solid #ced4da",
-              cursor: "pointer",
-              fontSize: "12px",
-              opacity: !hasMore || loading ? 0.7 : 1,
-              transition: "background-color 0.2s, border-color 0.2s",
-            }}
-          >
-            ถัดไป
-          </button>
+            <button
+              onClick={handlePrevPage}
+              disabled={currentPage === 1 || loading}
+              style={{
+                backgroundColor: "#f8f9fa", color: "#495057", padding: "6px 12px",
+                borderRadius: "5px", border: "1px solid #ced4da", cursor: "pointer",
+                fontSize: "12px", opacity: currentPage === 1 || loading ? 0.7 : 1,
+                transition: "background-color 0.2s, border-color 0.2s",
+              }}
+            >
+              ย้อนกลับ
+            </button>
+            <span style={{ fontSize: "12px", fontWeight: "bold" }}>
+              หน้า {currentPage}
+            </span>
+            <button
+              onClick={handleNextPage}
+              disabled={!hasMore || loading}
+              style={{
+                backgroundColor: "#f8f9fa", color: "#495057", padding: "6px 12px",
+                borderRadius: "5px", border: "1px solid #ced4da", cursor: "pointer",
+                fontSize: "12px", opacity: !hasMore || loading ? 0.7 : 1,
+                transition: "background-color 0.2s, border-color 0.2s",
+              }}
+            >
+              ถัดไป
+            </button>
+          </div>
+
+          {/* Right Side: Per Page Selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <label style={{ fontSize: "12px", color: "#555" }}>แสดง:</label>
+            <select
+              value={recordsPerPage}
+              onChange={(e) => setRecordsPerPage(Number(e.target.value))}
+              style={{
+                fontSize: "12px", border: "1px solid #ccc", borderRadius: "6px",
+                padding: "6px 12px", background: "#fff", cursor: "pointer",
+              }}
+            >
+              <option value={10}>10 รายการ</option>
+              <option value={20}>20 รายการ</option>
+              <option value={25}>25 รายการ</option>
+              <option value={50}>50 รายการ</option>
+            </select>
+          </div>
         </div>
       )}
+       {/* --- END: ส่วนควบคุมที่ปรับปรุงใหม่ --- */}
 
-      {loading && filteredRecords.length === 0 ? (
+
+      {loading && paymentRecords.length === 0 ? (
         <div style={{ textAlign: "center", padding: "50px" }}>
           กำลังโหลดประวัติการชำระเงิน...
         </div>
