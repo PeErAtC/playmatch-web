@@ -16,11 +16,6 @@ import { useRouter } from "next/router";
 import debounce from "lodash.debounce";
 import { useMemo } from "react";
 
-
-
-// Constants
-const ITEMS_PER_PAGE = 25; // <<< กำหนดให้ดึงมาหน้าละ 25 รายการ
-
 const History = () => {
   const router = useRouter();
   const [matches, setMatches] = useState([]);
@@ -33,6 +28,10 @@ const History = () => {
   const [viewedMatches, setViewedMatches] = useState({});
 
   const [isBrowser, setIsBrowser] = useState(false);
+
+  // --- START: การเปลี่ยนแปลงสำหรับตัวกรองจำนวนข้อมูล ---
+  const [itemsPerPage, setItemsPerPage] = useState(25); // <<< State ใหม่สำหรับจัดการจำนวนรายการต่อหน้า
+  // --- END: การเปลี่ยนแปลง ---
 
   // <<< เพิ่ม State ใหม่สำหรับ Server-side Pagination
   const [firstVisible, setFirstVisible] = useState(null); // DocumentSnapshot ของเอกสารแรกในหน้าปัจจุบัน
@@ -56,7 +55,7 @@ const History = () => {
     }
   }, []);
 // กำหนดว่าแมตช์จะถือว่าเป็น "ใหม่" ภายในกี่ชั่วโมง
-  const NEW_MATCH_THRESHOLD_HOURS = 20 / 3600; // 20 วินาที แปลงเป็นชั่วโมง (20 / 60 วินาที/นาที / 60 นาที/ชั่วโมง)
+  const NEW_MATCH_THRESHOLD_HOURS = 24; // คุณสามารถปรับค่านี้ได้ตามต้องการ
 
   // ฟังก์ชันตรวจสอบว่าเป็นแมตช์ใหม่หรือไม่
   const isNewMatch = (match) => {
@@ -74,7 +73,7 @@ const History = () => {
   return diffHours < NEW_MATCH_THRESHOLD_HOURS && !viewedMatches[match.id];
   };
 
-  // <<< ฟังก์ชัน fetchMatches ถูกแก้ไขใหม่หมด เพื่อทำ Server-side Pagination
+ // <<< ฟังก์ชัน fetchMatches ถูกแก้ไขเพื่อใช้ itemsPerPage จาก state
  const fetchMatches = useCallback(
   async (direction = "current", cursor = null) => {
     if (!loggedInEmail) return;
@@ -115,7 +114,7 @@ const History = () => {
 
       let q;
       if (direction === "next" && cursor) {
-        q = query(baseQuery, startAfter(cursor), limit(ITEMS_PER_PAGE));
+        q = query(baseQuery, startAfter(cursor), limit(itemsPerPage));
       } else if (direction === "prev" && cursor) {
         q = query(
           userMatchesCollectionRef,
@@ -124,10 +123,10 @@ const History = () => {
             ? [where("topic", ">=", trimmedSearch), where("topic", "<=", trimmedSearch + "\uf8ff")]
             : []),
           startAfter(cursor),
-          limit(ITEMS_PER_PAGE)
+          limit(itemsPerPage)
         );
       } else {
-        q = query(baseQuery, limit(ITEMS_PER_PAGE));
+        q = query(baseQuery, limit(itemsPerPage));
       }
 
       const documentSnapshots = await getDocs(q);
@@ -177,9 +176,8 @@ const History = () => {
       setIsLoading(false);
     }
   },
-  [loggedInEmail, searchTopic]
+  [loggedInEmail, searchTopic, itemsPerPage] // <<< เพิ่ม itemsPerPage ใน dependency array
 );
-
   // >>> สิ้นสุดการปรับปรุง fetchMatches
 
 
@@ -197,10 +195,10 @@ const handleSearchChange = (e) => {
   // <<< ปรับปรุง useEffect ให้เรียก fetchMatches ด้วย Pagination
   useEffect(() => {
     if (isBrowser && loggedInEmail) {
-      setCurrentPage(1); // รีเซ็ตหน้าเป็น 1 เสมอเมื่อ loggedInEmail หรือ searchTopic เปลี่ยน
+      setCurrentPage(1); // รีเซ็ตหน้าเป็น 1 เสมอเมื่อ loggedInEmail หรือ searchTopic หรือ itemsPerPage เปลี่ยน
       fetchMatches("current", null); // ดึงข้อมูลหน้าแรก
     }
-  }, [loggedInEmail, searchTopic, isBrowser, fetchMatches]); // เพิ่ม fetchMatches ใน dependencies
+  }, [loggedInEmail, searchTopic, isBrowser, itemsPerPage, fetchMatches]); // <<< เพิ่ม itemsPerPage และ fetchMatches ใน dependencies
   // >>>
 
   // <<< ฟังก์ชันเปลี่ยนหน้า
@@ -254,8 +252,8 @@ const handleSearchChange = (e) => {
           <input
             type="text"
             placeholder="ค้นหาหัวเรื่อง"
-            value={searchTopic}
-    onChange={handleSearchChange}
+            value={searchText}
+            onChange={handleSearchChange}
             className="topic-search-input"
           />
         </div>
@@ -265,24 +263,48 @@ const handleSearchChange = (e) => {
         </div>
       </div>
 
-      {/* Row 2 - Pagination (ปรับปรุงปุ่มให้ใช้งานได้กับ Server-side Pagination) */}
-      <div className="pagination-container">
-        <button
-          onClick={goToPrevPage}
-          disabled={!hasMorePrev || isLoading}
-          className="pagination-button"
-        >
-          ย้อนกลับ
-        </button>
-        <span className="page-info">หน้า {currentPage}</span>
-        <button
-          onClick={goToNextPage}
-          disabled={!hasMoreNext || isLoading}
-          className="pagination-button"
-        >
-          ถัดไป
-        </button>
+      {/* --- START: UI ที่ปรับปรุงใหม่ --- */}
+      <div className="history-controls-container">
+        {/* Left: Pagination */}
+        <div className="pagination-controls">
+          <button
+            onClick={goToPrevPage}
+            disabled={!hasMorePrev || isLoading}
+            className="pagination-button"
+          >
+            ย้อนกลับ
+          </button>
+          <span className="page-info">หน้า {currentPage}</span>
+          <button
+            onClick={goToNextPage}
+            disabled={!hasMoreNext || isLoading}
+            className="pagination-button"
+          >
+            ถัดไป
+          </button>
+        </div>
+
+        {/* Right: Per Page Selector */}
+        <div className="per-page-selector">
+            <label htmlFor="items-per-page">แสดง:</label>
+            <select
+              id="items-per-page"
+              className="per-page-select"
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                // ไม่จำเป็นต้องเรียก fetchMatches ที่นี่ เพราะ useEffect จะทำงานเองเมื่อ itemsPerPage เปลี่ยน
+              }}
+            >
+              <option value="10">10 รายการ</option>
+              <option value="20">20 รายการ</option>
+              <option value="30">30 รายการ</option>
+              <option value="50">50 รายการ</option>
+            </select>
+        </div>
       </div>
+      {/* --- END: UI ที่ปรับปรุงใหม่ --- */}
+
 
       {/* Row 3 - Matches Table */}
       <div className="table-responsive-container">
@@ -308,7 +330,7 @@ const handleSearchChange = (e) => {
                 <td colSpan={4} className="no-data-message">
                   {searchTopic ? "ไม่พบหัวเรื่องที่ค้นหา" : "ไม่พบประวัติการจัดก๊วน"}
                 </td>
-                
+
               </tr>
             )}
             {!isLoading && matches.length > 0 && matches.map((match, idx) => (
@@ -346,9 +368,8 @@ const handleSearchChange = (e) => {
       {/* CSS-in-JS using <style jsx> */}
       <style jsx>{`
         /* Global Styles for this component */
-        /* ใช้ font-family ที่คุณต้องการ หากต้องการ Kanit ต้อง import ที่ _document.js หรือ _app.js */
         .main-content * {
-          font-family: 'Kanit', sans-serif; /* ตั้งค่าเป็น Kanit หากคุณ import ไว้แล้ว หรือใช้ sans-serif ทั่วไป */
+          font-family: 'Kanit', sans-serif;
           box-sizing: border-box;
         }
 
@@ -356,7 +377,7 @@ const handleSearchChange = (e) => {
           padding: 28px;
           background-color: #f7f7f7;
           overflow-y: auto;
-          overflow-x: hidden; /* Ensure no horizontal scroll within main-content itself */
+          overflow-x: hidden;
         }
 
         .main-title {
@@ -411,15 +432,44 @@ const handleSearchChange = (e) => {
           white-space: nowrap;
         }
 
-        /* Row 2 - Pagination */
-        .pagination-container {
+        /* --- START: CSS สำหรับส่วนควบคุมที่เพิ่มใหม่ --- */
+        .history-controls-container {
+            display: flex;
+            justify-content: space-between; /* <<< หัวใจของการจัดวาง */
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap; 
+            gap: 15px;
+        }
+
+        .pagination-controls {
           display: flex;
           justify-content: flex-start;
-          align-items: center; /* <<< ตรงนี้ที่เพิ่ม */
-          margin-bottom: 20px;
-          flex-wrap: wrap;
-          gap: 5px;
+          align-items: center;
+          gap: 8px;
         }
+
+        .per-page-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .per-page-selector label {
+            font-size: 12px;
+            color: #555;
+            white-space: nowrap;
+        }
+
+        .per-page-select {
+            font-size: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 6px 12px;
+            background: #fff;
+            cursor: pointer;
+        }
+        /* --- END: CSS ใหม่ --- */
 
         .pagination-button {
           padding: 6px 12px;
@@ -461,11 +511,11 @@ const handleSearchChange = (e) => {
           margin-bottom: 16px;
         }
 
-        .new-match-indicator { //คำว่าใหม่ ของเเมตที่สร้างใหม่
+        .new-match-indicator {
           color: red;
           font-weight: bold;
           margin-left: 5px;
-          font-size: 0.9em; /* ปรับขนาดตามต้องการ */
+          font-size: 0.9em;
         }
 
         .matches-table {
@@ -485,7 +535,6 @@ const handleSearchChange = (e) => {
           text-align: center;
           height: 40px;
         }
-        /* กำหนด border-radius เฉพาะมุมบนของ head */
         .matches-table th:first-child { border-top-left-radius: 13px; }
         .matches-table th:last-child { border-top-right-radius: 13px; }
 
@@ -542,66 +591,29 @@ const handleSearchChange = (e) => {
         .detail-button:hover {
           background-color: #37d381;
         }
-        /* สไตล์ใหม่สำหรับสถานะ Ranking */
         .ranking-status {
-          font-size: 11px; /* ปรับขนาดตัวอักษรตามต้องการ */
-          margin-top: 5px; /* ระยะห่างเล็กน้อยเพื่อแยกจากปุ่ม */
+          font-size: 11px;
+          margin-top: 5px;
           text-align: center;
-          white-space: nowrap; /* ตรวจสอบให้แน่ใจว่าข้อความไม่ขึ้นบรรทัดใหม่ */
+          white-space: nowrap;
         }
 
         .ranking-status.saved {
-          color: #28a745; /* สีเขียวสำหรับ "บันทึกRankingเรียบร้อย" */
+          color: #28a745;
         }
 
         .ranking-status.not-saved {
-          color: #dc3545; /* สีแดงสำหรับ "ไม่ได้บันทึก Ranking" */
+          color: #dc3545;
         }
 
-        /* Media Queries สำหรับ Responsive Design (ปรับตามความจำเป็นสำหรับองค์ประกอบใหม่) */
-        @media (max-width: 480px) {
-          .main-content {
-            padding: 10px;
-          }
-          .search-and-total-row {
-            padding: 10px;
-          }
-          .search-input-container {
-            align-items: center;
-          }
-          .topic-search-input {
-            padding: 8px 10px;
-            font-size: 12px;
-          }
-          .total-matches-display {
-            justify-content: center;
-            font-size: 13px;
-          }
-          .detail-button {
-            padding: 5px 12px;
-            font-size: 12px;
-          }
-          .pagination-button {
-            padding: 6px 8px;
-            font-size: 10px;
-          }
-          /* การปรับปรุงสำหรับสถานะ Ranking ใหม่บนหน้าจอขนาดเล็ก */
-          .ranking-status {
-            font-size: 10px;
-            margin-top: 3px;
-          }
-        /* Media Queries for Responsive Design */
+        /* Media Queries สำหรับ Responsive Design */
         @media (max-width: 768px) {
-          .main-content {
-            padding: 15px;
-          }
-
+          .main-content { padding: 15px; }
           .search-and-total-row {
             grid-template-columns: 1fr;
             gap: 15px;
             padding: 15px;
           }
-
           .search-input-container {
             flex-direction: column;
             gap: 10px;
@@ -612,70 +624,14 @@ const handleSearchChange = (e) => {
             min-width: unset;
             width: 100%;
           }
-          .total-matches-display {
-            justify-content: flex-start;
-          }
-
-          .matches-table {
-            min-width: 600px;
-          }
-          
-          .matches-table thead {
-            display: table-header-group;
-            position: static;
-          }
-
-          .matches-table tr {
-            display: table-row;
-            margin-bottom: 0;
-            border: none;
-            border-radius: 0;
-            background-color: inherit;
-            box-shadow: none;
-            padding: 0;
-          }
-
-          .matches-table td {
-            display: table-cell;
-            position: static;
-            padding-left: 9px;
-            text-align: center;
-            align-items: initial;
-            justify-content: initial;
-            min-height: auto;
-            padding-top: 11px;
-            padding-bottom: 11px;
-            font-size: 12px;
-            white-space: nowrap;
-          }
-          .matches-table td:before {
-            content: none;
-          }
-
-          .pagination-container {
-            justify-content: center;
-            gap: 3px;
-          }
-          .pagination-button {
-            padding: 8px 10px;
-            font-size: 11px;
-          }
+          .total-matches-display { justify-content: flex-start; }
+          .matches-table { min-width: 600px; }
         }
 
         @media (max-width: 480px) {
-          .main-content {
-            padding: 10px;
-          }
-          .search-and-total-row {
-            padding: 10px;
-          }
-          .search-input-container {
-            align-items: center;
-          }
-          .topic-search-input {
-            padding: 8px 10px;
-            font-size: 12px;
-          }
+          .main-content { padding: 10px; }
+          .search-and-total-row { padding: 10px; }
+          .topic-search-input { font-size: 12px; }
           .total-matches-display {
             justify-content: center;
             font-size: 13px;
@@ -684,9 +640,9 @@ const handleSearchChange = (e) => {
             padding: 5px 12px;
             font-size: 12px;
           }
-          .pagination-button {
-            padding: 6px 8px;
-            font-size: 10px;
+          .history-controls-container {
+            flex-direction: column; /* บนจอเล็กมาก ให้เรียงบน-ล่าง */
+            align-items: flex-start;
           }
         }
       `}</style>
