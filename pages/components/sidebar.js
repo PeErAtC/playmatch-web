@@ -18,8 +18,13 @@ import {
   Swords,
 } from "lucide-react";
 
-// 1. ปรับโครงสร้างข้อมูล allMenuList
+// --- 1. เพิ่มการ import สำหรับ Firestore ---
+import { db } from "../../lib/firebaseConfig";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
+
+
 const allMenuList = [
+  //... โครงสร้างเมนูของคุณ (เหมือนเดิม)
   {
     label: "Members",
     path: "/home",
@@ -33,16 +38,14 @@ const allMenuList = [
   {
     label: "Category",
     icon: <History size={20} strokeWidth={1.7} />,
-    // path จะถูกลบออก เพราะเมนูนี้จะทำหน้าที่เปิด-ปิดเมนูย่อยแทน
     subMenu: [
       {
-        label: "History", // << เพิ่มเมนูย่อยสำหรับลิงก์เดิมของ History
+        label: "History",
         path: "/history",
       },
       {
         label: "Payment",
         path: "/PaymentHistory",
-        // ไม่ต้องใส่ icon ที่นี่เพื่อให้ดูเรียบง่าย หรือจะใส่ก็ได้
       },
     ],
   },
@@ -63,7 +66,6 @@ const allMenuList = [
     path: "/Dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
   },
-  // เมนู Payment ถูกย้ายไปเป็นเมนูย่อยของ History แล้ว
 ];
 
 export default function Sidebar({
@@ -77,11 +79,12 @@ export default function Sidebar({
   const [groupName, setGroupName] = useState("");
   const [activePath, setActivePath] = useState("");
   const [showBirthdayBadge, setShowBirthdayBadge] = useState(true);
-
-  // 2. เพิ่ม State สำหรับจัดการเมนูย่อยที่กำลังเปิดอยู่
   const [openSubMenu, setOpenSubMenu] = useState(null);
 
-  // ฟังก์ชันสำหรับเปิด-ปิดเมนูย่อย
+  // --- 2. เพิ่ม State สำหรับเก็บ URL รูปโปรไฟล์ ---
+  const [profileImageUrl, setProfileImageUrl] = useState(null);
+
+
   const handleSubMenuToggle = (label) => {
     setOpenSubMenu(openSubMenu === label ? null : label);
   };
@@ -90,8 +93,6 @@ export default function Sidebar({
   useEffect(() => {
     const currentPath = window.location.pathname;
     setActivePath(currentPath);
-
-    // ตรวจสอบว่า path ปัจจุบันอยู่ในเมนูย่อยของเมนูไหนหรือไม่
     for (const item of allMenuList) {
       if (item.subMenu && item.subMenu.find(sub => sub.path === currentPath)) {
         setOpenSubMenu(item.label);
@@ -100,16 +101,40 @@ export default function Sidebar({
     }
   }, []);
 
+  // --- 3. แก้ไข useEffect นี้เพื่อดึงข้อมูล User และรูปภาพแบบ Real-time ---
   useEffect(() => {
     if (typeof window !== "undefined") {
       const username = localStorage.getItem("loggedInUsername");
       const group = localStorage.getItem("groupName");
+      const email = localStorage.getItem("loggedInEmail"); // ดึง email มาเพื่อใช้ค้นหา
+
       if (username) setLoggedInUsername(username);
       if (group) setGroupName(group);
 
       const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
       if (savedBirthdayNotifications !== null) {
         setShowBirthdayBadge(JSON.parse(savedBirthdayNotifications));
+      }
+
+      // ถ้ามี email ใน localStorage ให้เริ่มดึงข้อมูลจาก Firestore
+      if (email) {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", email));
+
+        // ใช้ onSnapshot เพื่อสร้าง Real-time listener
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          if (!querySnapshot.empty) {
+            // เรามั่นใจว่ามี user เดียว เพราะ email ไม่ซ้ำกัน
+            const userDoc = querySnapshot.docs[0];
+            const userData = userDoc.data();
+
+            // อัปเดต State ด้วย URL รูปภาพจาก Firestore
+            setProfileImageUrl(userData.profileImageUrl || null);
+          }
+        });
+
+        // Cleanup function: ยกเลิก listener เมื่อ component ถูก unmount
+        return () => unsubscribe();
       }
     }
   }, []);
@@ -118,6 +143,8 @@ export default function Sidebar({
     localStorage.removeItem("loggedInEmail");
     localStorage.removeItem("loggedInUsername");
     localStorage.removeItem("groupName");
+    // เราอาจต้องลบ profileImageUrl ออกไปด้วยเพื่อความสะอาด
+    localStorage.removeItem("profileImageUrl");
     window.location.href = "/login";
   };
 
@@ -157,8 +184,6 @@ export default function Sidebar({
       <nav className="sidebar-menu">
         {allMenuList.map((item) => {
           const isDisabled = item.access && !item.access.includes(packageType);
-
-          // 3. แก้ไขการ Render โดยเพิ่มเงื่อนไขสำหรับเมนูที่มีเมนูย่อย
           if (item.subMenu) {
             const isSubMenuOpen = openSubMenu === item.label;
             return (
@@ -175,7 +200,6 @@ export default function Sidebar({
                     isSubMenuOpen ? <ChevronUp size={16} className="submenu-chevron" /> : <ChevronDown size={16} className="submenu-chevron" />
                   )}
                 </div>
-                {/* Render เมนูย่อย */}
                 <div className={`submenu-container ${isSubMenuOpen && isSidebarOpen ? 'open' : ''}`}>
                   {item.subMenu.map((subItem) => (
                     <a
@@ -190,8 +214,6 @@ export default function Sidebar({
               </div>
             );
           }
-
-          // Render เมนูปกติ (ที่ไม่มีเมนูย่อย)
           return (
             <a
               key={item.path}
@@ -229,8 +251,13 @@ export default function Sidebar({
           className="user-info"
           onClick={() => setIsDropdownOpen((p) => !p)}
         >
+          {/* --- 4. แก้ไขส่วนแสดงผล Avatar --- */}
           <div className="user-avatar">
-            <User2 size={21} />
+            {profileImageUrl ? (
+              <img src={profileImageUrl} alt="User Avatar" className="user-avatar-image"/>
+            ) : (
+              <User2 size={21} />
+            )}
           </div>
           {isSidebarOpen && (
             <span className="user-name">{loggedInUsername || "Demo"}</span>
@@ -259,12 +286,20 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* 4. เพิ่ม CSS สำหรับ Submenu */}
+      {/* --- 5. เพิ่ม CSS สำหรับรูปภาพ Avatar --- */}
       <style jsx>{`
         * {
           font-family: "Kanit", sans-serif;
           box-sizing: border-box;
         }
+
+        .user-avatar-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* ทำให้รูปภาพเต็มวงกลมและไม่เสียสัดส่วน */
+        }
+
+        /* CSS ส่วนที่เหลือเหมือนเดิมทั้งหมด */
 
         .sidebar {
           height: 100vh;
@@ -488,10 +523,7 @@ export default function Sidebar({
           opacity: 0;
           pointer-events: none;
         }
-
-        /* --- CSS ใหม่สำหรับเมนูย่อย --- */
         .submenu-toggle {
-          /* ใช้สไตล์เดียวกับ sidebar-menu-item */
         }
         .submenu-chevron {
           margin-left: auto;
@@ -502,20 +534,19 @@ export default function Sidebar({
           opacity: 0;
           overflow: hidden;
           transition: max-height 0.3s ease-out, opacity 0.2s ease-out, padding 0.3s ease-out;
-          padding-left: 28px; /* ระยะห่างจากขอบซ้าย */
+          padding-left: 28px; 
           position: relative;
         }
         .submenu-container.open {
-          max-height: 200px; /* ความสูงสูงสุดพอสำหรับเมนูย่อย */
+          max-height: 200px;
           opacity: 1;
         }
-        /* เส้นแนวตั้ง */
         .submenu-container::before {
           content: '';
           position: absolute;
-          left: 36px; /* จัดตำแหน่งเส้นให้อยู่ตรงกลาง icon */
-          top: 8px; /* เริ่มเส้นให้ต่ำลงมาหน่อย */
-          bottom: 8px; /* จบเส้นให้สูงขึ้นมาหน่อย */
+          left: 36px;
+          top: 8px;
+          bottom: 8px;
           width: 2px;
           background-color: #495057;
           opacity: 0.5;
@@ -529,18 +560,17 @@ export default function Sidebar({
           font-size: 0.9rem;
           transition: color 0.18s;
         }
-        /* จุดวงกลมหน้าเมนูย่อย */
         .submenu-item::before {
           content: '';
           position: absolute;
-          left: -6px; /* ดึงจุดออกมาทางซ้ายจากตัวหนังสือ */
+          left: -6px;
           top: 50%;
           transform: translateY(-50%);
           width: 8px;
           height: 8px;
           border-radius: 50%;
           background-color: #495057;
-          border: 2px solid #212529; /* สร้างเอฟเฟกต์เหมือนในรูป */
+          border: 2px solid #212529;
           transition: background-color 0.18s;
         }
         .submenu-item:hover, .submenu-item.active {
