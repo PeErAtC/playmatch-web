@@ -649,9 +649,10 @@ export default function Sidebar({
 
         .user-dropdown-menu {
           position: absolute;
-          left: 70px;
-          bottom: calc(100% + 10px);
-          min-width: 155px;
+          left: 15px; /* ปรับให้ชิดซ้ายมากขึ้น */
+          right: 15px; /* เพิ่ม right เพื่อให้ความกว้างยืดหยุ่น */
+          bottom: 85px; /* <-- เปลี่ยนเป็นค่าคงที่ */
+          min-width: auto; /* ปรับ min-width */
           background: #232836;
           border-radius: 8px;
           box-shadow: 0 8px 22px rgba(20, 30, 50, 0.1);
