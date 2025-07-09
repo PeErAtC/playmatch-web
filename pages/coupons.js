@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { QRCodeCanvas } from 'qrcode.react';
 import Swal from 'sweetalert2';
+import { FiEye, FiRotateCcw, FiTrash2 } from "react-icons/fi"; // import ไอคอนที่ใช้
 
 // --- Reusable Coupon Ticket Component (No changes needed here) ---
 const CouponTicket = ({ coupon }) => {
@@ -72,6 +73,8 @@ const CouponsPage = () => {
   const [isFormExpanded, setIsFormExpanded] = useState(true);
   const [editingCoupon, setEditingCoupon] = useState(null);
   const [newlyCreatedCouponId, setNewlyCreatedCouponId] = useState(null);
+  const [menuOpenId, setMenuOpenId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -93,6 +96,18 @@ const CouponsPage = () => {
       return () => clearTimeout(timer);
     }
   }, [newlyCreatedCouponId]);
+
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.fixed-dropdown') && !e.target.closest('.action-menu-trigger')) {
+        setMenuOpenId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
 
   const fetchCoupons = async () => {
     if (!userId) {
@@ -150,6 +165,7 @@ const CouponsPage = () => {
           expiresAt: expiryDate,
           redeemedBy: null,
           redeemedAt: null,
+          redeemedForMembers: [], // Initialize as empty array for new coupons
         });
         setNewlyCreatedCouponId(newCode);
         Swal.fire({ icon: 'success', title: 'สร้างคูปองสำเร็จ!', showConfirmButton: false, timer: 1500 });
@@ -209,6 +225,7 @@ const CouponsPage = () => {
             status: 'ACTIVE',
             redeemedBy: null,
             redeemedAt: null, // ล้างข้อมูลการใช้งาน
+            redeemedForMembers: [], // Clear redeemed members upon restore
           });
           Swal.fire('กู้คืนแล้ว!', 'คูปองถูกกู้คืนเรียบร้อยแล้ว', 'success');
           fetchCoupons(); // ดึงข้อมูลคูปองใหม่เพื่ออัปเดต UI
@@ -248,10 +265,15 @@ const CouponsPage = () => {
   };
   
   const getActualStatus = (coupon) => {
+    if (!coupon || !coupon.expiresAt) return 'UNKNOWN'; // ป้องกัน null
+
     const now = new Date();
     const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
-    return (coupon.status === 'ACTIVE' && expiryDate >= now) ? 'ACTIVE' : (coupon.status === 'USED' ? 'USED' : 'EXPIRED');
+    return (coupon.status === 'ACTIVE' && expiryDate >= now)
+      ? 'ACTIVE'
+      : (coupon.status === 'USED' ? 'USED' : 'EXPIRED');
   };
+
 
   const openCouponModal = (coupon) => setViewingCoupon(coupon);
   const closeCouponModal = () => setViewingCoupon(null);
@@ -286,6 +308,8 @@ const CouponsPage = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage; //
   const currentItems = filteredCouponsForDisplay.slice(indexOfFirstItem, indexOfLastItem); //
   const totalPages = Math.ceil(filteredCouponsForDisplay.length / itemsPerPage); //
+  const selectedCoupon = currentItems.find(c => c.id === menuOpenId); // ← ย้ายมาตรงนี้ หลัง currentItems
+
   const paginate = (pageNumber) => setCurrentPage(pageNumber); //
 
   return (
@@ -372,7 +396,10 @@ const CouponsPage = () => {
                             <th>สถานะ</th>
                             <th>วันหมดอายุ</th>
                             {activeTab !== 'all' && ( // แสดงเฉพาะเมื่อไม่ใช่แท็บ "คูปองที่ใช้งานได้"
-                                <th>เวลาใช้งาน</th>
+                                <>
+                                    <th>เวลาที่ถูกใช้งาน</th>
+                                    <th>สมาชิก ที่ใช้</th> {/* Added new table header */}
+                                </>
                             )}
                             <th>จัดการ</th>
                         </tr>
@@ -394,26 +421,72 @@ const CouponsPage = () => {
                                 <td data-label="สถานะ">{getStatusComponent(coupon)}</td>
                                 <td data-label="วันหมดอายุ">{coupon.expiresAt?.toDate().toLocaleDateString('th-TH')}</td>
                                 {activeTab !== 'all' && ( // แสดงเฉพาะเมื่อไม่ใช่แท็บ "คูปองที่ใช้งานได้"
-                                    <td data-label="เวลาใช้งาน/หมดอายุ"> {/* แสดงข้อมูลเวลา */}
-                                        {getActualStatus(coupon) === 'USED' && coupon.redeemedAt?.toDate ?
-                                            `${coupon.redeemedAt.toDate().toLocaleDateString('th-TH')} ${coupon.redeemedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
-                                            : (getActualStatus(coupon) === 'EXPIRED' ?
-                                                `${coupon.expiresAt?.toDate().toLocaleDateString('th-TH')} ${coupon.expiresAt?.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
-                                                : '-'
-                                            )
-                                        }
-                                    </td>
+                                    <>
+                                        <td data-label="เวลาใช้งาน/หมดอายุ"> {/* แสดงข้อมูลเวลา */}
+                                            {getActualStatus(coupon) === 'USED' && coupon.redeemedAt?.toDate ?
+                                                `${coupon.redeemedAt.toDate().toLocaleDateString('th-TH')} ${coupon.redeemedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
+                                                : (getActualStatus(coupon) === 'EXPIRED' ?
+                                                    `${coupon.expiresAt?.toDate().toLocaleDateString('th-TH')} ${coupon.expiresAt?.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
+                                                    : '-'
+                                                )
+                                            }
+                                        </td>
+                                        <td data-label="Member ที่ใช้"> {/* Added new table data cell */}
+                                            {coupon.redeemedForMembers && coupon.redeemedForMembers.length > 0
+                                                ? coupon.redeemedForMembers.join(', ')
+                                                : '-'}
+                                        </td>
+                                    </>
                                 )}
                                 <td data-label="จัดการ" className="actions-cell">
-                                    <button className="action-btn view-btn" onClick={() => openCouponModal(coupon)}>ดูคูปอง</button>
-                                    {getActualStatus(coupon) !== 'ACTIVE' && ( // แสดงปุ่มกู้คืนเฉพาะในแท็บประวัติ (USED/EXPIRED)
-                                        <button className="action-btn restore-btn" onClick={() => handleRestoreCoupon(coupon.id)}>กู้คืน</button>
+                                  <div className="action-menu-container">
+                                    <button
+                                      className="action-menu-trigger"
+                                      onClick={(e) => {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+
+                                        setMenuOpenId((prevId) => {
+                                          // ถ้าคลิกซ้ำเมนูเดิม → ปิด
+                                          if (prevId === coupon.id) {
+                                            return null;
+                                          } else {
+                                            // คลิกเมนูใหม่ → เปิดเมนูใหม่
+                                            setMenuPosition({
+                                              top: rect.bottom + window.scrollY + 4,
+                                              left: rect.right + window.scrollX - 150,
+                                            });
+                                            return coupon.id;
+                                          }
+                                        });
+                                      }}
+                                    >
+                                      ⋯
+                                    </button>
+                                    {selectedCoupon && (
+                                      <div
+                                        className="fixed-dropdown"
+                                        style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px`, position: 'fixed' }}
+                                      >
+                                        <button className="dropdown-btn view" onClick={() => { openCouponModal(selectedCoupon); setMenuOpenId(null); }}>
+                                          <FiEye /> ดูคูปอง
+                                        </button>
+                                        {getActualStatus(selectedCoupon) !== 'ACTIVE' && (
+                                          <button className="dropdown-btn restore" onClick={() => { handleRestoreCoupon(selectedCoupon.id); setMenuOpenId(null); }}>
+                                            <FiRotateCcw /> กู้คืน
+                                          </button>
+                                        )}
+                                        <button className="dropdown-btn delete" onClick={() => { handleDeleteCoupon(selectedCoupon.id); setMenuOpenId(null); }}>
+                                          <FiTrash2 /> ลบ
+                                        </button>
+                                      </div>
                                     )}
-                                    <button className="action-btn delete-btn" onClick={() => handleDeleteCoupon(coupon.id)}>ลบ</button>
+
+                                  </div>
                                 </td>
+
                             </tr>
                         )) : (
-                            <tr><td colSpan={activeTab !== 'all' ? "8" : "7"} className="no-data">ไม่พบข้อมูล</td></tr> 
+                            <tr><td colSpan={activeTab !== 'all' ? 9 : 7} className="no-data">ไม่พบข้อมูล</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -480,6 +553,45 @@ const CouponsPage = () => {
         .card-body {
           padding: 20px; /* Reduced from 24px */
         }
+        .action-menu-container {
+          position: relative;
+          display: inline-block;
+        }
+        .action-menu-trigger {
+          background: none;
+          border: none;
+          font-size: 20px;
+          cursor: pointer;
+          padding: 4px 8px;
+        }
+        .action-dropdown {
+          position: absolute;
+          right: 0;
+          top: 28px;
+          display: none;
+          flex-direction: column;
+          background-color: #fff;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          z-index: 999;
+          min-width: 120px;
+        }
+        .action-dropdown button {
+          background: none;
+          border: none;
+          padding: 10px 12px;
+          font-size: 14px;
+          text-align: left;
+          cursor: pointer;
+          color: #333;
+        }
+        .action-dropdown button:hover {
+          background-color: #f0f0f0;
+        }
+        .action-dropdown .danger {
+          color: #f5222d;
+        }
 
         /* --- Form Styles --- */
         .form-grid {
@@ -496,6 +608,39 @@ const CouponsPage = () => {
           color: #555;
           font-weight: 500;
         }
+        .fixed-dropdown {
+          background: #fff;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          z-index: 9999;
+          display: flex;
+          flex-direction: column;
+          min-width: 140px;
+        }
+        .fixed-dropdown .dropdown-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 12px;
+          border: none;
+          background: none;
+          font-size: 14px;
+          cursor: pointer;
+        }
+        .fixed-dropdown .dropdown-btn:hover {
+          background-color: #f0f0f0;
+        }
+        .fixed-dropdown .view {
+          color: #1677ff;
+        }
+        .fixed-dropdown .restore {
+          color: #28a745;
+        }
+        .fixed-dropdown .delete {
+          color: #f5222d;
+        }
+
         .form-group input {
           width: 100%; /* Make input fill its grid column */
           padding: 8px 10px; /* Reduced from 10px 12px */
@@ -575,6 +720,37 @@ const CouponsPage = () => {
             background-color: #bae7ff; /* Lighter blue on hover */
             color: #0c84ff;
         }
+
+
+        .action-dropdown .dropdown-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: none;
+          border: none;
+          padding: 10px 12px;
+          font-size: 14px;
+          text-align: left;
+          cursor: pointer;
+          transition: background-color 0.2s;
+          color: #333;
+        }
+        .action-dropdown .dropdown-btn:hover {
+          background-color: #f0f0f0;
+        }
+        .action-dropdown .dropdown-btn svg {
+          font-size: 16px;
+        }
+        .action-dropdown .dropdown-btn.view {
+          color: #1677ff;
+        }
+        .action-dropdown .dropdown-btn.restore {
+          color: #28a745;
+        }
+        .action-dropdown .dropdown-btn.delete {
+          color: #f5222d;
+        }
+
 
         /* --- Table Toolbar (Tabs & Search) --- */
         .table-toolbar {
