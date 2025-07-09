@@ -530,7 +530,11 @@ const PaymentHistory = () => {
                               <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px"}}>
                                 <h4 style={{ fontSize: "16px", color: "#333", margin: 0 }}>
                                   รายละเอียดการชำระเงินใน Match นี้:
+                                  <span style={{ fontSize: "14px", color: "#666", marginLeft: "8px", fontWeight: "normal" }}>
+                                    {formatDate(record.matchDate)}
+                                  </span>
                                 </h4>
+                               
                                 <button
                                   onClick={() => handleDownloadDetailImage(record)}
                                   title="Download as Image"
