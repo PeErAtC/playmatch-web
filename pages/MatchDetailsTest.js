@@ -55,6 +55,8 @@ const MatchDetails = () => {
   const [isSavingRanking, setIsSavingRanking] = useState(false);
   const [memberPaidStatus, setMemberPaidStatus] = useState({});
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
+  const [showDateInDownloadImage, setShowDateInDownloadImage] = useState(false);
+
 
   // New states for managing multiple coupons applied to multiple members
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -821,39 +823,59 @@ const MatchDetails = () => {
       Swal.fire("ไม่มีข้อมูล", "กรุณาคำนวณข้อมูลก่อนดาวน์โหลดรูปภาพ", "warning");
       return;
     }
+
     try {
+      // 1. ตั้งค่าให้วันที่แสดงบน DOM ชั่วคราว
+      setShowDateInDownloadImage(true);
+
+      // 2. รอให้ DOM อัปเดต (สำคัญมาก)
+      await new Promise(resolve => setTimeout(resolve, 0)); // หรือ requestAnimationFrame
+
+      // 3. จับภาพ
       const canvas = await html2canvas(tableRef.current, {
         scale: 2,
         useCORS: true,
+        backgroundColor: '#ffffff', // กำหนดพื้นหลังให้เป็นสีขาวชัดเจน
       });
+
+      // 4. ตั้งค่าให้วันที่ซ่อนกลับไปทันทีหลังจากจับภาพ
+      setShowDateInDownloadImage(false);
+
       const fileName = `MatchSummary_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
       saveAs(canvas.toDataURL("image/png"), fileName);
       Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพสำเร็จ!' });
+
     } catch (error) {
       console.error("Error generating image:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพได้", "error");
+      // ตรวจสอบให้แน่ใจว่าวันที่ถูกซ่อนกลับไปแม้เกิดข้อผิดพลาด
+      setShowDateInDownloadImage(false);
     }
   };
+  // ******************************************************
 
+  // ******************************************************
+  // พิจารณาแก้ไข handleDownloadGameDetailsImage ด้วยวิธีเดียวกัน ถ้าต้องการให้มีวันที่ในภาพนั้นด้วย
+  // หากต้องการ ให้ทำตามขั้นตอนเดียวกับ handleDownloadImage ด้านบน
   const handleDownloadGameDetailsImage = async () => {
-    if (!gameDetailsTableRef.current || !matchData?.matches?.length) {
-      Swal.fire("ไม่มีข้อมูล", "ไม่มีข้อมูลเกมสำหรับดาวน์โหลดรูปภาพ", "warning");
-      return;
-    }
-    try {
-        const canvas = await html2canvas(gameDetailsTableRef.current, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-        });
-        const fileName = `GameDetails_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
-        saveAs(canvas.toDataURL("image/png"), fileName);
-        Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพรายละเอียดเกมสำเร็จ!' });
-    } catch (error) {
-        console.error("Error generating game details image:", error);
-        Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพรายละเอียดเกมได้", "error");
-    }
-  };
+      if (!gameDetailsTableRef.current || !matchData?.matches?.length) {
+        Swal.fire("ไม่มีข้อมูล", "ไม่มีข้อมูลเกมสำหรับดาวน์โหลดรูปภาพ", "warning");
+        return;
+      }
+      try {
+          const canvas = await html2canvas(gameDetailsTableRef.current, {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+          });
+          const fileName = `GameDetails_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
+          saveAs(canvas.toDataURL("image/png"), fileName);
+          Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพรายละเอียดเกมสำเร็จ!' });
+      } catch (error) {
+          console.error("Error generating game details image:", error);
+          Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพรายละเอียดเกมได้", "error");
+      }
+    };
 
   // Get list of members who have NOT been assigned a coupon in the current session
   const membersWithNoCouponAssigned = Object.values(memberCalculations)
@@ -1048,6 +1070,12 @@ const MatchDetails = () => {
       </div>
 
       <div ref={tableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '12px' }}>
+        {/* แสดงวันที่เฉพาะเมื่อ showDateInDownloadImage เป็น true */}
+        {showDateInDownloadImage && (
+          <div style={{ padding: "8px 0", marginBottom: "10px", fontSize: "16px", fontWeight: "bold", textAlign: "left", color: "#333", borderBottom: "1px solid #eee" }}>
+            สรุปค่าใช้จ่าย Match วันที่: {formatDate(matchData.matchDate)}
+          </div>
+        )}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
           <thead>
             <tr style={{ backgroundColor: "#323943", color: "white" }}>
@@ -1075,7 +1103,7 @@ const MatchDetails = () => {
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "left", fontWeight: "bold" }}>
                     {index === 0 && (<span style={{ color: "#DAA520", marginRight: "5px", fontWeight: "bold" }}>MVP ✨ </span>)}
                     {member.name}
-                    {member.level ? ` (${member.level})` : ""}
+                    {/* บรรทัดนี้ถูกซ่อนไว้: {member.level ? ` (${member.level})` : ""} */}
                   </td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.totalGames}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.totalBalls}</td>
