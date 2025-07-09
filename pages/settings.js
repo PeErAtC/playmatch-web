@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX, Camera, Loader } from "lucide-react";
 import { FaRegUserCircle } from "react-icons/fa";
 
-import { db } from "../lib/firebaseConfig";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+//  <-- IMPORT ที่แก้ไข -->
+import { db, storage } from "../lib/firebaseConfig";
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
 
 // ทำให้ฟังก์ชัน getText อยู่นอก component และใช้ภาษาไทยเป็นหลัก
 const texts = {
@@ -54,6 +57,10 @@ export default function SettingsPage() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
 
+  // <-- STATE และ REF ที่เพิ่มเข้ามา -->
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   // Effect to load initial settings from localStorage on component mount
   useEffect(() => {
     if (isBrowser) {
@@ -79,7 +86,7 @@ export default function SettingsPage() {
         setLoadingProfile(false);
       }
     }
-  }, [isBrowser]); // Removed getText from dependency array
+  }, [isBrowser]);
 
   // Effects to save settings to localStorage whenever they change
   useEffect(() => {
@@ -160,6 +167,7 @@ export default function SettingsPage() {
             createDate: userData.CreateDate || null,
             accountDurationDays: userData.AccountDurationDays !== undefined ? Number(userData.AccountDurationDays) : 30,
             packageType: userData.packageType || "N/A",
+            profileImageUrl: userData.profileImageUrl || null, // <-- แก้ไข: ดึง URL รูปภาพ
           });
         } else {
           setProfileError(getText("noData"));
@@ -175,6 +183,32 @@ export default function SettingsPage() {
     fetchUserProfile();
   }, [currentUserId]);
 
+  // <-- ฟังก์ชันที่เพิ่มเข้ามาสำหรับจัดการการอัปโหลด -->
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !currentUserId) return;
+
+    setIsUploading(true);
+    const storageRef = ref(storage, `profile_images/${currentUserId}`);
+
+    try {
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      const userDocRef = doc(db, "users", currentUserId);
+      await updateDoc(userDocRef, {
+        profileImageUrl: downloadURL,
+      });
+      setUserProfile(prevProfile => ({
+        ...prevProfile,
+        profileImageUrl: downloadURL,
+      }));
+    } catch (error) {
+      console.error("Error uploading image: ", error);
+      alert("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const accountExpiryInfo = useMemo(() => {
     if (!userProfile || !userProfile.createDate || userProfile.accountDurationDays === undefined) {
@@ -279,9 +313,30 @@ export default function SettingsPage() {
           ) : userProfile ? (
             <div className="profile-card">
               <div className="profile-header">
-                <div className="profile-avatar-wrapper">
-                  <FaRegUserCircle size={80} color="var(--accent-color, #007bff)" />
+
+                {/* <-- โค้ดส่วนแสดงผลรูปภาพที่แก้ไข --> */}
+                <div className="profile-avatar-wrapper" onClick={() => !isUploading && fileInputRef.current.click()}>
+                  {isUploading ? (
+                    <div className="upload-loader"><Loader size={32} /></div>
+                  ) : userProfile.profileImageUrl ? (
+                    <img src={userProfile.profileImageUrl} alt="Profile" className="profile-image" />
+                  ) : (
+                    <FaRegUserCircle size={80} color="var(--accent-color, #007bff)" />
+                  )}
+                  {!isUploading && (
+                    <div className="upload-overlay">
+                      <Camera size={24} color="white" />
+                    </div>
+                  )}
                 </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageUpload}
+                  style={{ display: "none" }}
+                  accept="image/png, image/jpeg"
+                />
+
                 <div className="profile-name-role">
                   <h4>{userProfile.username}</h4>
                   <p className="profile-role">{userProfile.role}</p>
@@ -578,17 +633,60 @@ export default function SettingsPage() {
         }
 
         .profile-avatar-wrapper {
+          position: relative; /* <-- เพิ่ม */
           flex-shrink: 0;
           width: 80px;
           height: 80px;
           border-radius: 50%;
           overflow: hidden;
-          background-color: #fff;
+          background-color: #e9ecef; /* <-- เพิ่ม */
           display: flex;
           justify-content: center;
           align-items: center;
           border: 2px solid var(--accent-color-light);
           color: var(--accent-color-light);
+          cursor: pointer; /* <-- เพิ่ม */
+        }
+
+        .profile-image { /* <-- เพิ่ม */
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .upload-overlay { /* <-- เพิ่ม */
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.4);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+
+        .profile-avatar-wrapper:hover .upload-overlay { /* <-- เพิ่ม */
+          opacity: 1;
+        }
+
+        .upload-loader { /* <-- เพิ่ม */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .upload-loader .lucide-loader { /* <-- เพิ่ม */
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin { /* <-- เพิ่ม */
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .profile-name-role {
