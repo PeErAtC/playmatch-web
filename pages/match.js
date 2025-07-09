@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react"; // MODIFIED: import useRef
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -10,39 +10,36 @@ import {
   where,
   serverTimestamp,
   updateDoc,
+  setDoc,
+  getDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
-// รายการสนาม
+// --- (ส่วนอื่นๆ ของโค้ดที่ไม่เปลี่ยนแปลง) ---
 const courts = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
-
 const RESULT_OPTIONS = [
   { value: "", label: "เลือกผล" },
   { value: "A", label: "ทีม A ชนะ" },
   { value: "B", label: "ทีม B ชนะ" },
   { value: "DRAW", label: "เสมอ" },
 ];
-
 const STATUS_COLORS = {
   เตรียมพร้อม: "#fff8d8",
   กำลังแข่งขัน: "#57e497",
   จบการแข่งขัน: "#f44336",
 };
-
 const LEVEL_COLORS = {
   C: "#6a3d9a", "P-": "#6a3d9a", P: "#6a3d9a", "P+": "#6a3d9a",
   "N-": "#1f78b4", N: "#1f78b4", BG: "#1f78b4", "BG-": "#1f78b4", Rookie: "#1f78b4",
   "S-": "#f44336", S: "#f44336", "S+": "#f44336",
   มือหน้าบ้าน: "#33a02c", มือหน้าบ้าน1: "#33a02c", มือหน้าบ้าน2: "#33a02c", มือหน้าบ้าน3: "#33a02c",
 };
-
 const LEVEL_ORDER_NORTHEAST = ["มือหน้าบ้าน", "มือหน้าบ้าน1", "มือหน้าบ้าน2", "มือหน้าบ้าน3", "BG", "S-", "S", "N-", "N", "P-", "P", "C"];
 const LEVEL_ORDER_CENTRAL = ["Rookie", "BG-", "BG", "N-", "N", "S", "S+", "P-", "P", "P+", "C"];
-
 const getLevelOrderIndex = (level, currentLevelOrder) => {
   const index = currentLevelOrder.indexOf(level);
   return index === -1 ? Infinity : index;
 };
-
 const ITEMS_PER_PAGE = 30;
 const padId = (id, len = 4) => String(id).padStart(len, "0");
 const getScoreByResult = (result) => {
@@ -51,6 +48,8 @@ const getScoreByResult = (result) => {
   if (result === "DRAW") return "1/1";
   return "";
 };
+// --- (จบส่วนที่ไม่เปลี่ยนแปลง) ---
+
 
 const Match = () => {
   const [matchDate, setMatchDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -77,33 +76,90 @@ const Match = () => {
   const [isCostSettingsOpen, setIsCostSettingsOpen] = useState(false);
   const contentRef = useRef(null);
   const [selectedRegion, setSelectedRegion] = useState(() => isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน");
-  const [showResultsColumn, setShowResultsColumn] = useState(true); // New state for column visibility
+  const [showResultsColumn, setShowResultsColumn] = useState(true);
+
+  // NEW: Create a ref to hold the latest state for the auto-save function
+  const sessionStateRef = useRef();
 
   const currentLevelOrder = selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
-
-  // Effect to handle column visibility from localStorage
+  
   useEffect(() => {
     const updateVisibility = () => {
       const savedSetting = localStorage.getItem('trackMatchResults');
-      // Default to true (show) if setting is not found
       setShowResultsColumn(savedSetting !== null ? JSON.parse(savedSetting) : true);
     };
-
-    updateVisibility(); // Initial check on component mount
-
-    // Add event listener to react to changes from other pages (like settings)
+    updateVisibility();
     window.addEventListener('storage', updateVisibility);
-
-    // Cleanup: remove event listener when component unmounts
     return () => {
       window.removeEventListener('storage', updateVisibility);
     };
-  }, []); // Empty dependency array ensures this runs only once on mount and cleans up on unmount
+  }, []);
 
   useEffect(() => {
     setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
   }, []);
+  
+  // NEW: This effect updates the ref with the latest state on every render.
+  // This avoids adding many dependencies to the setInterval effect.
+  useEffect(() => {
+    sessionStateRef.current = {
+        matches,
+        topic,
+        matchDate,
+        activityTime,
+        ballPrice,
+        courtFee,
+        courtFeePerGame,
+        fixedCourtFeePerPerson,
+        organizeFee,
+        selectedRegion,
+    };
+  });
 
+  // MODIFIED: Auto-save logic now uses the ref and has a minimal dependency array.
+  useEffect(() => {
+    // This effect now only depends on whether the session is active.
+    if (!isOpen || !loggedInEmail || !isBrowser) {
+        return;
+    }
+
+    const autoSaveToFirebase = async () => {
+        console.log("Auto-saving session to Firebase...");
+
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", loggedInEmail));
+        const userSnap = await getDocs(q);
+        if (userSnap.empty) {
+            console.error("Auto-save failed: Could not find user.");
+            return;
+        }
+        const userId = userSnap.docs[0].id;
+        
+        // The data comes from the ref, which always has the latest state.
+        const dataToBackup = {
+            ...sessionStateRef.current,
+            lastUpdated: serverTimestamp()
+        };
+
+        const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
+        
+        try {
+            await setDoc(backupDocRef, dataToBackup);
+            console.log("Firebase auto-save successful.");
+        } catch (error) {
+            console.error("Error during Firebase auto-save:", error);
+        }
+    };
+    
+    // Set interval to run every 1 minute and 30 seconds (90000 ms)
+    const intervalId = setInterval(autoSaveToFirebase, 90000);
+
+    // Clear interval on cleanup when the component unmounts or isOpen changes to false.
+    return () => clearInterval(intervalId);
+
+  }, [isOpen, loggedInEmail, isBrowser]); // The dependency array is now minimal.
+
+  // --- (ส่วนที่เหลือของโค้ดเหมือนเดิมทั้งหมด) ---
   const fetchMembers = async (isNewSessionStart = false) => {
     try {
       if (!loggedInEmail) return;
@@ -190,7 +246,7 @@ const Match = () => {
     setTotalBallsInSession(total);
   }, [matches]);
 
-  const resetSession = () => {
+  const resetSession = async () => {
     setMatches([]);
     setActivityTime(0);
     setIsOpen(false);
@@ -208,18 +264,100 @@ const Match = () => {
       localStorage.removeItem("activityTime");
       localStorage.removeItem("sessionMembers");
     }
-  };
 
+    if (loggedInEmail) {
+        try {
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("email", "==", loggedInEmail));
+            const userSnap = await getDocs(q);
+            if (!userSnap.empty) {
+                const userId = userSnap.docs[0].id;
+                const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
+                await deleteDoc(backupDocRef);
+                console.log("Firebase session backup cleared.");
+            }
+        } catch (error) {
+            console.error("Failed to clear Firebase session backup:", error);
+        }
+    }
+  };
+  
   useEffect(() => {
-    if (!isBrowser) return;
-    const savedIsOpen = localStorage.getItem("isOpen") === "true";
-    const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
-    const savedActivityTime = parseInt(localStorage.getItem("activityTime")) || 0;
-    setIsOpen(savedIsOpen);
-    setMatches(savedMatches);
-    setActivityTime(savedActivityTime);
-    setMatchCount(savedMatches.length);
-  }, [isBrowser]);
+    if (!isBrowser || !loggedInEmail) return;
+
+    const loadSession = async () => {
+        let restoredFromBackup = false;
+        const savedIsOpen = localStorage.getItem("isOpen") === "true";
+        const savedMatchesRaw = localStorage.getItem("matches");
+
+        if (savedIsOpen && savedMatchesRaw) {
+            try {
+                const savedMatches = JSON.parse(savedMatchesRaw);
+                setMatches(savedMatches);
+                setMatchCount(savedMatches.length);
+                setActivityTime(parseInt(localStorage.getItem("activityTime")) || 0);
+                setIsOpen(true);
+                console.log("Session restored from localStorage.");
+                return; 
+            } catch (error) {
+                console.error("Error parsing matches from localStorage, will check Firebase backup.", error);
+                Swal.fire('ข้อมูลเสียหาย', 'ตรวจพบข้อมูลในเบราว์เซอร์เสียหาย กำลังพยายามกู้คืนจากระบบสำรองข้อมูลออนไลน์', 'warning');
+            }
+        }
+        
+        console.log("localStorage is empty or corrupt, checking Firebase for backup...");
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", loggedInEmail));
+        const userSnap = await getDocs(q);
+        if (userSnap.empty) return;
+        const userId = userSnap.docs[0].id;
+        const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
+        
+        try {
+            const backupSnap = await getDoc(backupDocRef);
+            if (backupSnap.exists()) {
+                console.log("Firebase backup found. Restoring session...");
+                const data = backupSnap.data();
+                
+                setMatches(data.matches || []);
+                setTopic(data.topic || "");
+                setMatchDate(data.matchDate || new Date().toISOString().slice(0, 10));
+                setActivityTime(data.activityTime || 0);
+                setBallPrice(data.ballPrice || 0);
+                setCourtFee(data.courtFee || 0);
+                setCourtFeePerGame(data.courtFeePerGame || 0);
+                setFixedCourtFeePerPerson(data.fixedCourtFeePerPerson || 0);
+                setOrganizeFee(data.organizeFee || 0);
+                setSelectedRegion(data.selectedRegion || "ภาคอีสาน");
+                setIsOpen(true);
+                setMatchCount((data.matches || []).length);
+                restoredFromBackup = true;
+
+                localStorage.setItem("isOpen", "true");
+                localStorage.setItem("matches", JSON.stringify(data.matches || []));
+                localStorage.setItem("activityTime", (data.activityTime || 0).toString());
+                localStorage.setItem("topic", data.topic || "");
+                localStorage.setItem("ballPrice", (data.ballPrice || 0).toString());
+                localStorage.setItem("courtFee", (data.courtFee || 0).toString());
+                localStorage.setItem("courtFeePerGame", (data.courtFeePerGame || 0).toString());
+                localStorage.setItem("fixedCourtFeePerPerson", (data.fixedCourtFeePerPerson || 0).toString());
+                localStorage.setItem("organizeFee", (data.organizeFee || 0).toString());
+                localStorage.setItem("selectedRegion", data.selectedRegion || "ภาคอีสาน");
+
+                Swal.fire('กู้ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดถูกกู้คืนจากระบบสำรองข้อมูลแล้ว', 'success');
+            } else {
+                console.log("No active session backup found in Firebase.");
+            }
+        } catch (error) {
+            console.error("Error restoring session from Firebase:", error);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถกู้คืนข้อมูลจากระบบสำรองได้', 'error');
+        }
+    };
+
+    loadSession();
+
+  }, [isBrowser, loggedInEmail]);
+
 
   useEffect(() => {
     if (!isBrowser) return;
@@ -316,7 +454,6 @@ const Match = () => {
         const updated = [...prev];
         const matchBeingUpdated = { ...updated[idx] };
 
-        // --- REVISED VALIDATION LOGIC ---
         if (field === "status" && value === "กำลังแข่งขัน") {
             const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
             if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
@@ -327,7 +464,6 @@ const Match = () => {
 
         if (field === "status" && value === "จบการแข่งขัน") {
             const { A1, A2, B1, B2, court, balls, result } = matchBeingUpdated;
-            // เช็ค !result ก็ต่อเมื่อ showResultsColumn เป็น true
             if ((!A1 || !A2 || !B1 || !B2 || !court || !balls) || (showResultsColumn && !result)) {
                 showIncompleteForFinishingToast();
                 return prev;
@@ -341,7 +477,6 @@ const Match = () => {
                 return prev;
             }
         }
-        // --- END OF REVISED VALIDATION LOGIC ---
 
         const oldStatus = matchBeingUpdated.status;
         const oldBalls = parseInt(matchBeingUpdated.balls) || 0;
@@ -479,10 +614,24 @@ const Match = () => {
 
   const handleEndGroup = async () => {
     if (matches.length === 0) {
-      Swal.fire("ไม่มี Match ให้บันทึก", "กรุณาเพิ่ม Match ก่อนปิดก๊วน หรือกด 'ยกเลิก' เพื่อกลับไปจัดการ Match", "info");
-      resetSession();
+      Swal.fire({
+        title: "คุณแน่ใจหรือไม่?",
+        text: "ตอนนี้ยังไม่มีแมตช์ที่สร้างไว้ การปิดก๊วนจะรีเซ็ตทุกอย่างและคุณจะต้องเริ่มใหม่ทั้งหมด",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33",
+        confirmButtonText: "ใช่, ปิดก๊วนและรีเซ็ต",
+        cancelButtonText: "ยกเลิก",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          resetSession(); 
+          Swal.fire("รีเซ็ตสำเร็จ!", "ข้อมูลถูกล้างเพื่อเตรียมพร้อมสำหรับก๊วนใหม่", "success");
+        }
+      });
       return;
     }
+
     const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
@@ -570,7 +719,9 @@ const Match = () => {
             savedAt: serverTimestamp(),
           });
           Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
-          resetSession();
+          
+          await resetSession();
+          
           fetchMembers(false);
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
@@ -837,7 +988,6 @@ const Match = () => {
                   <th>ทีม B (ผู้เล่น 1)</th>
                   <th>ทีม B (ผู้เล่น 2)</th>
                   <th>ลูก</th>
-                  {/* Conditionally render Result and Score headers */}
                   {showResultsColumn && (
                     <>
                       <th>ผล</th>
@@ -859,7 +1009,6 @@ const Match = () => {
                     <td data-label="ทีม B (ผู้เล่น 2)"><select value={match.B2} onChange={(e) => handleChangeMatch((currentPage - 1) * ITEMS_PER_PAGE + idx, "B2", e.target.value)} style={{ border: match.B2 ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"}><option value="">เลือกผู้เล่น B2</option>{renderMemberOptions(match, "B2")}</select></td>
                     <td data-label="ลูก"><select value={match.balls} onChange={(e) => handleChangeMatch((currentPage - 1) * ITEMS_PER_PAGE + idx, "balls", e.target.value)} className="balls-select" style={{ backgroundColor: match.balls ? "#e6f7ff" : "#fff", border: match.balls ? "1px solid #ddd" : "1px solid #f44336" }} disabled={match.status === "จบการแข่งขัน"}><option value="">เลือกลูก</option>{balls.map((ball) => (<option key={ball} value={ball}>{ball}</option>))}</select></td>
 
-                    {/* Conditionally render Result and Score cells */}
                     {showResultsColumn && (
                       <>
                         <td data-label="ผล">
