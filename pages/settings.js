@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX, Camera, Loader } from "lucide-react";
 import { FaRegUserCircle } from "react-icons/fa";
 
-//  <-- IMPORT ที่แก้ไข -->
 import { db, storage } from "../lib/firebaseConfig";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+// เพิ่มการ import library สำหรับบีบอัดรูปภาพ
+import imageCompression from 'browser-image-compression';
 
 
 // ทำให้ฟังก์ชัน getText อยู่นอก component และใช้ภาษาไทยเป็นหลัก
@@ -57,7 +59,6 @@ export default function SettingsPage() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loggedInEmail, setLoggedInEmail] = useState("");
 
-  // <-- STATE และ REF ที่เพิ่มเข้ามา -->
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -167,7 +168,7 @@ export default function SettingsPage() {
             createDate: userData.CreateDate || null,
             accountDurationDays: userData.AccountDurationDays !== undefined ? Number(userData.AccountDurationDays) : 30,
             packageType: userData.packageType || "N/A",
-            profileImageUrl: userData.profileImageUrl || null, // <-- แก้ไข: ดึง URL รูปภาพ
+            profileImageUrl: userData.profileImageUrl || null,
           });
         } else {
           setProfileError(getText("noData"));
@@ -183,16 +184,24 @@ export default function SettingsPage() {
     fetchUserProfile();
   }, [currentUserId]);
 
-  // <-- ฟังก์ชันที่เพิ่มเข้ามาสำหรับจัดการการอัปโหลด -->
   const handleImageUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file || !currentUserId) return;
+    const imageFile = event.target.files[0];
+    if (!imageFile || !currentUserId) return;
 
-    setIsUploading(true);
-    const storageRef = ref(storage, `profile_images/${currentUserId}`);
+    const options = {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 800,
+      useWebWorker: true,
+    };
 
     try {
-      await uploadBytes(storageRef, file);
+      setIsUploading(true);
+
+      const compressedFile = await imageCompression(imageFile, options);
+
+      const storageRef = ref(storage, `profile_images/${currentUserId}`);
+      await uploadBytes(storageRef, compressedFile);
+
       const downloadURL = await getDownloadURL(storageRef);
       const userDocRef = doc(db, "users", currentUserId);
       await updateDoc(userDocRef, {
@@ -202,11 +211,16 @@ export default function SettingsPage() {
         ...prevProfile,
         profileImageUrl: downloadURL,
       }));
+
     } catch (error) {
-      console.error("Error uploading image: ", error);
+      console.error("Error processing or uploading image: ", error);
       alert("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ");
     } finally {
       setIsUploading(false);
+      // Reset the file input value to allow re-uploading the same file
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -289,6 +303,7 @@ export default function SettingsPage() {
   };
 
   const getPackageTypeClassName = (type) => {
+    if (!type) return "package-type";
     switch (type.toLowerCase()) {
       case "basic": return "package-type basic";
       case "pro": return "package-type pro";
@@ -303,7 +318,6 @@ export default function SettingsPage() {
         <h2>{getText("settingsTitle")}</h2>
         <hr className="title-separator" />
 
-        {/* ส่วนข้อมูลส่วนตัว */}
         <div className="settings-section personal-info-section">
           <h3>{getText("personalInfo")}</h3>
           {loadingProfile ? (
@@ -314,7 +328,6 @@ export default function SettingsPage() {
             <div className="profile-card">
               <div className="profile-header">
 
-                {/* <-- โค้ดส่วนแสดงผลรูปภาพที่แก้ไข --> */}
                 <div className="profile-avatar-wrapper" onClick={() => !isUploading && fileInputRef.current.click()}>
                   {isUploading ? (
                     <div className="upload-loader"><Loader size={32} /></div>
@@ -334,7 +347,7 @@ export default function SettingsPage() {
                   ref={fileInputRef}
                   onChange={handleImageUpload}
                   style={{ display: "none" }}
-                  accept="image/png, image/jpeg"
+                  accept="image/png, image/jpeg, image/gif"
                 />
 
                 <div className="profile-name-role">
@@ -357,7 +370,7 @@ export default function SettingsPage() {
                   <Briefcase size={18} className="info-icon" />
                   <span className="info-label">{getText("packageLabel")}:</span>
                   <span className={`info-value ${getPackageTypeClassName(userProfile.packageType)}`}>
-                    {userProfile.packageType}
+                    {userProfile.packageType || 'N/A'}
                   </span>
                 </div>
                 <div className="info-item">
@@ -379,7 +392,6 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* ส่วนการตั้งค่าทั่วไป */}
         <div className="settings-section">
           <h3>{getText("generalSettings")}</h3>
 
@@ -387,7 +399,6 @@ export default function SettingsPage() {
             <p className="save-message">{getText("settingsSaved")}</p>
           )}
 
-          {/* Birthday Notifications setting */}
           <div className="setting-item">
             <div className="setting-label">
               {birthdayNotifications ? (
@@ -410,7 +421,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* In-App Sounds setting */}
           <div className="setting-item">
             <div className="setting-label">
               {inAppSounds ? (
@@ -433,7 +443,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Track Match Results setting */}
           <div className="setting-item">
             <div className="setting-label">
               {trackMatchResults ? (
@@ -456,8 +465,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-
-          {/* Reset Settings button */}
           <div className="setting-item reset-button-container">
             <button onClick={handleResetSettings} className="reset-button">
               <RefreshCcw size={18} className="button-icon" />
@@ -469,7 +476,6 @@ export default function SettingsPage() {
       </main>
 
       <style jsx global>{`
-        /* Global theme variables - Can be simplified if dark mode is fully removed */
         :root {
           --background-color-light: #f7f7f7;
           --text-color-light: #333;
@@ -633,28 +639,28 @@ export default function SettingsPage() {
         }
 
         .profile-avatar-wrapper {
-          position: relative; /* <-- เพิ่ม */
+          position: relative;
           flex-shrink: 0;
           width: 80px;
           height: 80px;
           border-radius: 50%;
           overflow: hidden;
-          background-color: #e9ecef; /* <-- เพิ่ม */
+          background-color: #e9ecef;
           display: flex;
           justify-content: center;
           align-items: center;
           border: 2px solid var(--accent-color-light);
           color: var(--accent-color-light);
-          cursor: pointer; /* <-- เพิ่ม */
+          cursor: pointer;
         }
 
-        .profile-image { /* <-- เพิ่ม */
+        .profile-image {
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
 
-        .upload-overlay { /* <-- เพิ่ม */
+        .upload-overlay {
           position: absolute;
           top: 0;
           left: 0;
@@ -668,11 +674,11 @@ export default function SettingsPage() {
           transition: opacity 0.3s ease;
         }
 
-        .profile-avatar-wrapper:hover .upload-overlay { /* <-- เพิ่ม */
+        .profile-avatar-wrapper:hover .upload-overlay {
           opacity: 1;
         }
 
-        .upload-loader { /* <-- เพิ่ม */
+        .upload-loader {
             display: flex;
             justify-content: center;
             align-items: center;
@@ -680,11 +686,11 @@ export default function SettingsPage() {
             height: 100%;
         }
 
-        .upload-loader .lucide-loader { /* <-- เพิ่ม */
+        .upload-loader .lucide-loader {
             animation: spin 2s linear infinite;
         }
 
-        @keyframes spin { /* <-- เพิ่ม */
+        @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
