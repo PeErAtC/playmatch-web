@@ -108,6 +108,85 @@ const Dashboard = ({ userId }) => {
 
   // ข้อมูลสำหรับ Doughnut Chart (สัดส่วน)
   const [doughnutChartValues, setDoughnutChartValues] = useState([0, 0, 0]);
+  const handleExportData = () => {
+  if (!aggregatedSummaryData) {
+    alert("ข้อมูลยังไม่พร้อมสำหรับการดาวน์โหลด");
+    return;
+  }
+
+  const {
+    playerOccurrencesByDay,
+    ballsByDay,
+    gamesByDay,
+    playerOccurrencesByMonth,
+    ballsByMonth,
+    gamesByMonth,
+    playerOccurrencesByYear,
+    ballsByYear,
+    gamesByYear,
+    calculatedTotalPlayersOverall,
+    calculatedTotalBallsOverall,
+    calculatedTotalGamesOverall,
+  } = aggregatedSummaryData;
+
+  let csvContent = "";
+
+  // กำหนดชื่อไฟล์ให้มีวันที่ดาวน์โหลดเป็นภาษาไทย
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const year = today.getFullYear();
+  const formattedDate = `${year}-${month}-${day}`;
+  const fileName = `สรุปข้อมูลก๊วนแบดมินตัน_${formattedDate}.csv`; // ชื่อไฟล์ภาษาไทย
+
+  // ส่วนหัวของไฟล์ CSV เป็นภาษาไทย
+  csvContent += "หมวดหมู่,ช่วงเวลา,ผู้เล่น (คน),ลูก (ลูก),เกม (เกม)\n";
+
+  // ข้อมูลรายวัน (ใช้ชื่อภาษาไทยใน Category)
+  const sortedDailyKeys = Object.keys(playerOccurrencesByDay).sort();
+  sortedDailyKeys.forEach(dateKey => {
+      const players = playerOccurrencesByDay[dateKey] || 0;
+      const balls = ballsByDay[dateKey] || 0;
+      const games = gamesByDay[dateKey] || 0;
+      csvContent += `รายวัน,${dateKey},${players},${balls},${games}\n`;
+  });
+
+  // ข้อมูลรายเดือน (ใช้ชื่อภาษาไทยใน Category)
+  const sortedMonthlyKeys = Object.keys(playerOccurrencesByMonth).sort();
+  sortedMonthlyKeys.forEach(monthKey => {
+      const players = playerOccurrencesByMonth[monthKey] || 0;
+      const balls = ballsByMonth[monthKey] || 0;
+      const games = gamesByMonth[monthKey] || 0;
+      csvContent += `รายเดือน,${monthKey},${players},${balls},${games}\n`;
+  });
+
+  // ข้อมูลรายปี (ใช้ชื่อภาษาไทยใน Category)
+  const sortedYearlyKeys = Object.keys(playerOccurrencesByYear).sort();
+  sortedYearlyKeys.forEach(yearKey => {
+      const players = playerOccurrencesByYear[yearKey] || 0;
+      const balls = ballsByYear[yearKey] || 0;
+      const games = gamesByYear[yearKey] || 0;
+      csvContent += `รายปี,${yearKey},${players},${balls},${games}\n`;
+  });
+
+  // ข้อมูลรวมทั้งหมด (Overall) (ใช้ชื่อภาษาไทยใน Category)
+  csvContent += `รวมทั้งหมด,ทั้งหมด,${calculatedTotalPlayersOverall},${calculatedTotalBallsOverall},${calculatedTotalGamesOverall}\n`;
+
+  // สร้าง Blob และ URL สำหรับดาวน์โหลด
+  // สำคัญมาก: `charset=utf-8;` จะช่วยให้ภาษาไทยแสดงผลได้อย่างถูกต้องใน Excel
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  if (link.download !== undefined) {
+    // Browsers that support HTML5 download attribute
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName); // ใช้ fileName ที่มีวันที่และเป็นภาษาไทย
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
 
   // Fetch loggedInEmail from localStorage and Admin email from Firebase Config
   useEffect(() => {
@@ -417,6 +496,10 @@ const Dashboard = ({ userId }) => {
           .slice(0, 5); // Get top 5 players
         setTopPlayersData(sortedPlayers);
 
+        // ฟังก์ชันสำหรับดาวน์โหลดข้อมูล
+    
+
+        
         // ** Prepare data for "Balls and Games Played (Daily)" chart **
         // This chart remains daily for the current month
         const dailyKeysInCurrentMonth = Object.keys(dailyBallsTemp)
@@ -657,6 +740,9 @@ const Dashboard = ({ userId }) => {
           <option value="year">ปีนี้</option>
           <option value="overall">ทั้งหมด (รวม)</option>
         </select>
+        <button onClick={handleExportData} style={styles.exportButton}>
+          ดาวน์โหลดข้อมูลสรุป
+        </button>
       </div>
 
       {/* Info Cards Section */}
@@ -927,6 +1013,22 @@ const styles = {
     marginBottom: "20px",
     flexWrap: "wrap",
     alignItems: "stretch",
+  },
+  exportButton: {
+    padding: "8px 15px",
+    borderRadius: "5px",
+    border: "1px solid #007bff",
+    backgroundColor: "#007bff",
+    color: "white",
+    fontSize: "13px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "background-color 0.2s ease, border-color 0.2s ease",
+    marginLeft: "10px", // เพิ่มระยะห่างจาก select filter
+    "&:hover": {
+      backgroundColor: "#0056b3",
+      borderColor: "#0056b3",
+    },
   },
   infoCard: {
     flex: "1 1 calc(20% - 11.25px)",
