@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"; // MODIFIED: import useRef
+import React, { useState, useEffect, useRef } from "react";
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -78,7 +78,8 @@ const Match = () => {
   const [selectedRegion, setSelectedRegion] = useState(() => isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน");
   const [showResultsColumn, setShowResultsColumn] = useState(true);
 
-  // NEW: Create a ref to hold the latest state for the auto-save function
+  const [showSaveIndicator, setShowSaveIndicator] = useState(false);
+
   const sessionStateRef = useRef();
 
   const currentLevelOrder = selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
@@ -99,33 +100,20 @@ const Match = () => {
     setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
   }, []);
   
-  // NEW: This effect updates the ref with the latest state on every render.
-  // This avoids adding many dependencies to the setInterval effect.
   useEffect(() => {
     sessionStateRef.current = {
-        matches,
-        topic,
-        matchDate,
-        activityTime,
-        ballPrice,
-        courtFee,
-        courtFeePerGame,
-        fixedCourtFeePerPerson,
-        organizeFee,
-        selectedRegion,
+        matches, topic, matchDate, activityTime, ballPrice, courtFee,
+        courtFeePerGame, fixedCourtFeePerPerson, organizeFee, selectedRegion,
     };
   });
 
-  // MODIFIED: Auto-save logic now uses the ref and has a minimal dependency array.
   useEffect(() => {
-    // This effect now only depends on whether the session is active.
     if (!isOpen || !loggedInEmail || !isBrowser) {
         return;
     }
 
     const autoSaveToFirebase = async () => {
         console.log("Auto-saving session to Firebase...");
-
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", loggedInEmail));
         const userSnap = await getDocs(q);
@@ -135,31 +123,36 @@ const Match = () => {
         }
         const userId = userSnap.docs[0].id;
         
-        // The data comes from the ref, which always has the latest state.
         const dataToBackup = {
             ...sessionStateRef.current,
             lastUpdated: serverTimestamp()
         };
-
         const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
         
         try {
             await setDoc(backupDocRef, dataToBackup);
             console.log("Firebase auto-save successful.");
+            setShowSaveIndicator(true);
         } catch (error) {
             console.error("Error during Firebase auto-save:", error);
         }
     };
     
-    // Set interval to run every 1 minute and 30 seconds (90000 ms)
     const intervalId = setInterval(autoSaveToFirebase, 90000);
 
-    // Clear interval on cleanup when the component unmounts or isOpen changes to false.
     return () => clearInterval(intervalId);
 
-  }, [isOpen, loggedInEmail, isBrowser]); // The dependency array is now minimal.
+  }, [isOpen, loggedInEmail, isBrowser]);
 
-  // --- (ส่วนที่เหลือของโค้ดเหมือนเดิมทั้งหมด) ---
+  useEffect(() => {
+    if (showSaveIndicator) {
+      const timer = setTimeout(() => {
+        setShowSaveIndicator(false);
+      }, 4000); 
+      return () => clearTimeout(timer);
+    }
+  }, [showSaveIndicator]);
+
   const fetchMembers = async (isNewSessionStart = false) => {
     try {
       if (!loggedInEmail) return;
@@ -896,6 +889,13 @@ const Match = () => {
               <span style={{ color: "#2196f3", fontWeight: 600 }}>Total Activity Time</span>
               <span style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}>- {formatTime(activityTime)}</span>
             </div>
+            <div className={`save-indicator ${showSaveIndicator ? 'visible' : ''}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.5 22h.5c2.2 0 4-1.8 4-4v-6c0-2.2-1.8-4-4-4h-1.4c-.4-2.8-2.8-5-5.6-5s-5.2 2.2-5.6 5H4c-2.2 0-4 1.8-4 4v6c0 2.2 1.8 4 4 4h.5"/>
+                <path d="m8 14 3 3 5-5"/>
+              </svg>
+              <span>สำรองข้อมูลแล้ว</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1038,7 +1038,7 @@ const Match = () => {
         <button onClick={handleAddMatch} className="add-match-button" disabled={!isOpen}>+ Add New Match</button>
       </div>
       <style jsx>{`
-        /* CSS styles remain the same, no changes needed here */
+        /* --- Existing styles --- */
         .card { background-color: #ffffff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); margin-bottom: 30px; }
         .control-panel { display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px; justify-content: space-between; align-items: flex-start; }
         .financial-summary-card { padding-top: 15px; }
@@ -1062,7 +1062,7 @@ const Match = () => {
         .match-table tbody tr:hover { background-color: #eaf6ff; }
         .match-table td select, .match-table td input { width: 100%; padding: 8px 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
         .no-matches-message { text-align: center; padding: 20px; color: #777; background-color: #fdfdfd; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #e0e0e0; }
-        .date-topic-group, .action-time-group { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+        .date-topic-group { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
         .input-group { display: flex; flex-direction: column; }
         .control-label { font-weight: 600; margin-bottom: 8px; color: #333; font-size: 15px; }
         .control-input { padding: 10px 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; width: 200px; max-width: 100%; box-sizing: border-box; }
@@ -1072,6 +1072,16 @@ const Match = () => {
         .action-button.end-group { background-color: #f44336; }
         .action-button.end-group:hover { background-color: #d32f2f; }
         .activity-time-display { background-color: #e3f2fd; padding: 10px 15px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+        
+        /* MODIFIED: Add position: relative to the parent container */
+        .action-time-group { 
+          display: flex; 
+          flex-wrap: wrap; 
+          gap: 20px; 
+          align-items: center;
+          position: relative; /* This is the key for positioning the child */
+        }
+
         .match-table td select:disabled { background-color: #f0f0f0; cursor: not-allowed; }
         .match-table td select.status-select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%20viewBox%3D%220%200%20292.4%20292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 10px top 50%; background-size: 12px auto; padding-right: 30px; }
         .score-display { display: block; padding: 8px 5px; background-color: #f5f5f5; border-radius: 4px; min-width: 40px; }
@@ -1088,11 +1098,48 @@ const Match = () => {
         .add-match-button { display: block; width: fit-content; margin: 25px auto 0 auto; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
         .add-match-button:hover:not(:disabled) { background-color: #0056b3; }
         .add-match-button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        
+        /* MODIFIED: Changed styles for the save indicator to use absolute positioning */
+        .save-indicator {
+          position: absolute;
+          bottom: -50px; /* Position it below the parent container */
+          left: 50%;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #2e7d32;
+          background-color: #e8f5e9;
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid #a5d6a7;
+          opacity: 0;
+          visibility: hidden;
+          transform: translateX(-50%) translateY(10px); /* Center horizontally and start slightly lower */
+          transition: all 0.5s ease-in-out;
+        }
+        .save-indicator.visible {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(-50%) translateY(0); /* Center horizontally and move to final position */
+        }
+        .save-indicator svg {
+          stroke: #2e7d32;
+        }
+
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
           .date-topic-group, .action-time-group { flex-direction: column; align-items: stretch; }
           .control-input { width: 100%; }
           .action-button { width: 100%; }
+          .save-indicator {
+            width: fit-content;
+            bottom: -45px;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+          }
           .match-table thead { display: none; }
           .match-table, .match-table tbody, .match-table tr, .match-table td { display: block; width: 100%; }
           .match-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; padding: 10px; }
