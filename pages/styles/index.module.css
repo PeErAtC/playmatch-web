@@ -1,94 +1,159 @@
-/* คุณควรสร้างไฟล์นี้ขึ้นมา เช่น ในโฟลเดอร์ src/styles/index.module.css */
-
-/*
-   *** สำคัญมาก: ตรวจสอบและแก้ไข CSS ของ HTML และ BODY ในไฟล์ GLOBAL CSS ของคุณ ***
-   (เช่น: globals.css หรือใน _app.js หรือ layout.js ที่คุณ import Global CSS)
-
-   เพื่อให้ useInView ทำงานได้อย่างถูกต้องกับการ Scroll ของ Browser:
-   1. ตรวจสอบให้แน่ใจว่า html และ body ไม่มี 'overflow: hidden;' หรือ 'overflow: auto;'
-   2. ตรวจสอบว่า html และ body ไม่ได้ถูกกำหนด 'height: 100vh;' หรือ 'height: 100%;' แบบตายตัว
-      ถ้ามี ให้ลบออกหรือปรับเปลี่ยนเพื่อให้ Browser สามารถสร้าง Scrollbar หลักได้ตามปกติ
-*/
-/* ตัวอย่างโค้ดที่คุณควร *ไม่มี* หรือแก้ไขใน Global CSS ของคุณ */
-/*
-html, body {
-  height: 100vh; // ถ้ามี ให้ลบออก
-  overflow: hidden; // ถ้ามี ให้ลบออก
-}
-*/
-
-/* Font Import (หากยังไม่มีใน global CSS ของคุณ) */
+/* Import Font */
 @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap');
 
-/* Initial states for fade-in animation */
-.feature-left {
-  opacity: 0;
-  transform: translateX(-100px); /* เริ่มต้นจากซ้าย 100px */
+/* === Base & Container === */
+.container {
+  font-family: "Kanit", sans-serif;
+  background-color: #1a2a40;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  color: #e0e0e0;
 }
 
-.feature-right {
-  opacity: 0;
-  transform: translateX(100px); /* เริ่มต้นจากขวา 100px */
+.main {
+  flex: 1;
+  padding-top: 75px;
+  padding-bottom: 40px;
 }
 
-/* State when element is in view and should be visible */
-.feature-visible {
-  opacity: 1;
-  transform: translateX(0); /* เคลื่อนที่กลับมาที่เดิม */
+/* === Hero Section === */
+.heroSection {
+  background: linear-gradient(135deg, #0f1c30 0%, #3a7bd5 100%);
+  color: #fff;
+  padding: 100px 20px 80px;
+  text-align: center;
+  margin-bottom: 60px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0 0 50% 50% / 10%;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.5);
 }
 
-/* Transitions for smooth animation */
-.feature-left,
-.feature-right {
-  transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.8s ease-out;
+.heroTitle {
+  font-size: 3.8rem;
+  font-weight: 800;
+  margin: 0 auto 25px auto;
+  line-height: 1.2;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.6);
+  max-width: 900px;
 }
 
+.heroTitleHighlight {
+  color: #FFD700;
+  background: linear-gradient(45deg, #FFEB3B, #FFC107);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
-/* Hover effects (ใช้ className จาก stylesCss) */
+.playMatchText { color: #fff; }
+.playMatchTextMatch { color: #64b5f6; }
+
+
+.heroSubtitle {
+  font-size: 1.4rem;
+  max-width: 800px;
+  margin: 0 auto 40px auto;
+  opacity: 0.98;
+  line-height: 1.6;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
 .startButton {
-    position: relative;
-    overflow: hidden;
-    z-index: 1; /* Make sure pseudo-element is behind text */
-}
-
-.startButton::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.1) 100%);
-    transform: translateX(-100%);
-    transition: transform 0.6s ease-out;
-    z-index: -1; /* Place behind button content */
-}
-
-.startButton:hover::before {
-    transform: translateX(0);
+  background: linear-gradient(45deg, #3a7bd5 0%, #00d2ff 100%);
+  color: #fff;
+  border: none;
+  padding: 18px 40px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  box-shadow: 0 10px 25px rgba(58, 123, 213, 0.5);
+  transition: all 0.4s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
 }
 
 .startButton:hover {
-  background: linear-gradient(45deg, #00d2ff 0%, #3a7bd5 100%); /* สลับเฉดสีหรือเปลี่ยนสีเมื่อ hover */
-  box-shadow: 0 15px 35px rgba(58, 123, 213, 0.7); /* เงาที่ชัดเจนและกระจายมากขึ้น */
-  transform: translateY(-5px) scale(1.03); /* ยกขึ้นและขยายใหญ่ขึ้นเล็กน้อย */
-  cursor: pointer;
+  background: linear-gradient(45deg, #00d2ff 0%, #3a7bd5 100%);
+  box-shadow: 0 15px 35px rgba(58, 123, 213, 0.7);
+  transform: translateY(-5px) scale(1.03);
+}
+
+/* === Features Section === */
+.featuresSection {
+  padding: 60px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.featuresTitle {
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: #64b5f6;
+  text-align: center;
+  margin-bottom: 70px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.featureItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: 80px;
+  padding: 30px;
+  border-radius: 20px;
+  background-color: #2a3b50;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  color: #e0e0e0;
+  /* จัดการการสลับข้างด้วย CSS */
+  flex-direction: row;
+}
+
+/* ทำให้รายการที่เป็นเลขคู่สลับข้าง */
+.featureItem:nth-child(even) {
+  flex-direction: row-reverse;
+}
+
+.featureImageContainer {
+  flex: 1;
+  padding: 20px;
+  text-align: center;
+}
+
+.featureImage {
+  max-width: 100%;
+  height: auto;
+  border-radius: 15px;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
 }
 
 .featureImage:hover {
   transform: scale(1.03);
 }
 
-.featureLearnMore:hover {
-  color: #00d2ff; /* เปลี่ยนสีเมื่อ hover ให้เข้ากับธีม */
-  text-decoration: underline;
+.featureContent {
+  flex: 1.2;
+  padding: 20px 30px;
+  text-align: left;
 }
 
-.socialIcon:hover {
-  transform: scale(1.2);
+.featureContentTitle {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #64b5f6;
+  margin-bottom: 20px;
+  position: relative;
 }
 
-/* Pseudo-elements for decoration (ใช้ className จาก stylesCss) */
 .featureContentTitle::before {
   content: '';
   position: absolute;
@@ -96,10 +161,87 @@ html, body {
   left: 0;
   width: 60px;
   height: 4px;
-  background-color: #00d2ff; /* เปลี่ยนสีให้เข้ากับธีม */
+  background-color: #00d2ff;
   border-radius: 2px;
 }
 
+.featureContentDescription {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: #b0bec5;
+  margin-bottom: 30px;
+}
+
+.featureLearnMore {
+  color: #00d2ff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.3s ease;
+}
+
+.featureLearnMore:hover {
+  text-decoration: underline;
+}
+
+/* === Fade-in Animations === */
+.feature-left { opacity: 0; transform: translateX(-100px); }
+.feature-right { opacity: 0; transform: translateX(100px); }
+.feature-visible { opacity: 1; transform: translateX(0); }
+.feature-left, .feature-right {
+  transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.8s ease-out;
+}
+
+
+/* === Footer === */
+.footer {
+  background-color: #0f1c30;
+  color: #e0e0e0;
+  padding: 50px 20px 20px;
+  margin-top: auto;
+  border-top: 5px solid #3a7bd5;
+}
+
+.footerContent {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 40px;
+  max-width: 1200px;
+  margin: 0 auto 40px auto;
+  padding-bottom: 30px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+
+.footerSection { text-align: left; }
+
+.footerLogo {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.footerBrandName {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-left: 10px;
+}
+
+.footerAbout {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #b0bec5;
+}
+
+.footerHeading {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #00d2ff;
+  position: relative;
+}
 .footerHeading::after {
   content: '';
   position: absolute;
@@ -107,131 +249,119 @@ html, body {
   left: 0;
   width: 40px;
   height: 2px;
-  background-color: #00d2ff; /* เปลี่ยนสีให้เข้ากับธีม */
+  background-color: #00d2ff;
 }
 
+.footerList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
 
-/* Responsive adjustments (คัดลอกจาก styles object ใน JS มาไว้ที่นี่) */
+.footerLink {
+  color: #b0bec5;
+  text-decoration: none;
+  font-size: 0.9rem;
+  line-height: 2.2;
+  display: flex;
+  align-items: center;
+  transition: color 0.3s ease;
+}
+
+.footerLink:hover { color: #fff; }
+
+.footerIcon {
+  margin-right: 12px; /* แก้ไขค่า marginRight */
+  color: #00d2ff;
+  flex-shrink: 0; /* ป้องกัน icon ถูกบีบ */
+}
+
+.footerBottom {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 20px;
+}
+
+.footerCopyright {
+  font-size: 0.85rem;
+  color: #8899a6;
+  margin: 10px 0;
+}
+
+.footerSocialIcons {
+  display: flex;
+  gap: 15px;
+  margin: 10px 0;
+}
+
+.socialIcon {
+  display: block;
+  transition: transform 0.3s ease;
+}
+.socialIcon:hover { transform: scale(1.2); }
+
+/*
+================================
+=== RESPONSIVE MEDIA QUERIES ===
+================================
+*/
+
+/* Tablet ( <= 992px ) */
 @media (max-width: 992px) {
+  .heroTitle { font-size: 3rem; }
+  .heroSubtitle { font-size: 1.2rem; }
+  .featuresTitle { font-size: 2.2rem; }
 
-  .heroTitle {
-    font-size: 3rem;
-  }
-  .heroSubtitle {
-    font-size: 1.2rem;
-  }
-  .featuresTitle {
-    font-size: 2.2rem;
-  }
-  .featureItem {
-    flex-direction: column !important; /* Override inline style for mobile */
+  /* นี่คือส่วนสำคัญ! บังคับให้เป็น column บนจอเล็ก */
+  .featureItem,
+  .featureItem:nth-child(even) {
+    flex-direction: column !important; /* ใช้ !important เพื่อความแน่นอน */
     text-align: center;
-    padding: 20px;
   }
-  .featureImageContainer {
-    margin-bottom: 20px;
-  }
-  .featureContent {
-    padding: 10px 20px;
-  }
-  .featureContentTitle {
-    font-size: 1.8rem;
-  }
-  .featureContentTitle::before {
-    left: 50%;
-    transform: translateX(-50%);
-  }
+
+  .featureImageContainer { margin-bottom: 30px; }
+  .featureContent { padding: 10px; text-align: center; }
+  .featureContentTitle::before { left: 50%; transform: translateX(-50%); }
+}
+
+/* Small Tablet & Large Phone ( <= 768px ) */
+@media (max-width: 768px) {
+  .heroTitle { font-size: 2.5rem; }
+  .heroSubtitle { font-size: 1.1rem; }
+  .startButton { padding: 15px 30px; font-size: 1.1rem; }
+  .featuresTitle { font-size: 2rem; }
+  .featureContentTitle { font-size: 1.6rem; }
+  .featureContentDescription { font-size: 1rem; }
+
+  .footer { padding: 40px 15px 15px; }
   .footerContent {
     grid-template-columns: 1fr;
     text-align: center;
+    gap: 30px;
   }
   .footerSection {
+    display: flex;
+    flex-direction: column;
     align-items: center;
   }
-  .footerHeading::after {
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  .footerBottom {
-    flex-direction: column;
-    text-align: center;
-  }
+  .footerLogo { justify-content: center; }
+  .footerHeading::after { left: 50%; transform: translateX(-50%); }
+  .footerList { text-align: center; }
+  .footerLink { justify-content: center; }
+  .footerBottom { flex-direction: column; text-align: center; }
 }
-@media (max-width: 768px) {
-  .heroTitle {
-    font-size: 2.5rem;
-  }
-  .heroSubtitle {
-    font-size: 1.1rem;
-  }
-  .startButton {
-    padding: 15px 30px;
-    font-size: 1.1rem;
-  }
-  .featuresTitle {
-    font-size: 2rem;
-  }
-  .featureContentTitle {
-    font-size: 1.6rem;
-  }
-  .featureContentDescription {
-    font-size: 1rem;
-  }
-  .footer {
-    padding: 30px 15px 15px;
-  }
-  .footerBrandName {
-    font-size: 1.8rem; /* ปรับขนาดให้ใหญ่ขึ้นเล็กน้อย*/
-  }
-  .footerHeading {
-    font-size: 1.1rem;
-  }
-  .footerLink {
-    font-size: 0.85rem;
-  }
-  .footerIcon {
-    marginRight: "10px",
-  }
-  .footerCopyright {
-    font-size: 0.8rem;
-  }
-}
+
+/* Phone ( <= 480px ) */
 @media (max-width: 480px) {
-  .heroSection {
-    padding: 70px 15px 50px;
-  }
-  .heroTitle {
-    font-size: 2rem;
-    margin-bottom: 15px;
-  }
-  .heroSubtitle {
-    font-size: 0.95rem;
-    margin-bottom: 30px;
-  }
-  .startButton {
-    padding: 12px 25px;
-    font-size: 1rem;
-  }
-  .featuresTitle {
-    font-size: 1.8rem;
-    margin-bottom: 50px;
-  }
-  .featureItem {
-    margin-bottom: 50px;
-    padding: 15px;
-  }
-  .featureContentTitle {
-    font-size: 1.4rem;
-    margin-bottom: 15px;
-  }
-  .featureContentDescription {
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-  }
-  .footerContent {
-    gap: 20px;
-  }
-  .footerLogo {
-    justify-content: center;
-  }
+  .main { padding-top: 60px; }
+  .heroSection { padding: 70px 15px 50px; }
+  .heroTitle { font-size: 2.2rem; line-height: 1.3; }
+  .heroSubtitle { font-size: 1rem; }
+  .featuresTitle { font-size: 1.8rem; margin-bottom: 50px; }
+  .featureItem { margin-bottom: 50px; padding: 20px 15px; }
+  .featureContentTitle { font-size: 1.5rem; }
 }
