@@ -138,7 +138,7 @@ const Match = () => {
         }
     };
     
-    const intervalId = setInterval(autoSaveToFirebase, 90000);
+    const intervalId = setInterval(autoSaveToFirebase, 60000);
 
     return () => clearInterval(intervalId);
 
@@ -153,7 +153,7 @@ const Match = () => {
     }
   }, [showSaveIndicator]);
 
-  const fetchMembers = async (isNewSessionStart = false) => {
+  const fetchMembers = async () => {
     try {
       if (!loggedInEmail) return;
       const usersRef = collection(db, "users");
@@ -172,37 +172,18 @@ const Match = () => {
           memberList.push({
             memberId: doc.id, name: data.name, level: data.level,
             score: data.score || 0, wins: data.wins || 0,
-            gamesPlayed: 0, ballsUsed: 0,
-            totalGamesPlayed: data.totalGamesPlayed || 0, totalBallsUsed: data.totalBallsUsed || 0,
+            gamesPlayed: 0, 
+            ballsUsed: 0, 
+            totalGamesPlayed: data.totalGamesPlayed || 0, 
+            totalBallsUsed: data.totalBallsUsed || 0,
           });
         }
       });
 
       memberList.sort((a, b) => getLevelOrderIndex(a.level, currentLevelOrder) - getLevelOrderIndex(b.level, currentLevelOrder));
-
-      if (!isNewSessionStart && isBrowser && localStorage.getItem("isOpen") === "true") {
-        const savedMatches = JSON.parse(localStorage.getItem("matches")) || [];
-        const tempGamesPlayed = {};
-        const tempBallsUsed = {};
-        savedMatches.forEach((match) => {
-          if (match.status === "จบการแข่งขัน") {
-            const playersInMatch = [match.A1, match.A2, match.B1, match.B2].filter(Boolean);
-            const ballsInGame = parseInt(match.balls) || 0;
-            playersInMatch.forEach((playerName) => {
-              tempGamesPlayed[playerName] = (tempGamesPlayed[playerName] || 0) + 1;
-              tempBallsUsed[playerName] = (tempBallsUsed[playerName] || 0) + ballsInGame;
-            });
-          }
-        });
-
-        memberList = memberList.map(member => ({
-          ...member,
-          gamesPlayed: tempGamesPlayed[member.name] || 0,
-          ballsUsed: tempBallsUsed[member.name] || 0,
-        }));
-      }
-
+      
       setMembers(memberList);
+
     } catch (err) {
       console.error("Error fetching members:", err);
       setMembers([]);
@@ -210,8 +191,55 @@ const Match = () => {
   };
 
   useEffect(() => {
-    fetchMembers(false);
+    fetchMembers();
   }, [loggedInEmail, isBrowser, selectedRegion]);
+
+  useEffect(() => {
+    if (members.length === 0 && matches.length === 0) {
+        return;
+    }
+
+    // เคลียร์ค่าสถิติเมื่อไม่มีแมตช์
+    if (matches.length === 0 && members.some(m => m.gamesPlayed > 0 || m.ballsUsed > 0)) {
+        setMembers(prev => prev.map(m => ({ ...m, gamesPlayed: 0, ballsUsed: 0 })));
+        return;
+    }
+
+    const newStats = {};
+    members.forEach(m => {
+        newStats[m.name] = { gamesPlayed: 0, ballsUsed: 0 };
+    });
+
+    matches.forEach((match) => {
+        if (match.status === "จบการแข่งขัน") {
+            const playersInMatch = [match.A1, match.A2, match.B1, match.B2].filter(Boolean);
+            const ballsInGame = parseInt(match.balls) || 0;
+            playersInMatch.forEach((playerName) => {
+                if (newStats[playerName]) {
+                    newStats[playerName].gamesPlayed += 1;
+                    newStats[playerName].ballsUsed += ballsInGame;
+                }
+            });
+        }
+    });
+
+    const needsUpdate = members.some(member =>
+        (newStats[member.name] && (
+            member.gamesPlayed !== newStats[member.name].gamesPlayed ||
+            member.ballsUsed !== newStats[member.name].ballsUsed
+        ))
+    );
+
+    if (needsUpdate) {
+        setMembers(prevMembers =>
+            prevMembers.map(member => ({
+                ...member,
+                gamesPlayed: newStats[member.name]?.gamesPlayed || 0,
+                ballsUsed: newStats[member.name]?.ballsUsed || 0,
+            }))
+        );
+    }
+  }, [matches, members]);
 
   useEffect(() => {
     if (isBrowser) {
@@ -247,7 +275,6 @@ const Match = () => {
     clearInterval(timerRef.current);
     setMatchCount(0);
     setTotalBallsInSession(0);
-    setMembers((prevMembers) => prevMembers.map((member) => ({ ...member, gamesPlayed: 0, ballsUsed: 0 })));
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
 
@@ -279,14 +306,13 @@ const Match = () => {
     if (!isBrowser || !loggedInEmail) return;
 
     const loadSession = async () => {
-        let restoredFromBackup = false;
         const savedIsOpen = localStorage.getItem("isOpen") === "true";
         const savedMatchesRaw = localStorage.getItem("matches");
 
         if (savedIsOpen && savedMatchesRaw) {
             try {
                 const savedMatches = JSON.parse(savedMatchesRaw);
-                setMatches(savedMatches);
+                setMatches(savedMatches); 
                 setMatchCount(savedMatches.length);
                 setActivityTime(parseInt(localStorage.getItem("activityTime")) || 0);
                 setIsOpen(true);
@@ -312,7 +338,7 @@ const Match = () => {
                 console.log("Firebase backup found. Restoring session...");
                 const data = backupSnap.data();
                 
-                setMatches(data.matches || []);
+                setMatches(data.matches || []); 
                 setTopic(data.topic || "");
                 setMatchDate(data.matchDate || new Date().toISOString().slice(0, 10));
                 setActivityTime(data.activityTime || 0);
@@ -324,7 +350,6 @@ const Match = () => {
                 setSelectedRegion(data.selectedRegion || "ภาคอีสาน");
                 setIsOpen(true);
                 setMatchCount((data.matches || []).length);
-                restoredFromBackup = true;
 
                 localStorage.setItem("isOpen", "true");
                 localStorage.setItem("matches", JSON.stringify(data.matches || []));
@@ -471,9 +496,6 @@ const Match = () => {
             }
         }
 
-        const oldStatus = matchBeingUpdated.status;
-        const oldBalls = parseInt(matchBeingUpdated.balls) || 0;
-
         if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
             matchBeingUpdated[field] = value;
             const member = members.find(m => m.name === value);
@@ -482,91 +504,20 @@ const Match = () => {
             matchBeingUpdated[field] = value;
         }
 
-        let newStatus = matchBeingUpdated.status;
-
         if (field === "result") {
             matchBeingUpdated.score = getScoreByResult(value);
-            if (value && newStatus !== "จบการแข่งขัน") {
-                newStatus = "จบการแข่งขัน";
-                matchBeingUpdated.status = newStatus;
-            } else if (!value && newStatus === "จบการแข่งขัน") {
-                newStatus = "";
-                matchBeingUpdated.status = newStatus;
+            if (value && matchBeingUpdated.status !== "จบการแข่งขัน") {
+                matchBeingUpdated.status = "จบการแข่งขัน";
+            } else if (!value && matchBeingUpdated.status === "จบการแข่งขัน") {
+                matchBeingUpdated.status = "";
             }
         }
-
-        const playersInCurrentMatch = [
-            matchBeingUpdated.A1,
-            matchBeingUpdated.A2,
-            matchBeingUpdated.B1,
-            matchBeingUpdated.B2,
-        ].filter(Boolean);
-        const ballsInCurrentGame = parseInt(matchBeingUpdated.balls) || 0;
-
-        if (newStatus === "จบการแข่งขัน" && oldStatus !== "จบการแข่งขัน") {
-            setMembers((prevMembers) =>
-                prevMembers.map((member) =>
-                    playersInCurrentMatch.includes(member.name)
-                        ? {
-                            ...member,
-                            gamesPlayed: member.gamesPlayed + 1,
-                            ballsUsed: member.ballsUsed + ballsInCurrentGame,
-                        }
-                        : member
-                )
-            );
+        
+        if (field === "status" && value !== "จบการแข่งขัน" && matchBeingUpdated.status === "จบการแข่งขัน") {
+            matchBeingUpdated.result = "";
+            matchBeingUpdated.score = "";
         }
-        else if (newStatus !== "จบการแข่งขัน" && oldStatus === "จบการแข่งขัน") {
-            setMembers((prevMembers) =>
-                prevMembers.map((member) =>
-                    playersInCurrentMatch.includes(member.name)
-                        ? {
-                            ...member,
-                            gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                            ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
-                        }
-                        : member
-                )
-            );
-        }
-        else if (
-            field === "balls" &&
-            matchBeingUpdated.status === "จบการแข่งขัน" &&
-            matchBeingUpdated.result
-        ) {
-            const newBalls = parseInt(value) || 0;
-            setMembers((prevMembers) =>
-                prevMembers.map((member) => {
-                    if (playersInCurrentMatch.includes(member.name)) {
-                        return {
-                            ...member,
-                            ballsUsed: member.ballsUsed - oldBalls + newBalls,
-                        };
-                    }
-                    return member;
-                })
-            );
-        }
-
-        if (
-            oldStatus === "จบการแข่งขัน" &&
-            newStatus === "จบการแข่งขัน" &&
-            ((!matchBeingUpdated.balls) || (showResultsColumn && !matchBeingUpdated.result))
-        ) {
-            matchBeingUpdated.status = "";
-            setMembers((prevMembers) =>
-                prevMembers.map((member) =>
-                    playersInCurrentMatch.includes(member.name)
-                        ? {
-                            ...member,
-                            gamesPlayed: Math.max(0, member.gamesPlayed - 1),
-                            ballsUsed: Math.max(0, member.ballsUsed - ballsInCurrentGame),
-                        }
-                        : member
-                )
-            );
-        }
-
+        
         updated[idx] = matchBeingUpdated;
 
         if (isBrowser) {
@@ -602,7 +553,7 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
     setMatchCount(0);
-    await fetchMembers(true);
+    await fetchMembers();
   };
 
   const handleEndGroup = async () => {
@@ -715,7 +666,7 @@ const Match = () => {
           
           await resetSession();
           
-          fetchMembers(false);
+          fetchMembers();
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
           Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
@@ -734,23 +685,7 @@ const Match = () => {
         setMatches((prevMatches) => {
           const updatedMatches = prevMatches.filter((_, idx) => idx !== idxToDelete);
           const reIndexedMatches = updatedMatches.map((match, idx) => ({ ...match, matchId: padId(idx + 1, 4) }));
-          const tempGamesPlayed = {};
-          const tempBallsUsed = {};
-          reIndexedMatches.forEach((match) => {
-            if (match.status === "จบการแข่งขัน") {
-              const playersInMatch = [match.A1, match.A2, match.B1, match.B2].filter(Boolean);
-              const ballsInGame = parseInt(match.balls) || 0;
-              playersInMatch.forEach((playerName) => {
-                tempGamesPlayed[playerName] = (tempGamesPlayed[playerName] || 0) + 1;
-                tempBallsUsed[playerName] = (tempBallsUsed[playerName] || 0) + ballsInGame;
-              });
-            }
-          });
-          setMembers((prevMembers) => prevMembers.map((member) => ({
-            ...member,
-            gamesPlayed: tempGamesPlayed[member.name] || 0,
-            ballsUsed: tempBallsUsed[member.name] || 0,
-          })));
+          
           if (isBrowser) localStorage.setItem("matches", JSON.stringify(reIndexedMatches));
           setMatchCount(reIndexedMatches.length);
           Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
@@ -1072,16 +1007,13 @@ const Match = () => {
         .action-button.end-group { background-color: #f44336; }
         .action-button.end-group:hover { background-color: #d32f2f; }
         .activity-time-display { background-color: #e3f2fd; padding: 10px 15px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
-        
-        /* MODIFIED: Add position: relative to the parent container */
         .action-time-group { 
           display: flex; 
           flex-wrap: wrap; 
           gap: 20px; 
           align-items: center;
-          position: relative; /* This is the key for positioning the child */
+          position: relative;
         }
-
         .match-table td select:disabled { background-color: #f0f0f0; cursor: not-allowed; }
         .match-table td select.status-select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%20viewBox%3D%220%200%20292.4%20292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 10px top 50%; background-size: 12px auto; padding-right: 30px; }
         .score-display { display: block; padding: 8px 5px; background-color: #f5f5f5; border-radius: 4px; min-width: 40px; }
@@ -1098,11 +1030,9 @@ const Match = () => {
         .add-match-button { display: block; width: fit-content; margin: 25px auto 0 auto; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
         .add-match-button:hover:not(:disabled) { background-color: #0056b3; }
         .add-match-button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        
-        /* MODIFIED: Changed styles for the save indicator to use absolute positioning */
         .save-indicator {
           position: absolute;
-          bottom: -50px; /* Position it below the parent container */
+          bottom: -50px; 
           left: 50%;
           z-index: 10;
           display: flex;
@@ -1117,18 +1047,17 @@ const Match = () => {
           border: 1px solid #a5d6a7;
           opacity: 0;
           visibility: hidden;
-          transform: translateX(-50%) translateY(10px); /* Center horizontally and start slightly lower */
+          transform: translateX(-50%) translateY(10px);
           transition: all 0.5s ease-in-out;
         }
         .save-indicator.visible {
           opacity: 1;
           visibility: visible;
-          transform: translateX(-50%) translateY(0); /* Center horizontally and move to final position */
+          transform: translateX(-50%) translateY(0);
         }
         .save-indicator svg {
           stroke: #2e7d32;
         }
-
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
           .date-topic-group, .action-time-group { flex-direction: column; align-items: stretch; }
