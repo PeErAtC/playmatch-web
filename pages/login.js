@@ -180,7 +180,7 @@ export default function Login() {
         </div>
 
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.2.1
+          © 2025–2026 PlayMatch version 1.5.2
         </div>
       </div>
 
