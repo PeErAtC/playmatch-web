@@ -18,9 +18,9 @@ import {
   Swords,
 } from "lucide-react";
 
-// --- 1. เพิ่มการ import สำหรับ Firestore ---
+// --- เพิ่มการ import สำหรับ Firestore ---
 import { db } from "../../lib/firebaseConfig";
-import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 
 const allMenuList = [
@@ -80,8 +80,6 @@ export default function Sidebar({
   const [activePath, setActivePath] = useState("");
   const [showBirthdayBadge, setShowBirthdayBadge] = useState(true);
   const [openSubMenu, setOpenSubMenu] = useState(null);
-
-  // --- 2. เพิ่ม State สำหรับเก็บ URL รูปโปรไฟล์ ---
   const [profileImageUrl, setProfileImageUrl] = useState(null);
 
 
@@ -101,35 +99,33 @@ export default function Sidebar({
     }
   }, []);
 
-  // --- 3. แก้ไข useEffect นี้เพื่อดึงข้อมูล User และรูปภาพแบบ Real-time ---
+  // --- ส่วนที่แก้ไข: ดึงข้อมูลทั้งหมดจาก Firestore แบบ Real-time ---
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const username = localStorage.getItem("loggedInUsername");
-      const group = localStorage.getItem("groupName");
-      const email = localStorage.getItem("loggedInEmail"); // ดึง email มาเพื่อใช้ค้นหา
-
-      if (username) setLoggedInUsername(username);
-      if (group) setGroupName(group);
-
       const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
       if (savedBirthdayNotifications !== null) {
         setShowBirthdayBadge(JSON.parse(savedBirthdayNotifications));
       }
 
-      // ถ้ามี email ใน localStorage ให้เริ่มดึงข้อมูลจาก Firestore
+      const email = localStorage.getItem("loggedInEmail");
+
       if (email) {
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", email));
 
-        // ใช้ onSnapshot เพื่อสร้าง Real-time listener
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
           if (!querySnapshot.empty) {
-            // เรามั่นใจว่ามี user เดียว เพราะ email ไม่ซ้ำกัน
             const userDoc = querySnapshot.docs[0];
             const userData = userDoc.data();
 
-            // อัปเดต State ด้วย URL รูปภาพจาก Firestore
+            // อัปเดต State ทั้งหมดด้วยข้อมูลล่าสุดจาก Firestore
+            setLoggedInUsername(userData.username || "");
+            setGroupName(userData.groupName || "");
             setProfileImageUrl(userData.profileImageUrl || null);
+          } else {
+            console.error("User not found in Firestore with email:", email);
+            // อาจจะต้องการ Logout หรือแสดงสถานะผู้ใช้ที่ไม่รู้จัก
+            handleLogout();
           }
         });
 
@@ -143,8 +139,6 @@ export default function Sidebar({
     localStorage.removeItem("loggedInEmail");
     localStorage.removeItem("loggedInUsername");
     localStorage.removeItem("groupName");
-    // เราอาจต้องลบ profileImageUrl ออกไปด้วยเพื่อความสะอาด
-    localStorage.removeItem("profileImageUrl");
     window.location.href = "/login";
   };
 
@@ -251,7 +245,6 @@ export default function Sidebar({
           className="user-info"
           onClick={() => setIsDropdownOpen((p) => !p)}
         >
-          {/* --- 4. แก้ไขส่วนแสดงผล Avatar --- */}
           <div className="user-avatar">
             {profileImageUrl ? (
               <img src={profileImageUrl} alt="User Avatar" className="user-avatar-image"/>
@@ -286,7 +279,6 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* --- 5. เพิ่ม CSS สำหรับรูปภาพ Avatar --- */}
       <style jsx>{`
         * {
           font-family: "Kanit", sans-serif;
@@ -296,10 +288,8 @@ export default function Sidebar({
         .user-avatar-image {
             width: 100%;
             height: 100%;
-            object-fit: cover; /* ทำให้รูปภาพเต็มวงกลมและไม่เสียสัดส่วน */
+            object-fit: cover;
         }
-
-        /* CSS ส่วนที่เหลือเหมือนเดิมทั้งหมด */
 
         .sidebar {
           height: 100vh;
@@ -649,10 +639,10 @@ export default function Sidebar({
 
         .user-dropdown-menu {
           position: absolute;
-          left: 15px; /* ปรับให้ชิดซ้ายมากขึ้น */
-          right: 15px; /* เพิ่ม right เพื่อให้ความกว้างยืดหยุ่น */
-          bottom: 85px; /* <-- เปลี่ยนเป็นค่าคงที่ */
-          min-width: auto; /* ปรับ min-width */
+          left: 15px;
+          right: 15px;
+          bottom: 85px;
+          min-width: auto;
           background: #232836;
           border-radius: 8px;
           box-shadow: 0 8px 22px rgba(20, 30, 50, 0.1);
