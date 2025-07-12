@@ -6,11 +6,9 @@ import { db, storage } from "../lib/firebaseConfig";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-// เพิ่มการ import library สำหรับบีบอัดรูปภาพ
 import imageCompression from 'browser-image-compression';
 
 
-// ทำให้ฟังก์ชัน getText อยู่นอก component และใช้ภาษาไทยเป็นหลัก
 const texts = {
   settingsTitle: "การตั้งค่า",
   generalSettings: "การตั้งค่าทั่วไป",
@@ -26,11 +24,12 @@ const texts = {
   loading: "กำลังโหลดข้อมูล...",
   error: "เกิดข้อผิดพลาด:",
   noData: "ไม่มีข้อมูล",
-  expiresIn: "กำลังจะหมดอายุในอีก",
+  expiresIn: "หมดอายุในอีก",
   days: "วัน",
   expired: "หมดอายุแล้ว",
   expiresToday: "หมดอายุวันนี้",
   accountCreatedLabel: "สร้างบัญชีเมื่อ",
+  expiryDateLabel: "วันหมดอายุบัญชี",
   inAppSoundsLabel: "เสียงในแอป",
   soundsOn: "เปิด",
   soundsOff: "ปิด",
@@ -48,9 +47,12 @@ const getText = (key) => texts[key];
 export default function SettingsPage() {
   const isBrowser = typeof window !== "undefined";
 
-  const [birthdayNotifications, setBirthdayNotifications] = useState(true);
-  const [inAppSounds, setInAppSounds] = useState(true);
-  const [trackMatchResults, setTrackMatchResults] = useState(true);
+  const initialSettings = {
+    birthdayNotifications: true,
+    inAppSounds: true,
+    trackMatchResults: true,
+  };
+  const [settings, setSettings] = useState(initialSettings);
   const [showSaveMessage, setShowSaveMessage] = useState(false);
 
   const [userProfile, setUserProfile] = useState(null);
@@ -62,21 +64,12 @@ export default function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Effect to load initial settings from localStorage on component mount
   useEffect(() => {
     if (isBrowser) {
-      const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
-      const savedInAppSounds = localStorage.getItem("inAppSounds");
-      const savedTrackMatchResults = localStorage.getItem("trackMatchResults");
-
-      if (savedBirthdayNotifications !== null) {
-        setBirthdayNotifications(JSON.parse(savedBirthdayNotifications));
-      }
-      if (savedInAppSounds !== null) {
-        setInAppSounds(JSON.parse(savedInAppSounds));
-      }
-      if (savedTrackMatchResults !== null) {
-        setTrackMatchResults(JSON.parse(savedTrackMatchResults));
+      const savedSettings = localStorage.getItem("appSettings");
+      if (savedSettings) {
+        // ผสานค่าที่โหลดมากับค่าเริ่มต้น เพื่อรองรับการเพิ่ม setting ใหม่ในอนาคต
+        setSettings(prevSettings => ({ ...prevSettings, ...JSON.parse(savedSettings) }));
       }
 
       const email = localStorage.getItem("loggedInEmail");
@@ -89,46 +82,28 @@ export default function SettingsPage() {
     }
   }, [isBrowser]);
 
-  // Effects to save settings to localStorage whenever they change
   useEffect(() => {
     if (isBrowser) {
-      localStorage.setItem("birthdayNotifications", JSON.stringify(birthdayNotifications));
-      setShowSaveMessage(true);
-      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
-      return () => clearTimeout(timer);
+      // ใช้ flag เพื่อป้องกันการบันทึกค่าเริ่มต้นในครั้งแรกที่โหลด
+      const isInitialLoad = localStorage.getItem("appSettings") === null;
+      if (!isInitialLoad) {
+          localStorage.setItem("appSettings", JSON.stringify(settings));
+          setShowSaveMessage(true);
+          const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+          return () => clearTimeout(timer);
+      }
     }
-  }, [birthdayNotifications, isBrowser]);
-
-  useEffect(() => {
-    if (isBrowser) {
-      localStorage.setItem("inAppSounds", JSON.stringify(inAppSounds));
-      setShowSaveMessage(true);
-      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [inAppSounds, isBrowser]);
-
-  useEffect(() => {
-    if (isBrowser) {
-      localStorage.setItem("trackMatchResults", JSON.stringify(trackMatchResults));
-      setShowSaveMessage(true);
-      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [trackMatchResults, isBrowser]);
+  }, [settings, isBrowser]);
 
 
-  // Firebase fetching effects
   useEffect(() => {
     const fetchUserId = async () => {
       if (!loggedInEmail) return;
-
       try {
         setLoadingProfile(true);
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", loggedInEmail));
         const querySnapshot = await getDocs(q);
-
         if (!querySnapshot.empty) {
           querySnapshot.forEach(doc => {
             setCurrentUserId(doc.id);
@@ -144,20 +119,17 @@ export default function SettingsPage() {
         setLoadingProfile(false);
       }
     };
-
     fetchUserId();
   }, [loggedInEmail]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!currentUserId) return;
-
       setLoadingProfile(true);
       setProfileError(null);
       try {
         const userDocRef = doc(db, "users", currentUserId);
         const userDocSnap = await getDoc(userDocRef);
-
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           setUserProfile({
@@ -165,10 +137,10 @@ export default function SettingsPage() {
             groupName: userData.groupName || "N/A",
             role: userData.role || "N/A",
             username: userData.username || "N/A",
-            createDate: userData.CreateDate || null,
-            accountDurationDays: userData.AccountDurationDays !== undefined ? Number(userData.AccountDurationDays) : 30,
             packageType: userData.packageType || "N/A",
             profileImageUrl: userData.profileImageUrl || null,
+            createDate: userData.CreateDate || null,
+            expiryDate: userData.expiryDate || null,
           });
         } else {
           setProfileError(getText("noData"));
@@ -180,28 +152,22 @@ export default function SettingsPage() {
         setLoadingProfile(false);
       }
     };
-
     fetchUserProfile();
   }, [currentUserId]);
 
   const handleImageUpload = async (event) => {
     const imageFile = event.target.files[0];
     if (!imageFile || !currentUserId) return;
-
     const options = {
       maxSizeMB: 1,
       maxWidthOrHeight: 800,
       useWebWorker: true,
     };
-
     try {
       setIsUploading(true);
-
       const compressedFile = await imageCompression(imageFile, options);
-
       const storageRef = ref(storage, `profile_images/${currentUserId}`);
       await uploadBytes(storageRef, compressedFile);
-
       const downloadURL = await getDownloadURL(storageRef);
       const userDocRef = doc(db, "users", currentUserId);
       await updateDoc(userDocRef, {
@@ -211,13 +177,11 @@ export default function SettingsPage() {
         ...prevProfile,
         profileImageUrl: downloadURL,
       }));
-
     } catch (error) {
       console.error("Error processing or uploading image: ", error);
       alert("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ");
     } finally {
       setIsUploading(false);
-      // Reset the file input value to allow re-uploading the same file
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -225,34 +189,17 @@ export default function SettingsPage() {
   };
 
   const accountExpiryInfo = useMemo(() => {
-    if (!userProfile || !userProfile.createDate || userProfile.accountDurationDays === undefined) {
-      return { status: "not_available", message: getText("noData") };
+    if (!userProfile || !userProfile.expiryDate) {
+      return { status: "not_available", message: "ไม่มีข้อมูล" };
     }
-    let createDate;
-    if (typeof userProfile.createDate.toDate === 'function') {
-      createDate = userProfile.createDate.toDate();
-    } else {
-      if (typeof userProfile.createDate === 'string') {
-        const parts = userProfile.createDate.split('/');
-        createDate = parts.length === 3 ? new Date(`${parts[1]}/${parts[0]}/${parts[2]}`) : new Date(userProfile.createDate);
-      } else {
-         return { status: "error", message: getText("error") + " Unknown CreateDate type" };
-      }
-    }
-    if (isNaN(createDate.getTime())) {
-      return { status: "error", message: getText("error") + " Invalid date" };
-    }
-    const expiryDate = new Date(createDate);
-    expiryDate.setDate(createDate.getDate() + userProfile.accountDurationDays);
+    const expiryDate = userProfile.expiryDate.toDate();
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     expiryDate.setHours(0, 0, 0, 0);
     const diffTime = expiryDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays > 0) {
-      return {
-        status: "active", message: `${getText("expiresIn")} ${diffDays} ${getText("days")}`, isExpiringSoon: diffDays <= 7
-      };
+      return { status: "active", message: `${getText("expiresIn")} ${diffDays} ${getText("days")}`, isExpiringSoon: diffDays <= 7 };
     } else if (diffDays === 0) {
       return { status: "expires_today", message: getText("expiresToday"), isExpiringSoon: true };
     } else {
@@ -260,25 +207,19 @@ export default function SettingsPage() {
     }
   }, [userProfile]);
 
-
-  const toggleBirthdayNotifications = () => setBirthdayNotifications((prev) => !prev);
-  const toggleInAppSounds = () => setInAppSounds((prev) => !prev);
-  const toggleTrackMatchResults = () => setTrackMatchResults((prev) => !prev);
+  const handleSettingChange = (key) => {
+    setSettings(prevSettings => ({
+      ...prevSettings,
+      [key]: !prevSettings[key],
+    }));
+  };
 
   const handleResetSettings = () => {
     if (window.confirm(getText("resetConfirm"))) {
-      setBirthdayNotifications(true);
-      setInAppSounds(true);
-      setTrackMatchResults(true);
-
+      setSettings(initialSettings);
       if (isBrowser) {
-        localStorage.removeItem("birthdayNotifications");
-        localStorage.removeItem("inAppSounds");
-        localStorage.removeItem("trackMatchResults");
+        localStorage.removeItem("appSettings");
       }
-      setShowSaveMessage(true);
-      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
-      return () => clearTimeout(timer);
     }
   };
 
@@ -297,9 +238,7 @@ export default function SettingsPage() {
         return getText("noData");
       }
     }
-    return d.toLocaleDateString('th-TH', {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
+    return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   const getPackageTypeClassName = (type) => {
@@ -327,7 +266,6 @@ export default function SettingsPage() {
           ) : userProfile ? (
             <div className="profile-card">
               <div className="profile-header">
-
                 <div className="profile-avatar-wrapper" onClick={() => !isUploading && fileInputRef.current.click()}>
                   {isUploading ? (
                     <div className="upload-loader"><Loader size={32} /></div>
@@ -349,7 +287,6 @@ export default function SettingsPage() {
                   style={{ display: "none" }}
                   accept="image/png, image/jpeg, image/gif"
                 />
-
                 <div className="profile-name-role">
                   <h4>{userProfile.username}</h4>
                   <p className="profile-role">{userProfile.role}</p>
@@ -379,6 +316,11 @@ export default function SettingsPage() {
                   <span className="info-value">{formatDate(userProfile.createDate)}</span>
                 </div>
                 <div className="info-item">
+                  <Calendar size={18} className="info-icon" />
+                  <span className="info-label">{getText("expiryDateLabel")}:</span>
+                  <span className="info-value">{formatDate(userProfile.expiryDate)}</span>
+                </div>
+                <div className="info-item">
                   <Clock size={18} className="info-icon" />
                   <span className="info-label">{getText("accountStatusLabel")}:</span>
                   <span className={`info-value ${accountExpiryInfo.status === 'expired' ? 'status-expired' : accountExpiryInfo.isExpiringSoon ? 'status-expiring-soon' : ''}`}>
@@ -394,84 +336,69 @@ export default function SettingsPage() {
 
         <div className="settings-section">
           <h3>{getText("generalSettings")}</h3>
-
           {showSaveMessage && (
             <p className="save-message">{getText("settingsSaved")}</p>
           )}
-
           <div className="setting-item">
             <div className="setting-label">
-              {birthdayNotifications ? (
+              {settings.birthdayNotifications ? (
                 <Bell size={20} className="setting-icon" />
               ) : (
                 <BellOff size={20} className="setting-icon" />
               )}
               <span>{getText("notificationsLabel")}</span>
             </div>
-            <div
-              className="setting-control toggle-switch"
-              onClick={toggleBirthdayNotifications}
-            >
-              <div className={`switch-track ${birthdayNotifications ? "on" : "off"}`}>
+            <div className="setting-control toggle-switch" onClick={() => handleSettingChange('birthdayNotifications')}>
+              <div className={`switch-track ${settings.birthdayNotifications ? "on" : "off"}`}>
                 <div className="switch-thumb"></div>
               </div>
               <span className="toggle-label">
-                {birthdayNotifications ? getText("notificationsOn") : getText("notificationsOff")}
+                {settings.birthdayNotifications ? getText("notificationsOn") : getText("notificationsOff")}
               </span>
             </div>
           </div>
-
           <div className="setting-item">
             <div className="setting-label">
-              {inAppSounds ? (
+              {settings.inAppSounds ? (
                 <Volume2 size={20} className="setting-icon" />
               ) : (
                 <VolumeX size={20} className="setting-icon" />
               )}
               <span>{getText("inAppSoundsLabel")}</span>
             </div>
-            <div
-              className="setting-control toggle-switch"
-              onClick={toggleInAppSounds}
-            >
-              <div className={`switch-track ${inAppSounds ? "on" : "off"}`}>
+            <div className="setting-control toggle-switch" onClick={() => handleSettingChange('inAppSounds')}>
+              <div className={`switch-track ${settings.inAppSounds ? "on" : "off"}`}>
                 <div className="switch-thumb"></div>
               </div>
               <span className="toggle-label">
-                {inAppSounds ? getText("soundsOn") : getText("soundsOff")}
+                {settings.inAppSounds ? getText("soundsOn") : getText("soundsOff")}
               </span>
             </div>
           </div>
-
           <div className="setting-item">
             <div className="setting-label">
-              {trackMatchResults ? (
+              {settings.trackMatchResults ? (
                 <ListChecks size={20} className="setting-icon" />
               ) : (
                 <ListX size={20} className="setting-icon" />
               )}
               <span>{getText("trackResultsLabel")}</span>
             </div>
-            <div
-              className="setting-control toggle-switch"
-              onClick={toggleTrackMatchResults}
-            >
-              <div className={`switch-track ${trackMatchResults ? "on" : "off"}`}>
+            <div className="setting-control toggle-switch" onClick={() => handleSettingChange('trackMatchResults')}>
+              <div className={`switch-track ${settings.trackMatchResults ? "on" : "off"}`}>
                 <div className="switch-thumb"></div>
               </div>
               <span className="toggle-label">
-                {trackMatchResults ? getText("trackResultsOn") : getText("trackResultsOff")}
+                {settings.trackMatchResults ? getText("trackResultsOn") : getText("trackResultsOff")}
               </span>
             </div>
           </div>
-
           <div className="setting-item reset-button-container">
             <button onClick={handleResetSettings} className="reset-button">
               <RefreshCcw size={18} className="button-icon" />
               {getText("resetSettings")}
             </button>
           </div>
-
         </div>
       </main>
 
@@ -798,12 +725,12 @@ export default function SettingsPage() {
             text-align: center;
             font-weight: 500;
             animation: fadeOut 2s forwards;
-            animation-delay: 1s;
+            animation-delay: 1.5s;
         }
 
         @keyframes fadeOut {
             from { opacity: 1; }
-            to { opacity: 0; display: none; }
+            to { opacity: 0; }
         }
 
         .reset-button-container {
