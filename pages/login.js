@@ -23,57 +23,75 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      // 1. ตรวจสอบรหัสผ่านก่อน
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       const userRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const username = userData.username;
-        const groupName = userData.groupName;
 
-        localStorage.setItem("loggedInUsername", username);
-        localStorage.setItem("groupName", groupName);
+      // 2. ตรวจสอบว่ามีข้อมูลโปรไฟล์ และมีวันหมดอายุหรือไม่
+      if (userSnap.exists() && userSnap.data().expiryDate) {
+        const userData = userSnap.data();
+        const expiryDate = userData.expiryDate.toDate(); // แปลงเป็น JavaScript Date
+        const now = new Date();
+
+        // 3. เปรียบเทียบวันหมดอายุกับวันปัจจุบัน
+        if (now > expiryDate) {
+          // --- ถ้าหมดอายุแล้ว ---
+          await auth.signOut(); // สั่ง Sign out ทันที
+          // ตั้งค่าข้อความแจ้งเตือนให้ผู้ใช้
+          setMsg({ 
+            type: "error", 
+            text: "บัญชีของคุณหมดอายุการใช้งานแล้ว กรุณาติดต่อ PlayMatch Support เพื่อต่ออายุ" 
+          });
+          setLoading(false); // หยุดการโหลด
+          return; // จบการทำงาน ไม่ไปต่อ
+        }
+
+        // --- ถ้ายังไม่หมดอายุ ---
+        // บันทึกข้อมูลที่จำเป็นลง LocalStorage
+        localStorage.setItem("loggedInUsername", userData.username);
+        localStorage.setItem("groupName", userData.groupName);
       }
 
-      // ******** ส่วนที่เพิ่มเข้ามาเพื่อบันทึกเวลาเข้าสู่ระบบล่าสุด ********
-      // ใช้ updateDoc เพื่ออัปเดตช่อง 'lastLogin' ในเอกสารผู้ใช้
-      // serverTimestamp() จะบันทึกเวลาปัจจุบันตามเซิร์ฟเวอร์ Firestore ซึ่งมีความแม่นยำ
+      // 4. อัปเดตเวลาล็อกอินล่าสุด และพาไปหน้า Home
       await updateDoc(userRef, {
         lastLogin: serverTimestamp(),
       });
-      // *******************************************************************
 
       setMsg({ type: "success", text: "✅ เข้าสู่ระบบสำเร็จ" });
       localStorage.setItem("loggedInEmail", user.email);
 
       setIsLoading(true);
-      // เปลี่ยนจาก router.push("/home") เป็น window.location.href = "/home";
       setTimeout(() => {
         setIsLoading(false);
-        window.location.href = "/home"; // นี่คือการสั่งให้บราวเซอร์รีเฟรชและโหลดหน้า /home ใหม่ทั้งหมด
+        window.location.href = "/home";
       }, 1000);
+
     } catch (error) {
-      setMsg({ type: "error", text: error.message || "Login failed" });
-    } finally {
-      setLoading(false);
+      // แปลง Error code ของ Firebase เป็นภาษาไทยที่เข้าใจง่าย
+      let errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "คุณพยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง";
+      }
+      setMsg({ type: "error", text: errorMessage });
+      // ตรวจสอบให้แน่ใจว่า setLoading(false) ถูกเรียกในกรณีที่เกิด error ด้วย
+      setLoading(false); 
     }
+    // ไม่ต้องมี finally { setLoading(false); } แล้ว เพราะเราจัดการในแต่ละเงื่อนไขแล้ว
   };
 
   return (
     <main className="login-main">
-      <Head> {/* <--- เพิ่ม Head component ที่นี่ */}
+      <Head>
         <title>เข้าสู่ระบบ PlayMatch - จัดการและติดตามการแข่งขันกีฬา</title>
         <meta
           name="description"
           content="เข้าสู่ระบบ PlayMatch แพลตฟอร์มจัดการก๊วนแบดมินตันและกีฬาอื่นๆ เพื่อการบริหารสมาชิก สร้างแมตช์ และติดตามผลได้อย่างง่ายดาย."
         />
-        {/* คุณสามารถเพิ่ม meta tag อื่นๆ ที่นี่ได้หากต้องการ */}
       </Head>
 
       <div className="login-bg-overlay" />
@@ -81,7 +99,7 @@ export default function Login() {
         <div className="login-logo">
           <Image
             src="/images/Logo-iconnew.png"
-            alt="โลโก้ PlayMatch" // อัปเดต Alt text ให้ตรงกับเนื้อหามากขึ้น
+            alt="โลโก้ PlayMatch"
             width={74}
             height={86}
             priority
@@ -129,7 +147,6 @@ export default function Login() {
 
         {isLoading && <p className="login-loading">Loading...</p>}
 
-        {/* Contact icons */}
         <div className="login-contact">
           <a
             href="https://page.line.me/136rjkgt"
@@ -154,11 +171,10 @@ export default function Login() {
         </div>
 
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.2.1
+          © 2025–2026 PlayMatch version 1.5.2
         </div>
       </div>
 
-      {/* BG gradient and responsive */}
       <style jsx global>{`
         html,
         body,
