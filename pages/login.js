@@ -1,13 +1,11 @@
 // pages/login.js
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-// ตรวจสอบให้แน่ใจว่าได้ import serverTimestamp จาก firebaseConfig.js อย่างถูกต้อง
 import { auth, db, serverTimestamp } from "../lib/firebaseConfig";
-// เพิ่ม doc, getDoc, และ updateDoc สำหรับการจัดการเอกสารผู้ใช้
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import Head from 'next/head'; // <--- เพิ่มบรรทัดนี้สำหรับ SEO Head Tags
+import Head from 'next/head';
 
 export default function Login() {
   const router = useRouter();
@@ -16,6 +14,16 @@ export default function Login() {
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('rememberedEmail');
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,39 +31,37 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // 1. ตรวจสอบรหัสผ่านก่อน
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       const userRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userRef);
 
-      // 2. ตรวจสอบว่ามีข้อมูลโปรไฟล์ และมีวันหมดอายุหรือไม่
       if (userSnap.exists() && userSnap.data().expiryDate) {
         const userData = userSnap.data();
-        const expiryDate = userData.expiryDate.toDate(); // แปลงเป็น JavaScript Date
+        const expiryDate = userData.expiryDate.toDate();
         const now = new Date();
 
-        // 3. เปรียบเทียบวันหมดอายุกับวันปัจจุบัน
         if (now > expiryDate) {
-          // --- ถ้าหมดอายุแล้ว ---
-          await auth.signOut(); // สั่ง Sign out ทันที
-          // ตั้งค่าข้อความแจ้งเตือนให้ผู้ใช้
+          await auth.signOut();
           setMsg({ 
             type: "error", 
             text: "บัญชีของคุณหมดอายุการใช้งานแล้ว กรุณาติดต่อ PlayMatch Support เพื่อต่ออายุ" 
           });
-          setLoading(false); // หยุดการโหลด
-          return; // จบการทำงาน ไม่ไปต่อ
+          setLoading(false);
+          return;
         }
 
-        // --- ถ้ายังไม่หมดอายุ ---
-        // บันทึกข้อมูลที่จำเป็นลง LocalStorage
         localStorage.setItem("loggedInUsername", userData.username);
         localStorage.setItem("groupName", userData.groupName);
       }
 
-      // 4. อัปเดตเวลาล็อกอินล่าสุด และพาไปหน้า Home
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+      }
+
       await updateDoc(userRef, {
         lastLogin: serverTimestamp(),
       });
@@ -70,7 +76,6 @@ export default function Login() {
       }, 1000);
 
     } catch (error) {
-      // แปลง Error code ของ Firebase เป็นภาษาไทยที่เข้าใจง่าย
       let errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
@@ -78,10 +83,8 @@ export default function Login() {
         errorMessage = "คุณพยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง";
       }
       setMsg({ type: "error", text: errorMessage });
-      // ตรวจสอบให้แน่ใจว่า setLoading(false) ถูกเรียกในกรณีที่เกิด error ด้วย
       setLoading(false); 
     }
-    // ไม่ต้องมี finally { setLoading(false); } แล้ว เพราะเราจัดการในแต่ละเงื่อนไขแล้ว
   };
 
   return (
@@ -129,7 +132,13 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
           />
           <div className="remember-me">
-            <input type="checkbox" id="rememberMe" name="rememberMe" />
+            <input 
+              type="checkbox" 
+              id="rememberMe" 
+              name="rememberMe"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+            />
             <label htmlFor="rememberMe">Remember me</label>
           </div>
           <button type="submit" disabled={loading}>
@@ -171,7 +180,7 @@ export default function Login() {
         </div>
 
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.5.2
+          © 2025–2026 PlayMatch version 1.2.1
         </div>
       </div>
 
