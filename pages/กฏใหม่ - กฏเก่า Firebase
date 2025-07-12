@@ -39,3 +39,16 @@ service cloud.firestore {
     }
   }
 }
+
+
+------------------------------------------------------------------------------------------
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // อนุญาตให้อ่านและอัปเดตข้อมูลได้ ถ้าเป็นเจ้าของข้อมูล
+      allow read, update: if request.auth.uid == userId;
+    }
+  }
+}
