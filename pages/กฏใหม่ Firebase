@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- ฟังก์ชันสำหรับตรวจสอบว่าเป็นแอดมินหรือไม่ ---
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    // ++ เพิ่มเติม: กฎสำหรับ collection 'configurations' ++
+    match /configurations/{configId} {
+      // อนุญาตให้ผู้ใช้ที่ล็อกอินแล้วทุกคน อ่านข้อมูลการตั้งค่าได้
+      allow read: if request.auth != null;
+      
+      // การเขียนหรืออัปเดตข้อมูลการตั้งค่า อนุญาตเฉพาะแอดมิน
+      allow write: if isAdmin();
+    }
+
+    // --- กฎสำหรับคอลเลกชัน "users" (เหมือนเดิม) ---
+    match /users/{userId} {
+      // อนุญาตให้อ่านได้ ถ้าผู้ใช้ล็อกอินแล้ว
+      allow read: if request.auth != null;
+
+      // อนุญาตให้อัปเดตได้ ถ้าเป็นเจ้าของโปรไฟล์ หรือ เป็นแอดมิน
+      allow update: if request.auth.uid == userId || isAdmin();
+      
+      // อนุญาตให้สร้างโปรไฟล์ได้ ถ้าเป็นเจ้าของ UID นั้น
+      allow create: if request.auth.uid == userId;
+
+      // อนุญาตให้ลบได้ ก็ต่อเมื่อ! คนที่สั่งลบเป็นแอดมิน
+      allow delete: if isAdmin();
+
+      // กฎสำหรับ Subcollections ทั้งหมดที่อยู่ใต้ User แต่ละคน
+      match /{subcollection}/{docId=**} {
+        // อนุญาตให้เจ้าของข้อมูล หรือ แอดมิน สามารถ อ่าน/เขียน/ลบ ข้อมูลย่อยของตัวเองได้
+        allow read, write: if request.auth.uid == userId || isAdmin();
+      }
+    }
+  }
+}
