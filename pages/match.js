@@ -53,7 +53,7 @@ const getScoreByResult = (result) => {
 
 const Match = () => {
   const [matchDate, setMatchDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [topic, setTopic] = useState(() => typeof window !== "undefined" ? localStorage.getItem("topic") || "" : "");
+  const [topic, setTopic] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [matches, setMatches] = useState([]);
   const [activityTime, setActivityTime] = useState(0);
@@ -66,24 +66,26 @@ const Match = () => {
   const [matchCount, setMatchCount] = useState(0);
   const [totalBallsInSession, setTotalBallsInSession] = useState(0);
   const isBrowser = typeof window !== "undefined";
-  const [ballPrice, setBallPrice] = useState(() => isBrowser ? parseFloat(localStorage.getItem("ballPrice")) || 0 : 0);
-  const [courtFee, setCourtFee] = useState(() => isBrowser ? parseFloat(localStorage.getItem("courtFee")) || 0 : 0);
-  const [courtFeePerGame, setCourtFeePerGame] = useState(() => isBrowser ? parseFloat(localStorage.getItem("courtFeePerGame")) || 0 : 0);
-  const [fixedCourtFeePerPerson, setFixedCourtFeePerPerson] = useState(() => isBrowser ? parseFloat(localStorage.getItem("fixedCourtFeePerPerson")) || 0 : 0);
-  const [organizeFee, setOrganizeFee] = useState(() => isBrowser ? parseFloat(localStorage.getItem("organizeFee")) || 0 : 0);
+  const [ballPrice, setBallPrice] = useState(0);
+  const [courtFee, setCourtFee] = useState(0);
+  const [courtFeePerGame, setCourtFeePerGame] = useState(0);
+  const [fixedCourtFeePerPerson, setFixedCourtFeePerPerson] = useState(0);
+  const [organizeFee, setOrganizeFee] = useState(0);
   const [selectedMemberForEarlyExit, setSelectedMemberForEarlyExit] = useState("");
   const [earlyExitCalculationResult, setEarlyExitCalculationResult] = useState(null);
   const [isCostSettingsOpen, setIsCostSettingsOpen] = useState(false);
   const contentRef = useRef(null);
-  const [selectedRegion, setSelectedRegion] = useState(() => isBrowser ? localStorage.getItem("selectedRegion") || "ภาคอีสาน" : "ภาคอีสาน");
+  const [selectedRegion, setSelectedRegion] = useState("ภาคอีสาน");
   const [showResultsColumn, setShowResultsColumn] = useState(true);
 
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
-
   const sessionStateRef = useRef();
 
+  // -----! KEY CHANGE: ฟังก์ชันสร้างคีย์สำหรับ localStorage ให้เฉพาะตัวต่อผู้ใช้ !-----
+  const getUserKey = (baseKey) => loggedInEmail ? `${loggedInEmail}_${baseKey}` : null;
+
   const currentLevelOrder = selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
-  
+
   useEffect(() => {
     const updateVisibility = () => {
       const savedSetting = localStorage.getItem('trackMatchResults');
@@ -97,9 +99,22 @@ const Match = () => {
   }, []);
 
   useEffect(() => {
-    setLoggedInEmail(localStorage.getItem("loggedInEmail") || "");
-  }, []);
-  
+    const email = localStorage.getItem("loggedInEmail") || "";
+    setLoggedInEmail(email);
+
+    // -----! KEY CHANGE: ย้ายการโหลดค่าเริ่มต้นจาก localStorage มาที่นี่ !-----
+    // เพื่อให้แน่ใจว่ามี loggedInEmail ก่อน ถึงจะอ่านค่าที่ถูกต้องได้
+    if (isBrowser && email) {
+      setTopic(localStorage.getItem(`${email}_topic`) || "");
+      setBallPrice(parseFloat(localStorage.getItem(`${email}_ballPrice`)) || 0);
+      setCourtFee(parseFloat(localStorage.getItem(`${email}_courtFee`)) || 0);
+      setCourtFeePerGame(parseFloat(localStorage.getItem(`${email}_courtFeePerGame`)) || 0);
+      setFixedCourtFeePerPerson(parseFloat(localStorage.getItem(`${email}_fixedCourtFeePerPerson`)) || 0);
+      setOrganizeFee(parseFloat(localStorage.getItem(`${email}_organizeFee`)) || 0);
+      setSelectedRegion(localStorage.getItem(`${email}_selectedRegion`) || "ภาคอีสาน");
+    }
+  }, [isBrowser]);
+
   useEffect(() => {
     sessionStateRef.current = {
         matches, topic, matchDate, activityTime, ballPrice, courtFee,
@@ -111,7 +126,6 @@ const Match = () => {
     if (!isOpen || !loggedInEmail || !isBrowser) {
         return;
     }
-
     const autoSaveToFirebase = async () => {
         console.log("Auto-saving session to Firebase...");
         const usersRef = collection(db, "users");
@@ -122,13 +136,13 @@ const Match = () => {
             return;
         }
         const userId = userSnap.docs[0].id;
-        
+
         const dataToBackup = {
             ...sessionStateRef.current,
             lastUpdated: serverTimestamp()
         };
         const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
-        
+
         try {
             await setDoc(backupDocRef, dataToBackup);
             console.log("Firebase auto-save successful.");
@@ -137,11 +151,8 @@ const Match = () => {
             console.error("Error during Firebase auto-save:", error);
         }
     };
-    
     const intervalId = setInterval(autoSaveToFirebase, 60000);
-
     return () => clearInterval(intervalId);
-
   }, [isOpen, loggedInEmail, isBrowser]);
 
   useEffect(() => {
@@ -162,7 +173,6 @@ const Match = () => {
       let userId = null;
       userSnap.forEach((doc) => { userId = doc.id; });
       if (!userId) return;
-
       const membersRef = collection(db, `users/${userId}/Members`);
       const memSnap = await getDocs(membersRef);
       let memberList = [];
@@ -179,11 +189,8 @@ const Match = () => {
           });
         }
       });
-
       memberList.sort((a, b) => getLevelOrderIndex(a.level, currentLevelOrder) - getLevelOrderIndex(b.level, currentLevelOrder));
-      
       setMembers(memberList);
-
     } catch (err) {
       console.error("Error fetching members:", err);
       setMembers([]);
@@ -195,21 +202,15 @@ const Match = () => {
   }, [loggedInEmail, isBrowser, selectedRegion]);
 
   useEffect(() => {
-    if (members.length === 0 && matches.length === 0) {
-        return;
-    }
-
-    // เคลียร์ค่าสถิติเมื่อไม่มีแมตช์
+    if (members.length === 0 && matches.length === 0) { return; }
     if (matches.length === 0 && members.some(m => m.gamesPlayed > 0 || m.ballsUsed > 0)) {
         setMembers(prev => prev.map(m => ({ ...m, gamesPlayed: 0, ballsUsed: 0 })));
         return;
     }
-
     const newStats = {};
     members.forEach(m => {
         newStats[m.name] = { gamesPlayed: 0, ballsUsed: 0 };
     });
-
     matches.forEach((match) => {
         if (match.status === "จบการแข่งขัน") {
             const playersInMatch = [match.A1, match.A2, match.B1, match.B2].filter(Boolean);
@@ -222,14 +223,12 @@ const Match = () => {
             });
         }
     });
-
     const needsUpdate = members.some(member =>
         (newStats[member.name] && (
             member.gamesPlayed !== newStats[member.name].gamesPlayed ||
             member.ballsUsed !== newStats[member.name].ballsUsed
         ))
     );
-
     if (needsUpdate) {
         setMembers(prevMembers =>
             prevMembers.map(member => ({
@@ -241,23 +240,24 @@ const Match = () => {
     }
   }, [matches, members]);
 
+  // -----! KEY CHANGE: บันทึกค่าต่างๆ ลง localStorage โดยใช้คีย์เฉพาะตัว !-----
   useEffect(() => {
-    if (isBrowser) {
-      localStorage.setItem("ballPrice", ballPrice.toString());
-      localStorage.setItem("courtFee", courtFee.toString());
-      localStorage.setItem("courtFeePerGame", courtFeePerGame.toString());
-      localStorage.setItem("fixedCourtFeePerPerson", fixedCourtFeePerPerson.toString());
-      localStorage.setItem("organizeFee", organizeFee.toString());
+    if (isBrowser && loggedInEmail) {
+      localStorage.setItem(getUserKey("ballPrice"), ballPrice.toString());
+      localStorage.setItem(getUserKey("courtFee"), courtFee.toString());
+      localStorage.setItem(getUserKey("courtFeePerGame"), courtFeePerGame.toString());
+      localStorage.setItem(getUserKey("fixedCourtFeePerPerson"), fixedCourtFeePerPerson.toString());
+      localStorage.setItem(getUserKey("organizeFee"), organizeFee.toString());
     }
-  }, [ballPrice, courtFee, courtFeePerGame, fixedCourtFeePerPerson, organizeFee, isBrowser]);
+  }, [ballPrice, courtFee, courtFeePerGame, fixedCourtFeePerPerson, organizeFee, isBrowser, loggedInEmail]);
 
   useEffect(() => {
-    if (isBrowser) localStorage.setItem("topic", topic);
-  }, [topic, isBrowser]);
+    if (isBrowser && loggedInEmail) localStorage.setItem(getUserKey("topic"), topic);
+  }, [topic, isBrowser, loggedInEmail]);
 
   useEffect(() => {
-    if (isBrowser) localStorage.setItem("selectedRegion", selectedRegion);
-  }, [selectedRegion, isBrowser]);
+    if (isBrowser && loggedInEmail) localStorage.setItem(getUserKey("selectedRegion"), selectedRegion);
+  }, [selectedRegion, isBrowser, loggedInEmail]);
 
   useEffect(() => {
     const total = matches.reduce((sum, match) => {
@@ -278,11 +278,11 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
 
-    if (isBrowser) {
-      localStorage.removeItem("isOpen");
-      localStorage.removeItem("matches");
-      localStorage.removeItem("activityTime");
-      localStorage.removeItem("sessionMembers");
+    // -----! KEY CHANGE: ลบข้อมูล session ของ user คนปัจจุบันเท่านั้น !-----
+    if (isBrowser && loggedInEmail) {
+      localStorage.removeItem(getUserKey("isOpen"));
+      localStorage.removeItem(getUserKey("matches"));
+      localStorage.removeItem(getUserKey("activityTime"));
     }
 
     if (loggedInEmail) {
@@ -301,29 +301,42 @@ const Match = () => {
         }
     }
   };
-  
+
+  // -----! KEY CHANGE: แก้ไขฟังก์ชัน loadSession ทั้งหมด !-----
   useEffect(() => {
     if (!isBrowser || !loggedInEmail) return;
 
     const loadSession = async () => {
-        const savedIsOpen = localStorage.getItem("isOpen") === "true";
-        const savedMatchesRaw = localStorage.getItem("matches");
+        // 1. อ่านจาก localStorage โดยใช้คีย์เฉพาะตัว
+        const savedIsOpen = localStorage.getItem(getUserKey("isOpen")) === "true";
+        const savedMatchesRaw = localStorage.getItem(getUserKey("matches"));
 
         if (savedIsOpen && savedMatchesRaw) {
             try {
                 const savedMatches = JSON.parse(savedMatchesRaw);
                 setMatches(savedMatches); 
                 setMatchCount(savedMatches.length);
-                setActivityTime(parseInt(localStorage.getItem("activityTime")) || 0);
+
+                // อ่านค่าอื่นๆ จาก localStorage ด้วย
+                setActivityTime(parseInt(localStorage.getItem(getUserKey("activityTime"))) || 0);
+                setTopic(localStorage.getItem(getUserKey("topic")) || "");
+                setBallPrice(parseFloat(localStorage.getItem(getUserKey("ballPrice"))) || 0);
+                setCourtFee(parseFloat(localStorage.getItem(getUserKey("courtFee"))) || 0);
+                setCourtFeePerGame(parseFloat(localStorage.getItem(getUserKey("courtFeePerGame"))) || 0);
+                setFixedCourtFeePerPerson(parseFloat(localStorage.getItem(getUserKey("fixedCourtFeePerPerson"))) || 0);
+                setOrganizeFee(parseFloat(localStorage.getItem(getUserKey("organizeFee"))) || 0);
+                setSelectedRegion(localStorage.getItem(getUserKey("selectedRegion")) || "ภาคอีสาน");
+
                 setIsOpen(true);
-                console.log("Session restored from localStorage.");
+                console.log("Session restored from user-specific localStorage.");
                 return; 
             } catch (error) {
                 console.error("Error parsing matches from localStorage, will check Firebase backup.", error);
                 Swal.fire('ข้อมูลเสียหาย', 'ตรวจพบข้อมูลในเบราว์เซอร์เสียหาย กำลังพยายามกู้คืนจากระบบสำรองข้อมูลออนไลน์', 'warning');
             }
         }
-        
+
+        // 2. ถ้า localStorage ไม่มี, เช็ค Firebase (ส่วนนี้ถูกต้องอยู่แล้ว)
         console.log("localStorage is empty or corrupt, checking Firebase for backup...");
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", loggedInEmail));
@@ -331,13 +344,13 @@ const Match = () => {
         if (userSnap.empty) return;
         const userId = userSnap.docs[0].id;
         const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
-        
+
         try {
             const backupSnap = await getDoc(backupDocRef);
             if (backupSnap.exists()) {
                 console.log("Firebase backup found. Restoring session...");
                 const data = backupSnap.data();
-                
+
                 setMatches(data.matches || []); 
                 setTopic(data.topic || "");
                 setMatchDate(data.matchDate || new Date().toISOString().slice(0, 10));
@@ -351,16 +364,17 @@ const Match = () => {
                 setIsOpen(true);
                 setMatchCount((data.matches || []).length);
 
-                localStorage.setItem("isOpen", "true");
-                localStorage.setItem("matches", JSON.stringify(data.matches || []));
-                localStorage.setItem("activityTime", (data.activityTime || 0).toString());
-                localStorage.setItem("topic", data.topic || "");
-                localStorage.setItem("ballPrice", (data.ballPrice || 0).toString());
-                localStorage.setItem("courtFee", (data.courtFee || 0).toString());
-                localStorage.setItem("courtFeePerGame", (data.courtFeePerGame || 0).toString());
-                localStorage.setItem("fixedCourtFeePerPerson", (data.fixedCourtFeePerPerson || 0).toString());
-                localStorage.setItem("organizeFee", (data.organizeFee || 0).toString());
-                localStorage.setItem("selectedRegion", data.selectedRegion || "ภาคอีสาน");
+                // 3. เมื่อกู้จาก Firebase, บันทึกกลับลง localStorage ด้วยคีย์เฉพาะตัว
+                localStorage.setItem(getUserKey("isOpen"), "true");
+                localStorage.setItem(getUserKey("matches"), JSON.stringify(data.matches || []));
+                localStorage.setItem(getUserKey("activityTime"), (data.activityTime || 0).toString());
+                localStorage.setItem(getUserKey("topic"), data.topic || "");
+                localStorage.setItem(getUserKey("ballPrice"), (data.ballPrice || 0).toString());
+                localStorage.setItem(getUserKey("courtFee"), (data.courtFee || 0).toString());
+                localStorage.setItem(getUserKey("courtFeePerGame"), (data.courtFeePerGame || 0).toString());
+                localStorage.setItem(getUserKey("fixedCourtFeePerPerson"), (data.fixedCourtFeePerPerson || 0).toString());
+                localStorage.setItem(getUserKey("organizeFee"), (data.organizeFee || 0).toString());
+                localStorage.setItem(getUserKey("selectedRegion"), data.selectedRegion || "ภาคอีสาน");
 
                 Swal.fire('กู้ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดถูกกู้คืนจากระบบสำรองข้อมูลแล้ว', 'success');
             } else {
@@ -373,25 +387,26 @@ const Match = () => {
     };
 
     loadSession();
-
   }, [isBrowser, loggedInEmail]);
 
 
+  // -----! KEY CHANGE: บันทึกเวลาโดยใช้คีย์เฉพาะตัว !-----
   useEffect(() => {
     if (!isBrowser) return;
     clearInterval(timerRef.current);
-    if (isOpen) {
+    if (isOpen && loggedInEmail) {
       timerRef.current = setInterval(() => {
         setActivityTime((prev) => {
           const newTime = prev + 1;
-          localStorage.setItem("activityTime", newTime.toString());
+          localStorage.setItem(getUserKey("activityTime"), newTime.toString());
           return newTime;
         });
       }, 1000);
     }
     return () => clearInterval(timerRef.current);
-  }, [isOpen, isBrowser]);
+  }, [isOpen, isBrowser, loggedInEmail]);
 
+  // -----! KEY CHANGE: บันทึก match โดยใช้คีย์เฉพาะตัว !-----
   const handleAddMatch = () => {
     setMatches((prev) => {
       const newMatches = [
@@ -402,7 +417,7 @@ const Match = () => {
           balls: "", result: "", score: "", status: "",
         },
       ];
-      if (isBrowser) localStorage.setItem("matches", JSON.stringify(newMatches));
+      if (isBrowser && loggedInEmail) localStorage.setItem(getUserKey("matches"), JSON.stringify(newMatches));
       setMatchCount(newMatches.length);
       return newMatches;
     });
@@ -419,7 +434,6 @@ const Match = () => {
         .filter(([key, value]) => ["A1", "A2", "B1", "B2"].includes(key) && key !== currentField && value)
         .map(([, value]) => value)
     );
-
     const playersInPlayingMatches = new Set();
     matches.forEach((match) => {
       if (match.matchId !== currentMatch.matchId && match.status === "กำลังแข่งขัน") {
@@ -428,7 +442,6 @@ const Match = () => {
         });
       }
     });
-
     return members.filter((mem) => {
       const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
       const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
@@ -467,6 +480,7 @@ const Match = () => {
     });
   };
 
+  // -----! KEY CHANGE: บันทึก match โดยใช้คีย์เฉพาะตัว !-----
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
         const updated = [...prev];
@@ -479,7 +493,6 @@ const Match = () => {
                 return prev;
             }
         }
-
         if (field === "status" && value === "จบการแข่งขัน") {
             const { A1, A2, B1, B2, court, balls, result } = matchBeingUpdated;
             if ((!A1 || !A2 || !B1 || !B2 || !court || !balls) || (showResultsColumn && !result)) {
@@ -487,7 +500,6 @@ const Match = () => {
                 return prev;
             }
         }
-
         if (field === "result" && value) {
             const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
             if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
@@ -495,7 +507,6 @@ const Match = () => {
                 return prev;
             }
         }
-
         if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
             matchBeingUpdated[field] = value;
             const member = members.find(m => m.name === value);
@@ -503,7 +514,6 @@ const Match = () => {
         } else {
             matchBeingUpdated[field] = value;
         }
-
         if (field === "result") {
             matchBeingUpdated.score = getScoreByResult(value);
             if (value && matchBeingUpdated.status !== "จบการแข่งขัน") {
@@ -512,16 +522,14 @@ const Match = () => {
                 matchBeingUpdated.status = "";
             }
         }
-        
         if (field === "status" && value !== "จบการแข่งขัน" && matchBeingUpdated.status === "จบการแข่งขัน") {
             matchBeingUpdated.result = "";
             matchBeingUpdated.score = "";
         }
-        
         updated[idx] = matchBeingUpdated;
 
-        if (isBrowser) {
-            localStorage.setItem("matches", JSON.stringify(updated));
+        if (isBrowser && loggedInEmail) {
+            localStorage.setItem(getUserKey("matches"), JSON.stringify(updated));
         }
         return updated;
     });
@@ -534,17 +542,17 @@ const Match = () => {
       </option>
     ));
 
+  // -----! KEY CHANGE: เริ่ม session โดยใช้คีย์เฉพาะตัว !-----
   const handleStartGroup = async () => {
     if (!topic) {
       Swal.fire({ title: "กรุณาระบุหัวเรื่อง", text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History", icon: "warning" });
       return;
     }
-    if (isBrowser) {
-      localStorage.setItem("isOpen", "true");
-      localStorage.setItem("matches", JSON.stringify([]));
-      localStorage.setItem("activityTime", "0");
-      localStorage.removeItem("sessionMembers");
-      localStorage.setItem("topic", topic);
+    if (isBrowser && loggedInEmail) {
+      localStorage.setItem(getUserKey("isOpen"), "true");
+      localStorage.setItem(getUserKey("matches"), JSON.stringify([]));
+      localStorage.setItem(getUserKey("activityTime"), "0");
+      localStorage.setItem(getUserKey("topic"), topic); // บันทึก topic ตอนเริ่ม
     }
     setIsOpen(true);
     setActivityTime(0);
@@ -575,7 +583,6 @@ const Match = () => {
       });
       return;
     }
-
     const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
@@ -595,15 +602,12 @@ const Match = () => {
           let userId = null;
           userSnap.forEach((doc) => { userId = doc.id; });
           if (!userId) throw new Error("User data not found. Please log in again.");
-
           const memberUpdates = {};
           const memberSessionStats = {};
-
           matches.forEach((match) => {
             if (match.status === "จบการแข่งขัน") {
               const playersInMatch = [match.A1, match.A2, match.B1, match.B2].filter(Boolean);
               const ballsInGame = parseInt(match.balls) || 0;
-
               if (match.result === "A") {
                 playersInMatch.forEach((player) => {
                   if (!memberUpdates[player]) memberUpdates[player] = { scoreToAdd: 0, winsToAdd: 0 };
@@ -626,7 +630,6 @@ const Match = () => {
                   memberUpdates[player].scoreToAdd += 1;
                 });
               }
-
               playersInMatch.forEach(player => {
                 if (!memberSessionStats[player]) memberSessionStats[player] = { games: 0, balls: 0 };
                 memberSessionStats[player].games += 1;
@@ -634,7 +637,6 @@ const Match = () => {
               });
             }
           });
-
           for (const playerName of members.map(m => m.name)) {
             const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
             const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
@@ -655,7 +657,6 @@ const Match = () => {
               });
             }
           }
-
           const matchesRef = collection(db, `users/${userId}/Matches`);
           await addDoc(matchesRef, {
             topic, matchDate, totalTime: activityTime, matches,
@@ -663,9 +664,7 @@ const Match = () => {
             savedAt: serverTimestamp(),
           });
           Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
-          
           await resetSession();
-          
           fetchMembers();
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
@@ -675,6 +674,7 @@ const Match = () => {
     });
   };
 
+  // -----! KEY CHANGE: ลบ match โดยใช้คีย์เฉพาะตัว !-----
   const handleDeleteMatch = (idxToDelete) => {
     Swal.fire({
       title: "คุณแน่ใจหรือไม่?", text: "คุณต้องการลบ Match นี้ใช่หรือไม่?", icon: "warning",
@@ -685,8 +685,8 @@ const Match = () => {
         setMatches((prevMatches) => {
           const updatedMatches = prevMatches.filter((_, idx) => idx !== idxToDelete);
           const reIndexedMatches = updatedMatches.map((match, idx) => ({ ...match, matchId: padId(idx + 1, 4) }));
-          
-          if (isBrowser) localStorage.setItem("matches", JSON.stringify(reIndexedMatches));
+
+          if (isBrowser && loggedInEmail) localStorage.setItem(getUserKey("matches"), JSON.stringify(reIndexedMatches));
           setMatchCount(reIndexedMatches.length);
           Swal.fire("ลบสำเร็จ!", "Match ถูกลบเรียบร้อยแล้ว", "success");
           return reIndexedMatches;
@@ -703,10 +703,8 @@ const Match = () => {
     if (hours > 0) return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
     return `${pad(minutes)}:${pad(remainingSeconds)}`;
   };
-
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
   const paginatedMatches = matches.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
   const calculatePlayerSummary = () => {
     if (!selectedMemberForEarlyExit) {
       Swal.fire("กรุณาเลือกสมาชิกที่ต้องการคำนวณ", "", "warning");
@@ -762,16 +760,13 @@ const Match = () => {
       icon: "info", confirmButtonText: "รับทราบ",
     });
   };
-
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
   };
-
   const isCourtFeeActive = courtFee > 0;
   const isCourtFeePerGameActive = courtFeePerGame > 0;
   const isFixedCourtFeePerPersonActive = fixedCourtFeePerPerson > 0;
-
   const handleCourtFeeChange = (e) => {
     const value = parseFloat(e.target.value) || 0;
     setCourtFee(value);
@@ -787,7 +782,6 @@ const Match = () => {
     setFixedCourtFeePerPerson(value);
     if (value > 0) { setCourtFee(0); setCourtFeePerGame(0); }
   };
-
   const handleClearCostSettings = () => {
     Swal.fire({
       title: "คุณแน่ใจหรือไม่?", text: "การดำเนินการนี้จะล้างค่าใช้จ่ายทั้งหมด (ค่าลูก, ค่าสนาม, ค่าจัดก๊วน) เป็น 0",
