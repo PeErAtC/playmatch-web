@@ -287,6 +287,8 @@ const Home = () => {
   const [firstVisible, setFirstVisible] = useState(null);
   const [hasMoreNext, setHasMoreNext] = useState(false);
   const [hasMorePrev, setHasMorePrev] = useState(false);
+  const [totalCame, setTotalCame] = useState(0);
+  const [totalNotCame, setTotalNotCame] = useState(0);
 
 
   // State for sorting
@@ -667,6 +669,11 @@ const Home = () => {
         }
 
         setMembers(fetchedMembers);
+
+        const came = fetchedMembers.filter((m) => m.status === "มา").length;
+        const notCame = fetchedMembers.filter((m) => m.status === "ไม่มา").length;
+        setTotalCame(came);
+        setTotalNotCame(notCame);
 
         if (fetchedMembers.length > 0) {
             setFirstVisible(documentSnapshots.docs[0]);
@@ -1288,8 +1295,14 @@ useEffect(() => {
           />
         </div>
 
-        <div className="total-members-display">
-          <span>จำนวนสมาชิกในหน้านี้: {members.length}</span> {/* Display count of members on current page */}
+        <div className="total-members-display" style={{ textAlign: "right" }}>
+          <div style={{ marginBottom: "6px" }}>
+            จำนวนสมาชิกในหน้านี้: {members.length}
+          </div>
+          <div style={{ display: "inline-flex", gap: "20px" }}>
+            <span style={{ color: "#4caf50" }}>มาแล้ว: {totalCame} คน</span>
+            <span style={{ color: "#f44336" }}>ยังไม่มา: {totalNotCame} คน</span>
+          </div>
         </div>
 
         {/* <<< *** MODIFIED UI: Swapped pagination and per-page controls *** >>> */}
