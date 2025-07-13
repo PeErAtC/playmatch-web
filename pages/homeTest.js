@@ -652,7 +652,7 @@ const Home = () => {
                 if (sortConfig.direction === 'ascending') {
                     return (aIndex === -1 ? Infinity : aIndex) - (bIndex === -1 ? Infinity : bIndex);
                 } else {
-                    return (bIndex === -1 ? Infinity : bIndex) - (aIndex === -1 ? Infinity : aIndex);
+                    return (bIndex === -1 ? Infinity : bBndex) - (aIndex === -1 ? Infinity : aIndex);
                 }
             });
         } else if (sortConfig.key === 'birthDate') {
@@ -1295,53 +1295,54 @@ useEffect(() => {
           />
         </div>
 
-        <div className="total-members-display" style={{ textAlign: "right" }}>
-          <div style={{ marginBottom: "6px" }}>
-            จำนวนสมาชิกในหน้านี้: {members.length}
-          </div>
-          <div style={{ display: "inline-flex", gap: "20px" }}>
-            <span style={{ color: "#4caf50" }}>มาแล้ว: {totalCame} คน</span>
-            <span style={{ color: "#f44336" }}>ยังไม่มา: {totalNotCame} คน</span>
-          </div>
-        </div>
-
-        {/* <<< *** MODIFIED UI: Swapped pagination and per-page controls *** >>> */}
+        {/* Updated Table Controls Container */}
         <div className="table-controls-container">
-          <div className="pagination-controls">
-            <button
-              onClick={goToPrevPage}
-              className="pagination-button"
-              disabled={!hasMorePrev}
-            >
-              ย้อนกลับ
-            </button>
-            <span className="current-page-display">หน้า {currentPage}</span>
-            <button
-              onClick={goToNextPage}
-              className="pagination-button"
-              disabled={!hasMoreNext}
-            >
-              ถัดไป
-            </button>
-          </div>
-          <div className="per-page-selector">
-            <label htmlFor="members-per-page">แสดง:</label>
-            <select
-              id="members-per-page"
-              className="modern-input"
-              value={membersPerPage}
-              onChange={(e) => {
-                const newSize = Number(e.target.value);
-                setMembersPerPage(newSize);
-                setCurrentPage(1); // กลับไปหน้า 1 เสมอเมื่อเปลี่ยนจำนวนแสดงผล
-              }}
-            >
-              <option value="10">10 รายชื่อ</option>
-              <option value="20">20 รายชื่อ</option>
-              <option value="30">30 รายชื่อ</option>
-              <option value="50">50 รายชื่อ</option>
-            </select>
-          </div>
+            <div className="left-controls-wrapper">
+                <div className="status-summary">
+                    <span style={{ color: "#4caf50" }}>มาแล้ว: {totalCame} คน</span>
+                    <span style={{ color: "#f44336" }}>ยังไม่มา: {totalNotCame} คน</span>
+                </div>
+                <div className="pagination-controls">
+                    <button
+                        onClick={goToPrevPage}
+                        className="pagination-button"
+                        disabled={!hasMorePrev}
+                    >
+                        ย้อนกลับ
+                    </button>
+                    <span className="current-page-display">หน้า {currentPage}</span>
+                    <button
+                        onClick={goToNextPage}
+                        className="pagination-button"
+                        disabled={!hasMoreNext}
+                    >
+                        ถัดไป
+                    </button>
+                </div>
+            </div>
+            <div className="right-controls-wrapper">
+                <div className="total-members-on-page-display">
+                    จำนวนสมาชิกในหน้านี้: {members.length}
+                </div>
+                <div className="per-page-selector">
+                    <label htmlFor="members-per-page">แสดง:</label>
+                    <select
+                        id="members-per-page"
+                        className="modern-input"
+                        value={membersPerPage}
+                        onChange={(e) => {
+                            const newSize = Number(e.target.value);
+                            setMembersPerPage(newSize);
+                            setCurrentPage(1); // กลับไปหน้า 1 เสมอเมื่อเปลี่ยนจำนวนแสดงผล
+                        }}
+                    >
+                        <option value="10">10 รายชื่อ</option>
+                        <option value="20">20 รายชื่อ</option>
+                        <option value="30">30 รายชื่อ</option>
+                        <option value="50">50 รายชื่อ</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
 
@@ -1735,22 +1736,42 @@ useEffect(() => {
           box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
         }
 
-        /* Total Members Display */
-        .total-members-display {
-          text-align: right;
-          margin-bottom: 15px;
-          font-size: 12px; /* Adjusted font size */
-          color: var(--text-color, #555); /* Use theme variable */
-        }
-
-        /* <<< *** NEW CSS *** >>> */
+        /* --- Updated CSS for Table Controls Container --- */
         .table-controls-container {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            justify-content: space-between; /* Pushes children to ends */
+            align-items: flex-start; /* Aligns items to the top of the container */
             margin-bottom: 20px;
-            flex-wrap: wrap; 
-            gap: 15px;
+            flex-wrap: wrap; /* Allows wrapping on smaller screens */
+            gap: 15px 20px; /* Vertical and horizontal gap */
+        }
+
+        .left-controls-wrapper,
+        .right-controls-wrapper {
+            display: flex;
+            flex-direction: column; /* Stacks children vertically */
+            gap: 10px; /* Space between rows (status/pagination, total/per-page) */
+        }
+
+        .left-controls-wrapper {
+            align-items: flex-start; /* Align left group to the start (left) */
+        }
+
+        .right-controls-wrapper {
+            align-items: flex-end; /* Align right group to the end (right) */
+            text-align: right; /* Ensure text within this wrapper aligns right */
+        }
+
+        .status-summary {
+            display: flex;
+            gap: 20px; /* Space between 'มาแล้ว' and 'ยังไม่มา' */
+            font-size: 12px;
+            color: var(--text-color, #555);
+        }
+
+        .total-members-on-page-display {
+            font-size: 12px;
+            color: var(--text-color, #555);
         }
 
         .per-page-selector {
@@ -1770,7 +1791,7 @@ useEffect(() => {
             min-width: 120px;
         }
 
-        /* Pagination Controls */
+        /* Pagination Controls - Existing styles, may need minor tweaks for new parent */
         .pagination-controls {
           display: flex;
           justify-content: flex-start;
@@ -2049,14 +2070,6 @@ useEffect(() => {
           .user-table td[data-label="รูป"] {
             padding-left: 55%;
           }
-          .user-table td[data-label="รูป"]:before {
-            content: "รูป";
-            position: absolute;
-            left: 15px;
-            width: 40%;
-            font-weight: bold;
-            text-align: left;
-          }
           .user-table td[data-label="รูป"] .member-avatar-cell {
               margin: 0; /* ไม่ต้องจัดกลางใน mobile */
               margin-left: auto; /* จัดชิดขวา */
@@ -2095,6 +2108,27 @@ useEffect(() => {
 
           .form-buttons-container {
             justify-content: center;
+          }
+
+          /* Mobile adjustments for new table controls */
+          .table-controls-container {
+              flex-direction: column; /* Stack them vertically on small screens */
+              align-items: center; /* Center horizontally */
+              gap: 20px; /* More space between stacked blocks */
+          }
+
+          .left-controls-wrapper,
+          .right-controls-wrapper {
+              width: 100%; /* Take full width */
+              align-items: center; /* Center content within their own blocks */
+          }
+
+          /* For mobile, ensure elements within wrappers are also centered if needed */
+          .pagination-controls,
+          .status-summary,
+          .per-page-selector,
+          .total-members-on-page-display {
+              justify-content: center; /* Center elements in their rows */
           }
         }
 
