@@ -12,7 +12,7 @@ import { ChevronUp, ChevronDown, ArrowUpDown, Camera, Loader } from 'lucide-reac
 import Head from 'next/head';
 import imageCompression from 'browser-image-compression';
 
-// Modal Component - Integrated within Home.js (คงเดิม)
+// Modal Component
 const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
   if (!show) {
     return null;
@@ -49,7 +49,7 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
         </div>
       </div>
       <style jsx>{`
-        /* Modal CSS (คงเดิม) */
+        /* Modal CSS */
         .modal-overlay {
           position: fixed;
           top: 0;
@@ -109,7 +109,6 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
           gap: 15px;
         }
 
-        /* Adjust download button size */
         .modal-download-template-button {
           background-color: #4bf196;
           color: black;
@@ -180,9 +179,8 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
     </div>
   );
 };
-// End Modal Component
 
-// Image Preview Modal Component (คงเดิม)
+// Image Preview Modal Component
 const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
   if (!show) {
     return null;
@@ -254,7 +252,6 @@ const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
     </div>
   );
 };
-// End Image Preview Modal
 
 const Home = () => {
   const [search, setSearch] = useState("");
@@ -294,21 +291,19 @@ const Home = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageUrl, setModalImageUrl] = useState('');
 
-  // ✨ State ใหม่สำหรับควบคุมการแสดงคอลัมน์รูปภาพ ✨
   const [showMemberImagesColumn, setShowMemberImagesColumn] = useState(true);
 
-  // ✨ useEffect สำหรับอ่านค่า showMemberImages จาก localStorage และ listen event ✨
   useEffect(() => {
     const updateVisibility = () => {
       const savedSetting = localStorage.getItem('showMemberImages');
       setShowMemberImagesColumn(savedSetting !== null ? JSON.parse(savedSetting) : true);
     };
 
-    updateVisibility(); // Load initial setting
-    window.addEventListener('storage', updateVisibility); // Listen for changes from other tabs/windows
+    updateVisibility();
+    window.addEventListener('storage', updateVisibility);
 
     return () => {
-      window.removeEventListener('storage', updateVisibility); // Clean up event listener
+      window.removeEventListener('storage', updateVisibility);
     };
   }, []);
 
@@ -347,56 +342,18 @@ const Home = () => {
 
   const generateExcelTemplate = () => {
     const headers = [
-      "name",
-      "level",
-      "lineId",
-      "handed",
-      "phone",
-      "birthDate",
-      "experience",
-      "status",
+      "name", "level", "lineId", "handed", "phone", "birthDate", "experience", "status",
     ];
 
     const templateData = [
-      {
-        name: "ตัวอย่าง ชื่อ-นามสกุล",
-        level: "S",
-        lineId: "example_line_id",
-        handed: "Right",
-        phone: "0812345678",
-        birthDate: "1990-05-15",
-        experience: "2 ปี",
-        status: "มา",
-      },
-      {
-        name: "ตัวอย่าง คนที่สอง",
-        level: "P-",
-        lineId: "second_example",
-        handed: "Left",
-        phone: "0998765432",
-        birthDate: "1985-11-20",
-        experience: "5 ปี",
-        status: "ไม่มา",
-      },
+      { name: "ตัวอย่าง ชื่อ-นามสกุล", level: "S", lineId: "example_line_id", handed: "Right", phone: "0812345678", birthDate: "1990-05-15", experience: "2 ปี", status: "มา" },
+      { name: "ตัวอย่าง คนที่สอง", level: "P-", lineId: "second_example", handed: "Left", phone: "0998765432", birthDate: "1985-11-20", experience: "5 ปี", status: "ไม่มา" },
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([headers]);
-    XLSX.utils.sheet_add_json(ws, templateData, {
-      skipHeader: true,
-      origin: -1,
-      header: headers,
-    });
+    XLSX.utils.sheet_add_json(ws, templateData, { skipHeader: true, origin: -1, header: headers });
 
-    const columnWidths = [
-      { wch: 20 },
-      { wch: 10 },
-      { wch: 15 },
-      { wch: 10 },
-      { wch: 15 },
-      { wch: 18 },
-      { wch: 15 },
-      { wch: 10 },
-    ];
+    const columnWidths = [ { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 10 } ];
     ws["!cols"] = columnWidths;
 
     const wb = XLSX.utils.book_new();
@@ -413,18 +370,11 @@ const Home = () => {
         const data = new Uint8Array(event.target.result);
         const wb = XLSX.read(data, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, {
-          raw: false,
-          defval: null,
-        });
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: null });
 
         try {
           if (jsonData.length === 0) {
-            Swal.fire(
-              "ไฟล์ Excel ว่างเปล่า",
-              "ไม่พบข้อมูลในไฟล์ที่คุณอัปโหลด",
-              "warning"
-            );
+            Swal.fire( "ไฟล์ Excel ว่างเปล่า", "ไม่พบข้อมูลในไฟล์ที่คุณอัปโหลด", "warning" );
             return;
           }
 
@@ -435,7 +385,6 @@ const Home = () => {
 
           let validationErrors = [];
           let successCount = 0;
-
           const batch = writeBatch(db);
 
           for (let i = 0; i < jsonData.length; i++) {
@@ -465,21 +414,13 @@ const Home = () => {
               }
             }
 
-            const experienceTrimmed = (member.experience || "")
-              .toString()
-              .trim();
+            const experienceTrimmed = (member.experience || "").toString().trim();
             const statusTrimmed = (member.status || "ไม่มา").toString().trim();
 
             const newUser = {
-              name: nameTrimmed,
-              level: levelTrimmed,
-              lineId: lineIdTrimmed,
-              handed: handedTrimmed,
-              phone: phoneTrimmed,
-              birthDate: birthDateValue,
-              experience: experienceTrimmed,
-              status: statusTrimmed,
-              createBy: loggedInUsername,
+              name: nameTrimmed, level: levelTrimmed, lineId: lineIdTrimmed, handed: handedTrimmed,
+              phone: phoneTrimmed, birthDate: birthDateValue, experience: experienceTrimmed,
+              status: statusTrimmed, createBy: loggedInUsername,
             };
 
             let rowErrors = [];
@@ -487,67 +428,38 @@ const Home = () => {
             if (!newUser.level) rowErrors.push("ระดับ");
 
             if (rowErrors.length > 0) {
-              validationErrors.push(
-                `แถวที่ ${rowIndex}: ข้อมูลไม่ครบถ้วนในช่อง: ${rowErrors.join(
-                  ", "
-                )}`
-              );
+              validationErrors.push( `แถวที่ ${rowIndex}: ข้อมูลไม่ครบถ้วนในช่อง: ${rowErrors.join( ", " )}` );
               continue;
             }
 
             const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
             const memberId = newMemberRef.id;
 
-            batch.set(newMemberRef, {
-                ...newUser,
-                memberId,
-                createdAt: new Date(),
-            });
+            batch.set(newMemberRef, { ...newUser, memberId, createdAt: new Date() });
             successCount++;
           }
 
           if (successCount > 0) {
             await batch.commit();
-            Swal.fire(
-              "สำเร็จ!",
-              `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`,
-              "success"
-            );
+            Swal.fire( "สำเร็จ!", `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`, "success" );
             setShowModal(false);
             setCurrentPage(1);
             fetchMembers('current', null);
           }
 
           if (validationErrors.length > 0) {
-            Swal.fire(
-              "มีข้อผิดพลาดบางอย่าง",
-              "พบข้อผิดพลาดในการนำเข้าข้อมูลบางส่วน:\n" +
-                validationErrors.join("\n"),
-              "warning"
-            );
+            Swal.fire( "มีข้อผิดพลาดบางอย่าง", "พบข้อผิดพลาดในการนำเข้าข้อมูลบางส่วน:\n" + validationErrors.join("\n"), "warning" );
           } else if (successCount === 0) {
-            Swal.fire(
-              "ไม่พบข้อมูลที่ถูกต้อง",
-              "ไม่มีข้อมูลสมาชิกที่สามารถเพิ่มได้จากไฟล์ Excel",
-              "warning"
-            );
+            Swal.fire( "ไม่พบข้อมูลที่ถูกต้อง", "ไม่มีข้อมูลสมาชิกที่สามารถเพิ่มได้จากไฟล์ Excel", "warning" );
           }
         } catch (error) {
           console.error("Error uploading Excel file:", error);
-          Swal.fire(
-            "เกิดข้อผิดพลาดในการอัปโหลดไฟล์ Excel",
-            error.message,
-            "error"
-          );
+          Swal.fire( "เกิดข้อผิดพลาดในการอัปโหลดไฟล์ Excel", error.message, "error" );
         }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      Swal.fire(
-        "กรุณาอัปโหลดไฟล์ Excel เท่านั้น",
-        "ไฟล์ที่รองรับคือ .xlsx และ .xls",
-        "warning"
-      );
+      Swal.fire( "กรุณาอัปโหลดไฟล์ Excel เท่านั้น", "ไฟล์ที่รองรับคือ .xlsx และ .xls", "warning" );
     }
   };
 
@@ -574,10 +486,7 @@ const Home = () => {
   const fetchMembers = useCallback(async (direction = 'current', cursor = null) => {
     if (!currentUserId) {
         setMembers([]);
-        setFirstVisible(null);
-        setLastVisible(null);
-        setHasMoreNext(false);
-        setHasMorePrev(false);
+        setFirstVisible(null); setLastVisible(null); setHasMoreNext(false); setHasMorePrev(false);
         return;
     }
 
@@ -589,11 +498,7 @@ const Home = () => {
         let appliedOrderByDirection = sortConfig.direction === 'descending' ? 'desc' : 'asc';
 
         if (search) {
-            baseQuery = query(
-                baseQuery,
-                where('name', '>=', search),
-                where('name', '<=', search + '\uf8ff')
-            );
+            baseQuery = query( baseQuery, where('name', '>=', search), where('name', '<=', search + '\uf8ff') );
             appliedOrderByKey = 'name';
             appliedOrderByDirection = sortConfig.direction === 'descending' ? 'desc' : 'asc';
         }
@@ -608,10 +513,7 @@ const Home = () => {
         }
 
         const documentSnapshots = await getDocs(q);
-        let fetchedMembers = documentSnapshots.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        let fetchedMembers = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (direction === 'prev') {
             fetchedMembers = fetchedMembers.reverse();
@@ -650,39 +552,22 @@ const Home = () => {
             setFirstVisible(documentSnapshots.docs[0]);
             setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
 
-            const nextDocsQuery = query(
-                baseQuery,
-                orderBy(appliedOrderByKey, appliedOrderByDirection),
-                startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]),
-                limit(1)
-            );
+            const nextDocsQuery = query( baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection), startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), limit(1) );
             const nextDocsSnapshot = await getDocs(nextDocsQuery);
             setHasMoreNext(!nextDocsSnapshot.empty);
 
-            const prevDocsQuery = query(
-                baseQuery,
-                orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'),
-                startAfter(documentSnapshots.docs[0]),
-                limit(1)
-            );
+            const prevDocsQuery = query( baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'), startAfter(documentSnapshots.docs[0]), limit(1) );
             const prevDocsSnapshot = await getDocs(prevDocsQuery);
             setHasMorePrev(!prevDocsSnapshot.empty);
 
         } else {
-            setFirstVisible(null);
-            setLastVisible(null);
-            setHasMoreNext(false);
-            setHasMorePrev(false);
+            setFirstVisible(null); setLastVisible(null); setHasMoreNext(false); setHasMorePrev(false);
         }
 
     } catch (error) {
         console.error("Error fetching paginated members:", error);
         Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถดึงข้อมูลสมาชิกได้: " + error.message, "error");
-        setMembers([]);
-        setFirstVisible(null);
-        setLastVisible(null);
-        setHasMoreNext(false);
-        setHasMorePrev(false);
+        setMembers([]); setFirstVisible(null); setLastVisible(null); setHasMoreNext(false); setHasMorePrev(false);
     }
   }, [currentUserId, membersPerPage, sortConfig, levelOrder, search]);
 
@@ -720,43 +605,26 @@ useEffect(() => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (
-      !name ||
-      !level
-    ) {
+    if (!name || !level) {
       Swal.fire("กรุณากรอกข้อมูล 'ชื่อ' และ 'ระดับ' ให้ครบถ้วน", "", "warning");
       return;
     }
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(birthDate)) {
-      Swal.fire(
-        "รูปแบบวันเดือนปีเกิดไม่ถูกต้อง",
-        "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)",
-        "warning"
-      );
+      Swal.fire("รูปแบบวันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)", "warning");
       return;
     }
     const parsedDate = new Date(birthDate);
     if (isNaN(parsedDate.getTime())) {
-      Swal.fire(
-        "วันเดือนปีเกิดไม่ถูกต้อง",
-        "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง",
-        "warning"
-      );
+      Swal.fire("วันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง", "warning");
       return;
     }
 
     const newUser = {
-      name,
-      level,
-      lineId: lineId || "",
-      handed: handed || "Right",
-      phone: phone || "",
+      name, level, lineId: lineId || "", handed: handed || "Right", phone: phone || "",
       birthDate: birthDate || new Date().toISOString().split('T')[0],
-      experience: experience || "",
-      status: status || "ไม่มา",
-      createBy: loggedInUsername,
+      experience: experience || "", status: status || "ไม่มา", createBy: loggedInUsername,
     };
 
     try {
@@ -766,21 +634,14 @@ useEffect(() => {
       }
 
       if (isEditing && selectedUser) {
-        const memberRef = doc(
-          db,
-          `users/${currentUserId}/Members/${selectedUser.memberId}`
-        );
+        const memberRef = doc(db, `users/${currentUserId}/Members/${selectedUser.memberId}`);
         await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
         Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
       } else {
         const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
         const memberId = newMemberRef.id;
 
-        await setDoc(newMemberRef, {
-          ...newUser,
-          memberId,
-          createdAt: new Date(),
-        });
+        await setDoc(newMemberRef, { ...newUser, memberId, createdAt: new Date() });
         Swal.fire("สำเร็จ!", "เพิ่มสมาชิกสำเร็จ!", "success");
       }
 
@@ -795,12 +656,8 @@ useEffect(() => {
   const handleDelete = async () => {
     if (selectedUser) {
       const result = await Swal.fire({
-        title: `ลบสมาชิก ${selectedUser.name}?`,
-        text: "คุณต้องการลบสมาชิกนี้จริงหรือไม่?",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "ลบ",
-        cancelButtonText: "ยกเลิก",
+        title: `ลบสมาชิก ${selectedUser.name}?`, text: "คุณต้องการลบสมาชิกนี้จริงหรือไม่?",
+        icon: "warning", showCancelButton: true, confirmButtonText: "ลบ", cancelButtonText: "ยกเลิก",
       });
 
       if (!result.isConfirmed) return;
@@ -811,10 +668,7 @@ useEffect(() => {
           return;
         }
 
-        const memberRef = doc(
-          db,
-          `users/${currentUserId}/Members/${selectedUser.memberId}`
-        );
+        const memberRef = doc(db, `users/${currentUserId}/Members/${selectedUser.memberId}`);
         await deleteDoc(memberRef);
         Swal.fire("ลบสำเร็จ!", "", "success");
 
@@ -835,17 +689,12 @@ useEffect(() => {
         return;
       }
 
-      const memberRef = doc(
-        db,
-        `users/${currentUserId}/Members/${user.memberId}`
-      );
+      const memberRef = doc(db, `users/${currentUserId}/Members/${user.memberId}`);
       await updateDoc(memberRef, { status: newStatus });
 
       setMembers(prevMembers =>
         prevMembers.map(member =>
-          member.memberId === user.memberId
-            ? { ...member, status: newStatus }
-            : member
+          member.memberId === user.memberId ? { ...member, status: newStatus } : member
         )
       );
     } catch (error) {
@@ -855,13 +704,9 @@ useEffect(() => {
 
   const handleResetAllStatus = async () => {
     const result = await Swal.fire({
-      title: "รีเซ็ตสถานะทั้งหมด?",
-      text: "คุณต้องการรีเซ็ตสถานะของสมาชิกทุกคนให้เป็น 'ไม่มา' ใช่หรือไม่?",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "รีเซ็ต",
-      cancelButtonText: "ยกเลิก",
-      confirmButtonColor: "#d33",
+      title: "รีเซ็ตสถานะทั้งหมด?", text: "คุณต้องการรีเซ็ตสถานะของสมาชิกทุกคนให้เป็น 'ไม่มา' ใช่หรือไม่?",
+      icon: "warning", showCancelButton: true, confirmButtonText: "รีเซ็ต",
+      cancelButtonText: "ยกเลิก", confirmButtonColor: "#d33",
     });
 
     if (!result.isConfirmed) return;
@@ -895,21 +740,12 @@ useEffect(() => {
   };
 
   const clearForm = () => {
-    setName("");
-    setLevel("");
-    setLineId("");
-    setHanded("Right");
-    setPhone("");
-    setBirthDate(new Date().toISOString().split('T')[0]);
-    setStatus("ไม่มา");
-    setExperience("");
-    setSelectedUser(null);
-    setIsEditing(false);
+    setName(""); setLevel(""); setLineId(""); setHanded("Right"); setPhone("");
+    setBirthDate(new Date().toISOString().split('T')[0]); setStatus("ไม่มา");
+    setExperience(""); setSelectedUser(null); setIsEditing(false);
   };
 
-  const toggleFormExpansion = () => {
-    setIsFormExpanded((prev) => !prev);
-  };
+  const toggleFormExpansion = () => setIsFormExpanded((prev) => !prev);
 
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -922,11 +758,7 @@ useEffect(() => {
 
   const getSortIcon = (key) => {
     if (sortConfig.key === key) {
-      if (sortConfig.direction === 'ascending') {
-        return <ChevronUp size={16} className="sort-icon" />;
-      } else {
-        return <ChevronDown size={16} className="sort-icon" />;
-      }
+      return sortConfig.direction === 'ascending' ? <ChevronUp size={16} className="sort-icon" /> : <ChevronDown size={16} className="sort-icon" />;
     }
     return <ArrowUpDown size={16} className="sort-icon" />;
   };
@@ -967,48 +799,31 @@ useEffect(() => {
 
   const handleMemberImageUpload = async (event) => {
     const imageFile = event.target.files[0];
-    if (!imageFile || !uploadTargetMemberId || !currentUserId) {
-      return;
-    }
+    if (!imageFile || !uploadTargetMemberId || !currentUserId) return;
 
-    const options = {
-      maxSizeMB: 1,
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-    };
+    const options = { maxSizeMB: 1, maxWidthOrHeight: 800, useWebWorker: true };
 
     try {
       setIsMemberUploading(uploadTargetMemberId);
-
       const compressedFile = await imageCompression(imageFile, options);
-
       const storagePath = `member_profiles/${currentUserId}/${uploadTargetMemberId}`;
       const storageRef = ref(storage, storagePath);
-
       await uploadBytes(storageRef, compressedFile);
       const downloadURL = await getDownloadURL(storageRef);
-
       const memberDocRef = doc(db, `users/${currentUserId}/Members/${uploadTargetMemberId}`);
-      await updateDoc(memberDocRef, {
-        profileImageUrl: downloadURL,
-      });
+      await updateDoc(memberDocRef, { profileImageUrl: downloadURL });
 
       setMembers(prevMembers =>
         prevMembers.map(member =>
-          member.memberId === uploadTargetMemberId
-            ? { ...member, profileImageUrl: downloadURL }
-            : member
+          member.memberId === uploadTargetMemberId ? { ...member, profileImageUrl: downloadURL } : member
         )
       );
-
     } catch (error) {
       console.error("Error uploading member image:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถอัปโหลดรูปภาพได้", "error");
     } finally {
       setIsMemberUploading(null);
-      if (memberFileInputRef.current) {
-        memberFileInputRef.current.value = "";
-      }
+      if (memberFileInputRef.current) memberFileInputRef.current.value = "";
       setUploadTargetMemberId(null);
     }
   };
@@ -1050,12 +865,8 @@ useEffect(() => {
             className="reset-status-button"
           >
             {isResettingStatus ? (
-                <>
-                    <span className="spinner"></span> กำลังรีเซ็ต...
-                </>
-            ) : (
-                "รีเซ็ตสถานะทั้งหมด"
-            )}
+                <> <span className="spinner"></span> กำลังรีเซ็ต... </>
+            ) : ( "รีเซ็ตสถานะทั้งหมด" )}
           </button>
         </div>
 
@@ -1078,103 +889,52 @@ useEffect(() => {
             </button>
           </div>
 
-          <div
-            className={`form-content-collapsible ${
-              isFormExpanded ? "expanded" : "collapsed"
-            }`}
-          >
+          <div className={`form-content-collapsible ${isFormExpanded ? "expanded" : "collapsed"}`}>
             <p className="form-required-note">ช่องที่มีเครื่องหมาย <span className="required-asterisk">*</span> จำเป็นต้องกรอก</p>
-
             <form onSubmit={handleSubmit} className="form-box" noValidate>
               <div className="form-grid-container">
                 <div>
                   <label className="form-label">ชื่อ<span className="required-asterisk">*</span></label>
-                  <input
-                    className="modern-input"
-                    type="text"
-                    placeholder="ชื่อ"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
+                  <input className="modern-input" type="text" placeholder="ชื่อ" value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div>
                   <label className="form-label">Line</label>
-                  <input
-                    className="modern-input"
-                    type="text"
-                    placeholder="Line"
-                    value={lineId}
-                    onChange={(e) => setLineId(e.target.value)}
-                  />
+                  <input className="modern-input" type="text" placeholder="Line" value={lineId} onChange={(e) => setLineId(e.target.value)} />
                 </div>
                 <div>
                   <label className="form-label">เบอร์โทร</label>
-                  <input
-                    className="modern-input"
-                    type="text"
-                    placeholder="เบอร์โทร"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    maxLength="10"
-                  />
+                  <input className="modern-input" type="text" placeholder="เบอร์โทร" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength="10" />
                 </div>
                 <div>
                   <label className="form-label">วันเดือนปีเกิด</label>{" "}
-                  <input
-                    className="modern-input"
-                    type="date"
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                  />
+                  <input className="modern-input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
                 </div>
                 <div>
                   <label className="form-label">ระดับ<span className="required-asterisk">*</span></label>
-                  <select
-                    className="modern-input"
-                    value={level}
-                    onChange={(e) => setLevel(e.target.value)}
-                  >
+                  <select className="modern-input" value={level} onChange={(e) => setLevel(e.target.value)}>
                     <option value="">เลือกระดับ</option>
-                    {levelOrder.map(lvl => (
-                        <option key={lvl} value={lvl}>{lvl}</option>
-                    ))}
+                    {levelOrder.map(lvl => ( <option key={lvl} value={lvl}>{lvl}</option> ))}
                   </select>
                 </div>
                 <div>
                   <label className="form-label">ประสบการณ์</label>
-                  <select
-                    className="modern-input"
-                    value={experience}
-                    onChange={(e) => setExperience(e.target.value)}
-                  >
+                  <select className="modern-input" value={experience} onChange={(e) => setExperience(e.target.value)}>
                     <option value="">ประสบการณ์</option>
                     <option value="น้อยกว่า 1 ปี">น้อยกว่า 1 ปี</option>
-                    {[...Array(10)].map((_, i) => (
-                      <option key={i + 1} value={`${i + 1} ปี`}>
-                        {i + 1} ปี
-                      </option>
-                    ))}
+                    {[...Array(10)].map((_, i) => ( <option key={i + 1} value={`${i + 1} ปี`}>{i + 1} ปี</option> ))}
                     <option value=">10 ปี">มากกว่า 10 ปี</option>
                   </select>
                 </div>
                 <div>
                   <label className="form-label">เลือกมือที่ถนัด</label>
-                  <select
-                    className="modern-input"
-                    value={handed}
-                    onChange={(e) => setHanded(e.target.value)}
-                  >
+                  <select className="modern-input" value={handed} onChange={(e) => setHanded(e.target.value)}>
                     <option value="Right">ขวา</option>
                     <option value="Left">ซ้าย</option>
                   </select>
                 </div>
                 <div>
                   <label className="form-label">สถานะ</label>
-                  <select
-                    className="modern-input"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                  >
+                  <select className="modern-input" value={status} onChange={(e) => setStatus(e.target.value)}>
                     <option value="มา">มา</option>
                     <option value="ไม่มา">ไม่มา</option>
                   </select>
@@ -1182,19 +942,10 @@ useEffect(() => {
               </div>
 
               <div className="form-buttons-container">
-                <button
-                  type="submit"
-                  className={`submit-btn ${isEditing ? "edit" : ""}`}
-                >
+                <button type="submit" className={`submit-btn ${isEditing ? "edit" : ""}`}>
                   {isEditing ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={!selectedUser}
-                  className="delete-btn"
-                >
+                <button type="button" onClick={handleDelete} disabled={!selectedUser} className="delete-btn">
                   ลบ
                 </button>
               </div>
@@ -1206,24 +957,14 @@ useEffect(() => {
 
         <div className="region-selection-container">
           <label className="form-label">ลำดับระดับมือ:</label>
-          <select
-            className="modern-input"
-            value={selectedRegion}
-            onChange={(e) => setSelectedRegion(e.target.value)}
-          >
+          <select className="modern-input" value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)}>
             <option value="northeast">ภาคอีสาน</option>
             <option value="central">ภาคกลาง</option>
           </select>
         </div>
 
         <div className="search-box">
-          <input
-            type="text"
-            className="modern-input search-input"
-            placeholder="ค้นหาผู้ใช้"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <input type="text" className="modern-input search-input" placeholder="ค้นหาผู้ใช้" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="table-controls-container">
@@ -1233,33 +974,16 @@ useEffect(() => {
                     <span style={{ color: "#f44336" }}>ยังไม่มา: {totalNotCame} คน</span>
                 </div>
                 <div className="pagination-controls">
-                    <button
-                        onClick={goToPrevPage}
-                        className="pagination-button"
-                        disabled={!hasMorePrev}
-                    >
-                        ย้อนกลับ
-                    </button>
+                    <button onClick={goToPrevPage} className="pagination-button" disabled={!hasMorePrev}> ย้อนกลับ </button>
                     <span className="current-page-display">หน้า {currentPage}</span>
-                    <button
-                        onClick={goToNextPage}
-                        className="pagination-button"
-                        disabled={!hasMoreNext}
-                    >
-                        ถัดไป
-                    </button>
+                    <button onClick={goToNextPage} className="pagination-button" disabled={!hasMoreNext}> ถัดไป </button>
                 </div>
             </div>
             <div className="right-controls-wrapper">
-                <div className="total-members-on-page-display">
-                    จำนวนสมาชิกในหน้านี้: {members.length}
-                </div>
+                <div className="total-members-on-page-display"> จำนวนสมาชิกในหน้านี้: {members.length} </div>
                 <div className="per-page-selector">
                     <label htmlFor="members-per-page">แสดง:</label>
-                    <select
-                        id="members-per-page"
-                        className="modern-input"
-                        value={membersPerPage}
+                    <select id="members-per-page" className="modern-input" value={membersPerPage}
                         onChange={(e) => {
                             const newSize = Number(e.target.value);
                             setMembersPerPage(newSize);
@@ -1280,19 +1004,13 @@ useEffect(() => {
             <thead>
               <tr>
                 <th>เลือก</th>
-                {showMemberImagesColumn && ( // ✨ แสดง/ซ่อนตามค่า showMemberImagesColumn ✨
-                    <th className="avatar-column-header">รูป</th>
-                )}
+                {showMemberImagesColumn && (<th className="avatar-column-header">รูป</th>)}
                 <th>ชื่อ</th>
-                <th onClick={() => requestSort('level')} className="sortable-header">
-                    ระดับ {getSortIcon('level')}
-                </th>
+                <th onClick={() => requestSort('level')} className="sortable-header"> ระดับ {getSortIcon('level')} </th>
                 <th>Line</th>
                 <th>มือ</th>
                 <th>เบอร์โทร</th>
-                <th onClick={() => requestSort('birthDate')} className="sortable-header">
-                  อายุ {getSortIcon('birthDate')}
-                </th>
+                <th onClick={() => requestSort('birthDate')} className="sortable-header"> อายุ {getSortIcon('birthDate')} </th>
                 <th>ประสบการณ์</th>
                 <th>สถานะ</th>
               </tr>
@@ -1300,35 +1018,24 @@ useEffect(() => {
             <tbody>
               {members.length === 0 && !search && (
                 <tr>
-                  <td colSpan={showMemberImagesColumn ? "10" : "9"} className="no-data-message"> {/* ✨ ปรับ colspan ✨ */}
+                  <td colSpan={showMemberImagesColumn ? "10" : "9"} className="no-data-message">
                     ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่
                   </td>
                 </tr>
               )}
               {members.length === 0 && search && (
                 <tr>
-                  <td colSpan={showMemberImagesColumn ? "10" : "9"} className="no-data-message"> {/* ✨ ปรับ colspan ✨ */}
+                  <td colSpan={showMemberImagesColumn ? "10" : "9"} className="no-data-message">
                     ไม่พบข้อมูลสมาชิกที่ค้นหา
                   </td>
                 </tr>
               )}
               {members.map((user) => (
-                <tr
-                  key={user.memberId}
-                  className={
-                    selectedUser?.memberId === user.memberId
-                      ? "selected-row"
-                      : ""
-                  }
-                >
+                <tr key={user.memberId} className={ selectedUser?.memberId === user.memberId ? "selected-row" : "" }>
                   <td data-label="เลือก">
-                    <input
-                      type="checkbox"
-                      checked={selectedUser?.memberId === user.memberId}
-                      onChange={() => handleSelectUser(user)}
-                    />
+                    <input type="checkbox" checked={selectedUser?.memberId === user.memberId} onChange={() => handleSelectUser(user)} />
                   </td>
-                  {showMemberImagesColumn && ( // ✨ แสดง/ซ่อนตามค่า showMemberImagesColumn ✨
+                  {showMemberImagesColumn && (
                     <td data-label="รูป">
                       <div className="member-avatar-cell" onClick={() => handleAvatarClick(user)}>
                         {isMemberUploading === user.memberId ? (
@@ -1354,12 +1061,7 @@ useEffect(() => {
                   <td data-label="อายุ">{calculateAge(user.birthDate)}</td>
                   <td data-label="ประสบการณ์">{user.experience}</td>
                   <td data-label="สถานะ">
-                    <button
-                      onClick={() => toggleStatus(user)}
-                      className={`status-button ${
-                        user.status === "มา" ? "status-มา" : "status-ไม่มา"
-                      }`}
-                    >
+                    <button onClick={() => toggleStatus(user)} className={`status-button ${ user.status === "มา" ? "status-มา" : "status-ไม่มา" }`}>
                       {user.status || "ไม่ระบุ"}
                     </button>
                   </td>
@@ -1415,7 +1117,6 @@ useEffect(() => {
             flex-wrap: wrap;
         }
 
-        /* Excel Button Container (repurposed from .excel-button-container) */
         .generate-excel-button {
           background-color: #57e497;
           color: black;
@@ -1431,7 +1132,6 @@ useEffect(() => {
           background-color: #3fc57b;
         }
 
-        /* Reset Status Button */
         .reset-status-button {
             background-color: #f44336;
             color: white;
@@ -1451,11 +1151,8 @@ useEffect(() => {
             cursor: not-allowed;
         }
 
-        /* Spinner for loading buttons */
         @keyframes spinner {
-          to {
-            transform: rotate(360deg);
-          }
+          to { transform: rotate(360deg); }
         }
         .spinner {
           display: inline-block;
@@ -1469,7 +1166,6 @@ useEffect(() => {
         }
 
 
-        /* Container for the Form Section (Header + Collapsible Content) */
         .member-form-section {
           background-color: var(--card-background, #ffffff);
           border-radius: 8px;
@@ -1478,7 +1174,6 @@ useEffect(() => {
           border: 1px solid var(--border-color, #e9e9e9);
         }
 
-        /* Header for the collapsible form */
         .form-header-with-toggle {
           display: flex;
           justify-content: space-between;
@@ -1519,15 +1214,15 @@ useEffect(() => {
           color: var(--text-color, #000);
         }
 
-        /* Collapsible content for the form */
+        /* --- START: โค้ดที่แก้ไข --- */
         .form-content-collapsible {
           overflow: hidden;
-          transition: max-height 0.5s ease-out, opacity 0.5s ease-out,
-            padding 0.5s ease-out;
-          max-height: 500px;
+          transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding 0.5s ease-out;
+          max-height: 1200px; /* แก้ไขค่านี้ให้สูงพอสำหรับ mobile view */
           opacity: 1;
           padding: 20px 15px;
         }
+        /* --- END: โค้ดที่แก้ไข --- */
 
         .form-content-collapsible.collapsed {
           max-height: 0;
@@ -1536,7 +1231,6 @@ useEffect(() => {
           padding-bottom: 0;
         }
 
-        /* Note for required fields */
         .form-required-note {
           font-size: 12px;
           color: #666;
@@ -1550,8 +1244,6 @@ useEffect(() => {
           font-weight: bold;
         }
 
-
-        /* Original Form Styles (from image_f08aa0.png) */
         .form-label {
           font-size: 12px;
           color: var(--text-color, #333);
@@ -1634,7 +1326,6 @@ useEffect(() => {
           border-top: 1px solid var(--border-color, #aebdc9);
         }
 
-        /* Region Selection Container */
         .region-selection-container {
             margin-bottom: 20px;
             display: flex;
@@ -1649,7 +1340,6 @@ useEffect(() => {
             max-width: 200px;
         }
 
-        /* Search box style */
         .search-box {
           margin-bottom: 20px;
         }
@@ -1668,7 +1358,6 @@ useEffect(() => {
           box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
         }
 
-        /* --- Updated CSS for Table Controls Container --- */
         .table-controls-container {
             display: flex;
             justify-content: space-between;
@@ -1723,7 +1412,6 @@ useEffect(() => {
             min-width: 120px;
         }
 
-        /* Pagination Controls - Existing styles, may need minor tweaks for new parent */
         .pagination-controls {
           display: flex;
           justify-content: flex-start;
@@ -1764,7 +1452,6 @@ useEffect(() => {
             color: var(--text-color, #555);
         }
 
-        /* Table Styles */
         .user-table {
           width: 100%;
           border-collapse: collapse;
@@ -1797,7 +1484,6 @@ useEffect(() => {
           text-transform: none;
         }
 
-        /* Sortable Header Styles */
         .sortable-header {
             cursor: pointer;
             display: flex;
@@ -1814,12 +1500,10 @@ useEffect(() => {
             color: white;
         }
 
-        /* Remove bottom border for the last row */
         .user-table tbody tr:last-child td {
           border-bottom: none;
         }
 
-        /* Row Highlighting and Stripes */
         .user-table tbody tr:nth-child(odd) {
           background-color: var(--card-background, #ffffff);
         }
@@ -1827,29 +1511,24 @@ useEffect(() => {
           background-color: var(--background-color-even-row, #fdfdfd);
         }
 
-        /* Selected row background */
         .user-table tbody tr.selected-row {
           background-color: #e0ffe0;
         }
 
-        /* Hover effect */
         .user-table tbody tr:hover:not(.selected-row) {
           background-color: var(--border-color, #f5f5f5);
         }
 
-        /* Checkbox Column */
         .user-table td[data-label="เลือก"] {
           text-align: center;
         }
 
-        /* Add this to your <style jsx> block */
         .table-responsive-container {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           padding-bottom: 10px;
         }
 
-        /* Status Button */
         .status-button {
           padding: 5px 8px;
           border-radius: 5px;
@@ -1862,25 +1541,10 @@ useEffect(() => {
           text-align: center;
           color: white;
         }
-
-        .status-มา {
-          background-color: #57e497;
-          color: white;
-        }
-
-        .status-มา:hover {
-          background-color: #3fc57b;
-        }
-
-        .status-ไม่มา {
-          background-color: #f44336;
-          color: white;
-        }
-
-        .status-ไม่มา:hover {
-          background-color: #da190b;
-        }
-
+        .status-มา { background-color: #57e497; color: white; }
+        .status-มา:hover { background-color: #3fc57b; }
+        .status-ไม่มา { background-color: #f44336; color: white; }
+        .status-ไม่มา:hover { background-color: #da190b; }
         .no-data-message {
           text-align: center;
           font-style: italic;
@@ -1888,76 +1552,38 @@ useEffect(() => {
           padding: 20px;
           font-size: 12px;
         }
-
-        .avatar-column-header {
-            width: 100px;
-        }
-
+        .avatar-column-header { width: 100px; }
         .member-avatar-cell {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background-color: #f0f0f0;
-            margin: 0 auto;
-            cursor: pointer;
-            border: 1px solid #ddd;
+            display: flex; justify-content: center; align-items: center;
+            width: 50px; height: 50px; border-radius: 50%;
+            background-color: #f0f0f0; margin: 0 auto;
+            cursor: pointer; border: 1px solid #ddd;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
             position: relative;
         }
-
         .member-avatar-cell:hover {
             transform: scale(1.1);
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
-
         .member-avatar-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 50%;
+            width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
         }
-
-        .avatar-placeholder-icon {
-            color: #888;
-        }
-
+        .avatar-placeholder-icon { color: #888; }
         .edit-avatar-overlay {
-            position: absolute;
-            bottom: 0px;
-            left: 35px;
+            position: absolute; bottom: 0px; left: 35px;
             background-color: rgba(40, 40, 40, 0.7);
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            border: 2px solid white;
+            color: white; border-radius: 50%;
+            width: 20px; height: 20px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; border: 2px solid white;
             transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
-            opacity: 0;
-            transform: scale(0.8);
-            z-index: 1;
+            opacity: 0; transform: scale(0.8); z-index: 1;
         }
-
-        .member-avatar-cell:hover .edit-avatar-overlay {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        @keyframes spinner-anim {
-          to { transform: rotate(360deg); }
-        }
-        .avatar-spinner {
-            animation: spinner-anim 1s linear infinite;
-        }
+        .member-avatar-cell:hover .edit-avatar-overlay { opacity: 1; transform: scale(1); }
+        @keyframes spinner-anim { to { transform: rotate(360deg); } }
+        .avatar-spinner { animation: spinner-anim 1s linear infinite; }
 
 
-        /* Responsive Table */
         @media (max-width: 768px) {
           .form-grid-container {
             grid-template-columns: repeat(2, 1fr);
@@ -1966,12 +1592,7 @@ useEffect(() => {
           .user-table {
             min-width: unset;
           }
-          .user-table,
-          .user-table thead,
-          .user-table tbody,
-          .user-table th,
-          .user-table td,
-          .user-table tr {
+          .user-table, .user-table thead, .user-table tbody, .user-table th, .user-table td, .user-table tr {
             display: block;
           }
 
@@ -1989,47 +1610,34 @@ useEffect(() => {
           }
 
           .user-table td {
-            border: none;
-            position: relative;
-            padding-left: 55%;
-            text-align: right;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
             border-bottom: 1px solid var(--border-color, #f0f0f0);
+            position: relative;
+            text-align: right;
           }
-          /* ✨ ปรับ padding-left สำหรับ data-label รูปภาพบนมือถือ ✨ */
-          .user-table td[data-label="รูป"] {
-            padding-left: 55%;
-          }
-          .user-table td[data-label="รูป"] .member-avatar-cell {
-              margin: 0;
-              margin-left: auto;
-          }
-          .user-table td[data-label="ระดับ"]:before,
-          .user-table td[data-label="อายุ"]:before {
-            width: 45%;
-          }
-
-          .user-table td:last-child {
-            border-bottom: none;
-          }
-
           .user-table td:before {
-            position: absolute;
-            left: 15px;
-            width: 40%;
-            padding-right: 10px;
-            white-space: nowrap;
             content: attr(data-label);
             font-weight: bold;
             text-align: left;
             color: var(--text-color, #555);
             font-size: 12px;
+            padding-right: 15px;
+            white-space: nowrap;
           }
-
-          .user-table th.sortable-header {
-              display: flex;
-              justify-content: flex-start;
-              align-items: center;
-              padding-left: 15px;
+          .user-table td[data-label="รูป"] .member-avatar-cell {
+              margin: 0;
+          }
+          .user-table td:last-child {
+            border-bottom: none;
+          }
+          .user-table td[data-label="สถานะ"] {
+              flex-grow: 0;
+          }
+          .user-table td[data-label="สถานะ"] .status-button {
+              margin-left: auto;
           }
 
           .form-buttons-container {
@@ -2038,21 +1646,23 @@ useEffect(() => {
 
           .table-controls-container {
               flex-direction: column;
-              align-items: center;
+              align-items: flex-start;
               gap: 20px;
           }
-
           .left-controls-wrapper,
           .right-controls-wrapper {
               width: 100%;
-              align-items: center;
+              align-items: flex-start;
           }
-
           .pagination-controls,
           .status-summary,
           .per-page-selector,
           .total-members-on-page-display {
-              justify-content: center;
+              width: 100%;
+              justify-content: flex-start;
+          }
+          .per-page-selector {
+              flex-wrap: wrap;
           }
         }
 
