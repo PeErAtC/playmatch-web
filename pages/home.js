@@ -4,7 +4,7 @@ import Swal from "sweetalert2";
 import { db, storage } from "../lib/firebaseConfig";
 import {
   collection, getDocs, setDoc, doc, updateDoc, deleteDoc,
-  query, where, writeBatch, limit, orderBy, startAfter, endBefore
+  query, where, writeBatch, limit, orderBy, startAfter, endBefore, getCountFromServer
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as XLSX from "xlsx";
@@ -13,7 +13,7 @@ import Head from 'next/head';
 import imageCompression from 'browser-image-compression';
 
 // Modal Component
-const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
+const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload, isLimitReached, limitMessage }) => {
   if (!show) {
     return null;
   }
@@ -36,7 +36,8 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
             ดาวน์โหลดไฟล์ Excel แม่แบบ
           </button>
           <hr className="modal-separator" />
-          <label htmlFor="excel-upload" className="modal-upload-label">
+          {isLimitReached && <p className="limit-warning-modal">{limitMessage}</p>}
+          <label htmlFor="excel-upload" className={`modal-upload-label ${isLimitReached ? 'disabled' : ''}`}>
             เลือกไฟล์ Excel เพื่ออัปโหลด:
             <input
               id="excel-upload"
@@ -44,6 +45,7 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
               onChange={onFileUpload}
               accept=".xlsx, .xls"
               className="modal-file-input"
+              disabled={isLimitReached}
             />
           </label>
         </div>
@@ -101,6 +103,21 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
           margin-bottom: 25px;
           color: #555;
           font-size: 15px;
+        }
+
+        .limit-warning-modal {
+          color: #dc3545;
+          font-weight: bold;
+          background-color: #f8d7da;
+          border: 1px solid #f5c6cb;
+          padding: 10px;
+          border-radius: 5px;
+          margin-bottom: 15px;
+        }
+
+        .modal-upload-label.disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .modal-actions {
@@ -274,6 +291,9 @@ const Home = () => {
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [isResettingStatus, setIsResettingStatus] = useState(false);
 
+  const [userPackage, setUserPackage] = useState(null);
+  const [totalMemberCount, setTotalMemberCount] = useState(0);
+
   const [lastVisible, setLastVisible] = useState(null);
   const [firstVisible, setFirstVisible] = useState(null);
   const [hasMoreNext, setHasMoreNext] = useState(false);
@@ -292,6 +312,16 @@ const Home = () => {
   const [modalImageUrl, setModalImageUrl] = useState('');
 
   const [showMemberImagesColumn, setShowMemberImagesColumn] = useState(true);
+
+  const packageLimits = useMemo(() => ({
+    Basic: 60,
+    Pro: 200,
+    Premium: Infinity
+  }), []);
+
+  const currentLimit = userPackage ? packageLimits[userPackage] : 0;
+  const isLimitReached = userPackage !== 'premium' && totalMemberCount >= currentLimit;
+  const limitMessage = `คุณมีสมาชิก ${totalMemberCount}/${currentLimit} คน (เต็มจำนวน) สำหรับแพ็คเกจ ${userPackage}`;
 
   useEffect(() => {
     const updateVisibility = () => {
@@ -373,7 +403,31 @@ const Home = () => {
         const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: null });
 
         try {
-          if (jsonData.length === 0) {
+          if (isLimitReached) {
+            Swal.fire('เพิ่มสมาชิกไม่สำเร็จ', limitMessage, 'error');
+            return;
+          }
+
+          let membersToProcess = jsonData;
+          const availableSlots = currentLimit - totalMemberCount;
+
+          if (userPackage !== 'premium' && jsonData.length > availableSlots) {
+            const confirmation = await Swal.fire({
+              title: 'จำนวนสมาชิกเกินโควต้า',
+              html: `แพ็คเกจ <b>${userPackage}</b> ของคุณสามารถเพิ่มสมาชิกได้อีก <b>${availableSlots}</b> คนเท่านั้น (จาก ${jsonData.length} คนในไฟล์)<br/><br/>คุณต้องการเพิ่มสมาชิก ${availableSlots} คนแรกหรือไม่?`,
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonText: 'ใช่, เพิ่มเลย',
+              cancelButtonText: 'ยกเลิก'
+            });
+
+            if (!confirmation.isConfirmed) {
+              return;
+            }
+            membersToProcess = jsonData.slice(0, availableSlots);
+          }
+
+          if (membersToProcess.length === 0) {
             Swal.fire( "ไฟล์ Excel ว่างเปล่า", "ไม่พบข้อมูลในไฟล์ที่คุณอัปโหลด", "warning" );
             return;
           }
@@ -387,8 +441,8 @@ const Home = () => {
           let successCount = 0;
           const batch = writeBatch(db);
 
-          for (let i = 0; i < jsonData.length; i++) {
-            const member = jsonData[i];
+          for (let i = 0; i < membersToProcess.length; i++) {
+            const member = membersToProcess[i];
             const rowIndex = i + 2;
 
             if (!member) {
@@ -445,6 +499,7 @@ const Home = () => {
             setShowModal(false);
             setCurrentPage(1);
             fetchMembers('current', null);
+            fetchTotalMemberCount();
           }
 
           if (validationErrors.length > 0) {
@@ -472,16 +527,33 @@ const Home = () => {
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
           const docSnapshot = querySnapshot.docs[0];
-          setLoggedInUsername(docSnapshot.data().username);
+          const userData = docSnapshot.data();
+          setLoggedInUsername(userData.username);
           setCurrentUserId(docSnapshot.id);
+          setUserPackage(userData.packageType || 'basic');
         } else {
           console.warn("User data not found for email:", email);
+          setUserPackage('basic');
         }
       } catch (error) {
         console.error("Error fetching user data: ", error);
+        setUserPackage('basic');
       }
     }
   };
+
+  const fetchTotalMemberCount = useCallback(async () => {
+    if (!currentUserId) return;
+    try {
+        const membersRef = collection(db, `users/${currentUserId}/Members`);
+        const q = query(membersRef);
+        const snapshot = await getCountFromServer(q);
+        setTotalMemberCount(snapshot.data().count);
+    } catch (error) {
+        console.error("Error fetching total member count:", error);
+    }
+  }, [currentUserId]);
+
 
   const fetchMembers = useCallback(async (direction = 'current', cursor = null) => {
     if (!currentUserId) {
@@ -579,8 +651,9 @@ useEffect(() => {
     if (currentUserId) {
         setCurrentPage(1);
         fetchMembers('current', null);
+        fetchTotalMemberCount();
     }
-}, [currentUserId, fetchMembers, sortConfig, search, selectedRegion]);
+}, [currentUserId, fetchMembers, sortConfig, search, selectedRegion, fetchTotalMemberCount]);
 
   const handleSelectUser = (user) => {
     if (selectedUser && selectedUser.memberId === user.memberId) {
@@ -608,6 +681,15 @@ useEffect(() => {
     if (!name || !level) {
       Swal.fire("กรุณากรอกข้อมูล 'ชื่อ' และ 'ระดับ' ให้ครบถ้วน", "", "warning");
       return;
+    }
+
+    if (!isEditing && isLimitReached) {
+        Swal.fire({
+            icon: 'error',
+            title: 'เพิ่มสมาชิกไม่สำเร็จ',
+            text: limitMessage + ' หากต้องการเพิ่มสมาชิกมากกว่านี้ กรุณาอัปเกรดแพ็คเกจ',
+        });
+        return;
     }
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -648,6 +730,7 @@ useEffect(() => {
       clearForm();
       setCurrentPage(1);
       fetchMembers('current', null);
+      fetchTotalMemberCount();
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
@@ -675,6 +758,7 @@ useEffect(() => {
         clearForm();
         setCurrentPage(1);
         fetchMembers('current', null);
+        fetchTotalMemberCount();
       } catch (error) {
         Swal.fire("เกิดข้อผิดพลาดในการลบ", error.message, "error");
       }
@@ -876,11 +960,15 @@ useEffect(() => {
           onClose={() => setShowModal(false)}
           onGenerateTemplate={generateExcelTemplate}
           onFileUpload={handleFileUpload}
+          isLimitReached={isLimitReached}
+          limitMessage={limitMessage}
         />
 
         <div className="member-form-section">
           <div className="form-header-with-toggle" onClick={toggleFormExpansion}>
-            <h3 className="form-section-title">กรอกข้อมูลสมาชิก</h3>
+            <h3 className="form-section-title">
+                กรอกข้อมูลสมาชิก 
+            </h3>
             <button
               className="toggle-form-button"
               aria-expanded={isFormExpanded}
@@ -890,6 +978,7 @@ useEffect(() => {
           </div>
 
           <div className={`form-content-collapsible ${isFormExpanded ? "expanded" : "collapsed"}`}>
+            {isLimitReached && <p className="limit-warning-form">{limitMessage}</p>}
             <p className="form-required-note">ช่องที่มีเครื่องหมาย <span className="required-asterisk">*</span> จำเป็นต้องกรอก</p>
             <form onSubmit={handleSubmit} className="form-box" noValidate>
               <div className="form-grid-container">
@@ -942,7 +1031,7 @@ useEffect(() => {
               </div>
 
               <div className="form-buttons-container">
-                <button type="submit" className={`submit-btn ${isEditing ? "edit" : ""}`}>
+                <button type="submit" className={`submit-btn ${isEditing ? "edit" : ""}`} disabled={!isEditing && isLimitReached}>
                   {isEditing ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
                 </button>
                 <button type="button" onClick={handleDelete} disabled={!selectedUser} className="delete-btn">
@@ -1107,6 +1196,17 @@ useEffect(() => {
           border: 0;
           border-top: 1px solid var(--border-color, #aebdc9);
           margin-bottom: 18px;
+        }
+
+        .limit-warning-form {
+          font-size: 14px;
+          text-align: center;
+          color: #856404;
+          background-color: #fff3cd;
+          border: 1px solid #ffeeba;
+          padding: 12px;
+          border-radius: 5px;
+          margin-bottom: 20px;
         }
 
         /* Top Action Buttons Container */
@@ -1305,6 +1405,12 @@ useEffect(() => {
         }
         .submit-btn.edit:hover {
           background-color: #ffa500;
+        }
+
+        .submit-btn:disabled {
+          background-color: #ccc;
+          cursor: not-allowed;
+          opacity: 0.7;
         }
 
         .delete-btn {
@@ -1581,7 +1687,6 @@ useEffect(() => {
         @keyframes spinner-anim { to { transform: rotate(360deg); } }
         .avatar-spinner { animation: spinner-anim 1s linear infinite; }
 
-        /* --- START: โค้ดที่แก้ไขสำหรับ Mobile --- */
         @media (max-width: 768px) {
           .form-grid-container {
             grid-template-columns: repeat(2, 1fr);
@@ -1642,7 +1747,6 @@ useEffect(() => {
             justify-content: center;
           }
 
-          /* จัดการ Layout ของส่วนควบคุมให้อยู่ตรงกลาง */
           .table-controls-container {
               flex-direction: column;
               align-items: center;
@@ -1651,10 +1755,10 @@ useEffect(() => {
           .left-controls-wrapper,
           .right-controls-wrapper {
               width: 100%;
-              display: flex; /* <<< เพิ่ม: เพื่อให้ align-items และ gap ทำงาน */
+              display: flex;
               flex-direction: column;
               align-items: center;
-              gap: 10px; /* <<< เพิ่ม: ระยะห่างระหว่าง items ภายใน group */
+              gap: 10px;
           }
           .pagination-controls,
           .status-summary,
@@ -1664,12 +1768,10 @@ useEffect(() => {
               flex-wrap: wrap;
               gap: 15px;
           }
-          /* เพิ่ม text-align: center เพื่อจัดข้อความให้อยู่กลาง */
           .total-members-on-page-display {
               text-align: center;
           }
         }
-        /* --- END: โค้ดที่แก้ไขสำหรับ Mobile --- */
 
         @media (max-width: 600px) {
           .main-content {
