@@ -1,16 +1,13 @@
+// settings.jsx
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX, Camera, Loader } from "lucide-react";
+import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX, Camera, Loader, Image, ImageOff } from "lucide-react"; // ✨ เพิ่ม Image, ImageOff ✨
 import { FaRegUserCircle } from "react-icons/fa";
 
 import { db, storage } from "../lib/firebaseConfig";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-
-// เพิ่มการ import library สำหรับบีบอัดรูปภาพ
 import imageCompression from 'browser-image-compression';
 
-
-// ทำให้ฟังก์ชัน getText อยู่นอก component และใช้ภาษาไทยเป็นหลัก
 const texts = {
   settingsTitle: "การตั้งค่า",
   generalSettings: "การตั้งค่าทั่วไป",
@@ -31,7 +28,7 @@ const texts = {
   expired: "หมดอายุแล้ว",
   expiresToday: "หมดอายุวันนี้",
   accountCreatedLabel: "สร้างบัญชีเมื่อ",
-  expiryDateLabel: "วันหมดอายุบัญชี", // เพิ่ม text สำหรับวันหมดอายุ
+  expiryDateLabel: "วันหมดอายุบัญชี",
   inAppSoundsLabel: "เสียงในแอป",
   soundsOn: "เปิด",
   soundsOff: "ปิด",
@@ -42,9 +39,12 @@ const texts = {
   trackResultsLabel: "แสดงผลการแข่งขัน",
   trackResultsOn: "แสดง",
   trackResultsOff: "ซ่อน",
+  // ✨ เพิ่มข้อความใหม่ ✨
+  showMemberImagesLabel: "แสดงรูปภาพสมาชิก",
+  showMemberImagesOn: "แสดง",
+  showMemberImagesOff: "ซ่อน",
 };
 const getText = (key) => texts[key];
-
 
 export default function SettingsPage() {
   const isBrowser = typeof window !== "undefined";
@@ -53,6 +53,8 @@ export default function SettingsPage() {
   const [inAppSounds, setInAppSounds] = useState(true);
   const [trackMatchResults, setTrackMatchResults] = useState(true);
   const [showSaveMessage, setShowSaveMessage] = useState(false);
+  // ✨ เพิ่ม State ใหม่สำหรับรูปภาพสมาชิก ✨
+  const [showMemberImages, setShowMemberImages] = useState(true);
 
   const [userProfile, setUserProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -63,12 +65,13 @@ export default function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Effect to load initial settings from localStorage on component mount
   useEffect(() => {
     if (isBrowser) {
       const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
       const savedInAppSounds = localStorage.getItem("inAppSounds");
       const savedTrackMatchResults = localStorage.getItem("trackMatchResults");
+      // ✨ โหลดค่าใหม่จาก localStorage ✨
+      const savedShowMemberImages = localStorage.getItem("showMemberImages");
 
       if (savedBirthdayNotifications !== null) {
         setBirthdayNotifications(JSON.parse(savedBirthdayNotifications));
@@ -78,6 +81,10 @@ export default function SettingsPage() {
       }
       if (savedTrackMatchResults !== null) {
         setTrackMatchResults(JSON.parse(savedTrackMatchResults));
+      }
+      // ✨ ตั้งค่า State ใหม่ ✨
+      if (savedShowMemberImages !== null) {
+        setShowMemberImages(JSON.parse(savedShowMemberImages));
       }
 
       const email = localStorage.getItem("loggedInEmail");
@@ -90,7 +97,6 @@ export default function SettingsPage() {
     }
   }, [isBrowser]);
 
-  // Effects to save settings to localStorage whenever they change
   useEffect(() => {
     if (isBrowser) {
       localStorage.setItem("birthdayNotifications", JSON.stringify(birthdayNotifications));
@@ -118,8 +124,17 @@ export default function SettingsPage() {
     }
   }, [trackMatchResults, isBrowser]);
 
+  // ✨ useEffect ใหม่สำหรับ showMemberImages ✨
+  useEffect(() => {
+    if (isBrowser) {
+      localStorage.setItem("showMemberImages", JSON.stringify(showMemberImages));
+      setShowSaveMessage(true);
+      const timer = setTimeout(() => setShowSaveMessage(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showMemberImages, isBrowser]);
 
-  // Firebase fetching effects
+
   useEffect(() => {
     const fetchUserId = async () => {
       if (!loggedInEmail) return;
@@ -161,8 +176,6 @@ export default function SettingsPage() {
 
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
-          // --- ส่วนที่แก้ไข ---
-          // ดึงข้อมูลทั้ง CreateDate และ expiryDate ใหม่
           setUserProfile({
             email: userData.email || "N/A",
             groupName: userData.groupName || "N/A",
@@ -170,8 +183,8 @@ export default function SettingsPage() {
             username: userData.username || "N/A",
             packageType: userData.packageType || "N/A",
             profileImageUrl: userData.profileImageUrl || null,
-            createDate: userData.CreateDate || null, // เก็บวันที่สร้างบัญชี
-            expiryDate: userData.expiryDate || null,   // เก็บวันหมดอายุที่กำหนดเอง
+            createDate: userData.CreateDate || null,
+            expiryDate: userData.expiryDate || null,
           });
         } else {
           setProfileError(getText("noData"));
@@ -226,8 +239,6 @@ export default function SettingsPage() {
     }
   };
 
-  // --- ส่วนที่แก้ไข ---
-  // ใช้ Logic การคำนวณจาก expiryDate โดยตรง
   const accountExpiryInfo = useMemo(() => {
     if (!userProfile || !userProfile.expiryDate) {
       return { status: "not_available", message: "ไม่มีข้อมูล" };
@@ -255,21 +266,25 @@ export default function SettingsPage() {
     }
   }, [userProfile]);
 
-
   const toggleBirthdayNotifications = () => setBirthdayNotifications((prev) => !prev);
   const toggleInAppSounds = () => setInAppSounds((prev) => !prev);
   const toggleTrackMatchResults = () => setTrackMatchResults((prev) => !prev);
+  // ✨ ฟังก์ชันใหม่สำหรับ Toggle showMemberImages ✨
+  const toggleShowMemberImages = () => setShowMemberImages((prev) => !prev);
+
 
   const handleResetSettings = () => {
     if (window.confirm(getText("resetConfirm"))) {
       setBirthdayNotifications(true);
       setInAppSounds(true);
       setTrackMatchResults(true);
+      setShowMemberImages(true); // ✨ รีเซ็ตค่าใหม่ด้วย ✨
 
       if (isBrowser) {
         localStorage.removeItem("birthdayNotifications");
         localStorage.removeItem("inAppSounds");
         localStorage.removeItem("trackMatchResults");
+        localStorage.removeItem("showMemberImages"); // ✨ ลบค่าใหม่จาก localStorage ✨
       }
       setShowSaveMessage(true);
       const timer = setTimeout(() => setShowSaveMessage(false), 2000);
@@ -465,6 +480,30 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* ✨ เพิ่ม Setting สำหรับรูปภาพสมาชิก ✨ */}
+          <div className="setting-item">
+            <div className="setting-label">
+              {showMemberImages ? (
+                <Image size={20} className="setting-icon" />
+              ) : (
+                <ImageOff size={20} className="setting-icon" />
+              )}
+              <span>{getText("showMemberImagesLabel")}</span>
+            </div>
+            <div
+              className="setting-control toggle-switch"
+              onClick={toggleShowMemberImages}
+            >
+              <div className={`switch-track ${showMemberImages ? "on" : "off"}`}>
+                <div className="switch-thumb"></div>
+              </div>
+              <span className="toggle-label">
+                {showMemberImages ? getText("showMemberImagesOn") : getText("showMemberImagesOff")}
+              </span>
+            </div>
+          </div>
+          {/* ✨ สิ้นสุดการเพิ่ม Setting ✨ */}
+
           <div className="setting-item reset-button-container">
             <button onClick={handleResetSettings} className="reset-button">
               <RefreshCcw size={18} className="button-icon" />
@@ -476,6 +515,7 @@ export default function SettingsPage() {
       </main>
 
       <style jsx global>{`
+        /* ... (คงเดิม CSS ทั้งหมด) ... */
         :root {
           --background-color-light: #f7f7f7;
           --text-color-light: #333;
