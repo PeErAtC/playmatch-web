@@ -1,29 +1,27 @@
-// Home.js
+// home.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Swal from "sweetalert2";
-// --- 1. แก้ไข Imports ---
-import { db, storage } from "../lib/firebaseConfig"; // เพิ่ม storage
+import { db, storage } from "../lib/firebaseConfig";
 import {
   collection, getDocs, setDoc, doc, updateDoc, deleteDoc,
   query, where, writeBatch, limit, orderBy, startAfter, endBefore
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // เพิ่ม imports ของ storage
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as XLSX from "xlsx";
-import { ChevronUp, ChevronDown, ArrowUpDown, Camera, Loader } from 'lucide-react'; // เพิ่มไอคอน
+import { ChevronUp, ChevronDown, ArrowUpDown, Camera, Loader } from 'lucide-react';
 import Head from 'next/head';
-import imageCompression from 'browser-image-compression'; // เพิ่ม import สำหรับบีบอัดรูป
+import imageCompression from 'browser-image-compression';
 
-// Modal Component - Integrated within Home.js
+// Modal Component - Integrated within Home.js (คงเดิม)
 const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
   if (!show) {
     return null;
   }
-
   return (
     <div className="modal-overlay">
       <div className="modal-content">
         <button className="modal-close-button" onClick={onClose}>
-          &times; {/* Cross icon */}
+          &times;
         </button>
         <h3>จัดการไฟล์ Excel สมาชิก</h3>
         <p>
@@ -51,7 +49,7 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
         </div>
       </div>
       <style jsx>{`
-        /* Modal CSS */
+        /* Modal CSS (คงเดิม) */
         .modal-overlay {
           position: fixed;
           top: 0;
@@ -184,19 +182,16 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
 };
 // End Modal Component
 
-// --- ✨ NEW ✨ Image Preview Modal Component ---
+// Image Preview Modal Component (คงเดิม)
 const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
   if (!show) {
     return null;
   }
-
-  // Closes the modal if the overlay (background) is clicked
   const handleOverlayClick = (e) => {
     if (e.target.id === 'image-modal-overlay') {
       onClose();
     }
   };
-
   return (
     <div id="image-modal-overlay" className="image-modal-overlay" onClick={handleOverlayClick}>
       <div className="image-modal-content">
@@ -216,7 +211,7 @@ const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
           display: flex;
           justify-content: center;
           align-items: center;
-          z-index: 2000; /* Ensure it's on top of everything */
+          z-index: 2000;
           cursor: pointer;
         }
         .image-modal-content {
@@ -228,8 +223,8 @@ const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
         .image-modal-image {
           width: 100%;
           height: 100%;
-          border-radius: 50%; /* Make the image container circular */
-          object-fit: cover; /* Ensure the image covers the circle without distortion */
+          border-radius: 50%;
+          object-fit: cover;
           border: 3px solid white;
           box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
@@ -265,24 +260,23 @@ const Home = () => {
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [level, setLevel] = useState("");
-  const [lineId, setLineId] = useState(""); // Optional
-  const [handed, setHanded] = useState("Right"); // Default to Right
-  const [phone, setPhone] = useState(""); // Optional
-  const [birthDate, setBirthDate] = useState(new Date().toISOString().split('T')[0]); // Default to current date
-  const [experience, setExperience] = useState(""); // Optional
-  const [status, setStatus] = useState("ไม่มา"); // Default to ไม่มา
+  const [lineId, setLineId] = useState("");
+  const [handed, setHanded] = useState("Right");
+  const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState(new Date().toISOString().split('T')[0]);
+  const [experience, setExperience] = useState("");
+  const [status, setStatus] = useState("ไม่มา");
   const [members, setMembers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loggedInUsername, setLoggedInUsername] = useState("");
-  const [currentUserId, setCurrentUserId] = useState(null); // Added State to store userId
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [membersPerPage, setMembersPerPage] = useState(30); // <<< *** UPDATED ***
+  const [membersPerPage, setMembersPerPage] = useState(30);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
-  const [isResettingStatus, setIsResettingStatus] = useState(false); // New state for reset status button
+  const [isResettingStatus, setIsResettingStatus] = useState(false);
 
-  // States for server-side pagination cursors
   const [lastVisible, setLastVisible] = useState(null);
   const [firstVisible, setFirstVisible] = useState(null);
   const [hasMoreNext, setHasMoreNext] = useState(false);
@@ -290,22 +284,34 @@ const Home = () => {
   const [totalCame, setTotalCame] = useState(0);
   const [totalNotCame, setTotalNotCame] = useState(0);
 
-
-  // State for sorting
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+  const [selectedRegion, setSelectedRegion] = useState('northeast');
 
-  // State for region selection
-  const [selectedRegion, setSelectedRegion] = useState('northeast'); // 'northeast' or 'central'
+  const memberFileInputRef = useRef(null);
+  const [uploadTargetMemberId, setUploadTargetMemberId] = useState(null);
+  const [isMemberUploading, setIsMemberUploading] = useState(null);
 
-  const memberFileInputRef = useRef(null); // Ref สำหรับ input file ที่ซ่อนไว้
-  const [uploadTargetMemberId, setUploadTargetMemberId] = useState(null); // ID ของสมาชิกที่กำลังจะอัปโหลดรูป
-  const [isMemberUploading, setIsMemberUploading] = useState(null); // เก็บ ID สมาชิกที่กำลังอัปโหลดเพื่อแสดง spinner
-
-  // --- ✨ NEW ✨ State for Image Preview Modal ---
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageUrl, setModalImageUrl] = useState('');
 
-  // Custom order for levels based on selected region
+  // ✨ State ใหม่สำหรับควบคุมการแสดงคอลัมน์รูปภาพ ✨
+  const [showMemberImagesColumn, setShowMemberImagesColumn] = useState(true);
+
+  // ✨ useEffect สำหรับอ่านค่า showMemberImages จาก localStorage และ listen event ✨
+  useEffect(() => {
+    const updateVisibility = () => {
+      const savedSetting = localStorage.getItem('showMemberImages');
+      setShowMemberImagesColumn(savedSetting !== null ? JSON.parse(savedSetting) : true);
+    };
+
+    updateVisibility(); // Load initial setting
+    window.addEventListener('storage', updateVisibility); // Listen for changes from other tabs/windows
+
+    return () => {
+      window.removeEventListener('storage', updateVisibility); // Clean up event listener
+    };
+  }, []);
+
   const levelOrder = useMemo(() => {
     const northeastOrder = [
       "มือหน้าบ้าน", "มือหน้าบ้าน1", "มือหน้าบ้าน2", "มือหน้าบ้าน3","BG", "S-", "S", "N-", "N", "P-", "P","C"
@@ -317,7 +323,6 @@ const Home = () => {
   }, [selectedRegion]);
 
 
-  // Helper function to calculate age from birth date (YYYY-MM-DD format)
   const calculateAge = (isoBirthDate) => {
     if (!isoBirthDate) return null;
     const today = new Date();
@@ -331,34 +336,27 @@ const Home = () => {
     return age;
   };
 
-  // Helper function to convert Excel date number to ISO string (YYYY-MM-DD)
-  // Excel stores dates as numbers (days since 1900-01-01)
   const excelDateToISODate = (excelDateNumber) => {
     if (typeof excelDateNumber !== "number") return null;
-    // Excel's epoch starts from 1900-01-01 (day 1). JavaScript's is 1970-01-01.
-    // Need to adjust for 1900-02-29 bug in Excel (Excel thinks 1900 was a leap year)
-    const date = new Date((excelDateNumber - (25569 + 1)) * 86400 * 1000); // 25569 is days between 1900-01-01 and 1970-01-01, plus 1 day for Excel's 1-based indexing and the 1900 leap year bug
+    const date = new Date((excelDateNumber - (25569 + 1)) * 86400 * 1000);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
 
-  // Function to generate Excel template file with example data
   const generateExcelTemplate = () => {
-    // 1. Define column headers
     const headers = [
       "name",
       "level",
       "lineId",
       "handed",
       "phone",
-      "birthDate", // Changed to birthDate
+      "birthDate",
       "experience",
       "status",
     ];
 
-    // 2. Define example data that matches headers
     const templateData = [
       {
         name: "ตัวอย่าง ชื่อ-นามสกุล",
@@ -366,7 +364,7 @@ const Home = () => {
         lineId: "example_line_id",
         handed: "Right",
         phone: "0812345678",
-        birthDate: "1990-05-15", // Example birth date (YYYY-MM-DD)
+        birthDate: "1990-05-15",
         experience: "2 ปี",
         status: "มา",
       },
@@ -376,43 +374,37 @@ const Home = () => {
         lineId: "second_example",
         handed: "Left",
         phone: "0998765432",
-        birthDate: "1985-11-20", // Example birth date (YYYY-MM-DD)
+        birthDate: "1985-11-20",
         experience: "5 ปี",
         status: "ไม่มา",
       },
     ];
 
-    // 3. Create a Worksheet starting with the Header
     const ws = XLSX.utils.aoa_to_sheet([headers]);
-
-    // 4. Add example data after the Header
     XLSX.utils.sheet_add_json(ws, templateData, {
       skipHeader: true,
       origin: -1,
       header: headers,
     });
 
-    // 5. Adjust column width (Optional: for better readability)
     const columnWidths = [
       { wch: 20 },
       { wch: 10 },
       { wch: 15 },
       { wch: 10 },
       { wch: 15 },
-      { wch: 18 }, // Increase width for birthDate (YYYY-MM-DD)
+      { wch: 18 },
       { wch: 15 },
       { wch: 10 },
     ];
     ws["!cols"] = columnWidths;
 
-    // 6. Create Workbook and write file
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "สมาชิก");
     const fileName = "members_template.xlsx";
     XLSX.writeFile(wb, fileName);
   };
 
-  // Function to upload Excel file
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
@@ -424,7 +416,7 @@ const Home = () => {
         const jsonData = XLSX.utils.sheet_to_json(sheet, {
           raw: false,
           defval: null,
-        }); // Use raw: false for formatted dates
+        });
 
         try {
           if (jsonData.length === 0) {
@@ -444,7 +436,7 @@ const Home = () => {
           let validationErrors = [];
           let successCount = 0;
 
-          const batch = writeBatch(db); // Initialize batch
+          const batch = writeBatch(db);
 
           for (let i = 0; i < jsonData.length; i++) {
             const member = jsonData[i];
@@ -457,22 +449,18 @@ const Home = () => {
 
             const nameTrimmed = (member.name || "").toString().trim();
             const levelTrimmed = (member.level || "").toString().trim();
-            // Optional fields, use empty string if null
             const lineIdTrimmed = (member.lineId || "").toString().trim();
-            const handedTrimmed = (member.handed || "Right").toString().trim(); // Default to Right
+            const handedTrimmed = (member.handed || "Right").toString().trim();
             const phoneTrimmed = (member.phone || "").toString().trim();
-            let birthDateValue = new Date().toISOString().split('T')[0]; // Default to current date if not provided in Excel
+            let birthDateValue = new Date().toISOString().split('T')[0];
 
-            // Handle birthDate from Excel
             if (member.birthDate) {
-              // If it's a number, it's likely an Excel date serial number
               if (typeof member.birthDate === "number") {
                 birthDateValue = excelDateToISODate(member.birthDate);
               } else if (typeof member.birthDate === "string") {
-                // If it's a string, try to parse it as YYYY-MM-DD
                 const parsedDate = new Date(member.birthDate);
                 if (!isNaN(parsedDate.getTime())) {
-                  birthDateValue = member.birthDate; // Assume YYYY-MM-DD or parsable
+                  birthDateValue = member.birthDate;
                 }
               }
             }
@@ -480,7 +468,7 @@ const Home = () => {
             const experienceTrimmed = (member.experience || "")
               .toString()
               .trim();
-            const statusTrimmed = (member.status || "ไม่มา").toString().trim(); // Default to ไม่มา
+            const statusTrimmed = (member.status || "ไม่มา").toString().trim();
 
             const newUser = {
               name: nameTrimmed,
@@ -488,7 +476,7 @@ const Home = () => {
               lineId: lineIdTrimmed,
               handed: handedTrimmed,
               phone: phoneTrimmed,
-              birthDate: birthDateValue, // Store birthDate
+              birthDate: birthDateValue,
               experience: experienceTrimmed,
               status: statusTrimmed,
               createBy: loggedInUsername,
@@ -497,7 +485,6 @@ const Home = () => {
             let rowErrors = [];
             if (!newUser.name) rowErrors.push("ชื่อ");
             if (!newUser.level) rowErrors.push("ระดับ");
-            // Removed validation for optional fields: lineId, handed, phone, birthDate, experience, status
 
             if (rowErrors.length > 0) {
               validationErrors.push(
@@ -508,30 +495,27 @@ const Home = () => {
               continue;
             }
 
-            // Use Firestore's auto-generated ID for new documents to avoid extra reads
             const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
-            const memberId = newMemberRef.id; // Get the auto-generated ID
+            const memberId = newMemberRef.id;
 
-            // Add the operation to the batch
             batch.set(newMemberRef, {
                 ...newUser,
-                memberId, // Store the auto-generated ID
+                memberId,
                 createdAt: new Date(),
             });
             successCount++;
           }
 
-          // Commit the batch operation outside the loop
           if (successCount > 0) {
-            await batch.commit(); // Commit all pending writes
+            await batch.commit();
             Swal.fire(
               "สำเร็จ!",
               `เพิ่มข้อมูลสมาชิกจาก Excel สำเร็จ ${successCount} คน!`,
               "success"
             );
             setShowModal(false);
-            setCurrentPage(1); // Reset to first page after bulk upload
-            fetchMembers('current', null); // Re-fetch members to update the UI
+            setCurrentPage(1);
+            fetchMembers('current', null);
           }
 
           if (validationErrors.length > 0) {
@@ -567,7 +551,6 @@ const Home = () => {
     }
   };
 
-  // Fetch Username and UserId when Component mounts
   const fetchUserData = async () => {
     const email = localStorage.getItem("loggedInEmail");
     if (email) {
@@ -578,7 +561,7 @@ const Home = () => {
         if (!querySnapshot.empty) {
           const docSnapshot = querySnapshot.docs[0];
           setLoggedInUsername(docSnapshot.data().username);
-          setCurrentUserId(docSnapshot.id); // Store userId in State
+          setCurrentUserId(docSnapshot.id);
         } else {
           console.warn("User data not found for email:", email);
         }
@@ -588,7 +571,6 @@ const Home = () => {
     }
   };
 
-  // Centralized fetch function for paginated and sorted data
   const fetchMembers = useCallback(async (direction = 'current', cursor = null) => {
     if (!currentUserId) {
         setMembers([]);
@@ -603,18 +585,15 @@ const Home = () => {
         const membersRef = collection(db, `users/${currentUserId}/Members`);
         let baseQuery = membersRef;
 
-        let appliedOrderByKey = sortConfig.key || 'createdAt'; // Default sort key for pagination
+        let appliedOrderByKey = sortConfig.key || 'createdAt';
         let appliedOrderByDirection = sortConfig.direction === 'descending' ? 'desc' : 'asc';
 
-        // Apply search filter if present (Firestore prefix search)
         if (search) {
             baseQuery = query(
                 baseQuery,
                 where('name', '>=', search),
-                where('name', '<=', search + '\uf8ff') // \uf8ff is a high-value Unicode character
+                where('name', '<=', search + '\uf8ff')
             );
-            // When searching, sort by 'name' to make prefix search effective.
-            // If the user then clicks another sort header, it will re-fetch based on that sort.
             appliedOrderByKey = 'name';
             appliedOrderByDirection = sortConfig.direction === 'descending' ? 'desc' : 'asc';
         }
@@ -623,10 +602,8 @@ const Home = () => {
         if (direction === 'next' && cursor) {
             q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection), startAfter(cursor), limit(membersPerPage));
         } else if (direction === 'prev' && cursor) {
-            // To go back, we order by the opposite direction, then startAfter the current first document
-            // and then reverse the results after fetching.
             q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'), startAfter(cursor), limit(membersPerPage));
-        } else { // 'current' or initial load, or when sort/search changes
+        } else {
             q = query(baseQuery, orderBy(appliedOrderByKey, appliedOrderByDirection), limit(membersPerPage));
         }
 
@@ -636,30 +613,24 @@ const Home = () => {
             ...doc.data()
         }));
 
-        // If going backwards, reverse the fetched results to maintain correct order
         if (direction === 'prev') {
             fetchedMembers = fetchedMembers.reverse();
         }
 
-        // Client-side sorting for 'level' and 'birthDate' if they are the primary sort key
-        // This is necessary because Firestore cannot directly sort by custom string order (e.g., C, P-, P)
-        // or calculated values like age. We fetch the paginated batch and then sort it in memory.
         if (sortConfig.key === 'level') {
             fetchedMembers.sort((a, b) => {
                 const aIndex = levelOrder.indexOf(a.level);
                 const bIndex = levelOrder.indexOf(b.level);
-                // Handle cases where level might not be in levelOrder
                 if (sortConfig.direction === 'ascending') {
                     return (aIndex === -1 ? Infinity : aIndex) - (bIndex === -1 ? Infinity : bIndex);
                 } else {
-                    return (bIndex === -1 ? Infinity : bBndex) - (aIndex === -1 ? Infinity : aIndex);
+                    return (bIndex === -1 ? Infinity : bIndex) - (aIndex === -1 ? Infinity : aIndex);
                 }
             });
         } else if (sortConfig.key === 'birthDate') {
             fetchedMembers.sort((a, b) => {
                 const ageA = calculateAge(a.birthDate);
                 const ageB = calculateAge(b.birthDate);
-                // Handle null ages
                 if (sortConfig.direction === 'ascending') {
                     return (ageA === null ? Infinity : ageA) - (ageB === null ? Infinity : ageB);
                 } else {
@@ -679,22 +650,20 @@ const Home = () => {
             setFirstVisible(documentSnapshots.docs[0]);
             setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
 
-            // Check if there are more documents after the last one
             const nextDocsQuery = query(
-                baseQuery, // Use baseQuery to include search filters
+                baseQuery,
                 orderBy(appliedOrderByKey, appliedOrderByDirection),
                 startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]),
-                limit(1) // Just fetch one to check existence
+                limit(1)
             );
             const nextDocsSnapshot = await getDocs(nextDocsQuery);
             setHasMoreNext(!nextDocsSnapshot.empty);
 
-            // Check if there are documents before the first one
             const prevDocsQuery = query(
-                baseQuery, // Use baseQuery to include search filters
-                orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'), // Reverse order for checking previous
-                startAfter(documentSnapshots.docs[0]), // Start after the current first document
-                limit(1) // Just fetch one to check existence
+                baseQuery,
+                orderBy(appliedOrderByKey, appliedOrderByDirection === 'asc' ? 'desc' : 'asc'),
+                startAfter(documentSnapshots.docs[0]),
+                limit(1)
             );
             const prevDocsSnapshot = await getDocs(prevDocsQuery);
             setHasMorePrev(!prevDocsSnapshot.empty);
@@ -715,20 +684,18 @@ const Home = () => {
         setHasMoreNext(false);
         setHasMorePrev(false);
     }
-  }, [currentUserId, membersPerPage, sortConfig, levelOrder, search]); // <<< *** UPDATED ***
+  }, [currentUserId, membersPerPage, sortConfig, levelOrder, search]);
 
 useEffect(() => {
-    fetchUserData(); // Fetch username and userId on first component load
+    fetchUserData();
 }, []);
 
-// Call fetchMembers when currentUserId, sortConfig, search, or selectedRegion changes
 useEffect(() => {
     if (currentUserId) {
-        // When currentUserId, sortConfig, search, or selectedRegion changes, reset pagination and fetch first page
-        setCurrentPage(1); // Always go to page 1 for new sort/search/region
+        setCurrentPage(1);
         fetchMembers('current', null);
     }
-}, [currentUserId, fetchMembers, sortConfig, search, selectedRegion]); // Add selectedRegion here
+}, [currentUserId, fetchMembers, sortConfig, search, selectedRegion]);
 
   const handleSelectUser = (user) => {
     if (selectedUser && selectedUser.memberId === user.memberId) {
@@ -739,21 +706,20 @@ useEffect(() => {
       setSelectedUser(user);
       setName(user.name);
       setLevel(user.level);
-      setLineId(user.lineId || ""); // Ensure lineId is string for optional field
-      setHanded(user.handed || "Right"); // Default to Right if null/undefined
-      setPhone(user.phone || ""); // Ensure phone is string for optional field
-      setBirthDate(user.birthDate || new Date().toISOString().split('T')[0]); // Default to current date if null
-      setExperience(user.experience || ""); // Ensure experience is string for optional field
-      setStatus(user.status || "ไม่มา"); // Default to ไม่มา if null/undefined
+      setLineId(user.lineId || "");
+      setHanded(user.handed || "Right");
+      setPhone(user.phone || "");
+      setBirthDate(user.birthDate || new Date().toISOString().split('T')[0]);
+      setExperience(user.experience || "");
+      setStatus(user.status || "ไม่มา");
       setIsEditing(true);
-      setIsFormExpanded(true); // Expand form when selecting a user
+      setIsFormExpanded(true);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Only 'name' and 'level' are required now
     if (
       !name ||
       !level
@@ -762,7 +728,6 @@ useEffect(() => {
       return;
     }
 
-    // Validate birthDate format (YYYY-MM-DD) only if a value exists (it will always exist now due to default)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(birthDate)) {
       Swal.fire(
@@ -785,12 +750,12 @@ useEffect(() => {
     const newUser = {
       name,
       level,
-      lineId: lineId || "", // Save as empty string if not provided
-      handed: handed || "Right", // Save with default if user clears it somehow
-      phone: phone || "", // Save as empty string if not provided
-      birthDate: birthDate || new Date().toISOString().split('T')[0], // Use default if for some reason it's cleared
-      experience: experience || "", // Save as empty string if not provided
-      status: status || "ไม่มา", // Use default if user clears it somehow
+      lineId: lineId || "",
+      handed: handed || "Right",
+      phone: phone || "",
+      birthDate: birthDate || new Date().toISOString().split('T')[0],
+      experience: experience || "",
+      status: status || "ไม่มา",
       createBy: loggedInUsername,
     };
 
@@ -808,21 +773,20 @@ useEffect(() => {
         await updateDoc(memberRef, { ...newUser, updatedAt: new Date() });
         Swal.fire("สำเร็จ!", "แก้ไขข้อมูลสมาชิกสำเร็จ!", "success");
       } else {
-        // Use Firestore's auto-generated ID for new documents
         const newMemberRef = doc(collection(db, `users/${currentUserId}/Members`));
         const memberId = newMemberRef.id;
 
         await setDoc(newMemberRef, {
           ...newUser,
-          memberId, // Store the auto-generated ID
+          memberId,
           createdAt: new Date(),
         });
         Swal.fire("สำเร็จ!", "เพิ่มสมาชิกสำเร็จ!", "success");
       }
 
       clearForm();
-      setCurrentPage(1); // Reset to first page after add/edit
-      fetchMembers('current', null); // Re-fetch the first page of members
+      setCurrentPage(1);
+      fetchMembers('current', null);
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
     }
@@ -855,8 +819,8 @@ useEffect(() => {
         Swal.fire("ลบสำเร็จ!", "", "success");
 
         clearForm();
-        setCurrentPage(1); // Reset to first page after delete
-        fetchMembers('current', null); // Re-fetch the first page of members
+        setCurrentPage(1);
+        fetchMembers('current', null);
       } catch (error) {
         Swal.fire("เกิดข้อผิดพลาดในการลบ", error.message, "error");
       }
@@ -877,23 +841,18 @@ useEffect(() => {
       );
       await updateDoc(memberRef, { status: newStatus });
 
-      // อัปเดต State 'members' โดยตรงเพื่อสะท้อนการเปลี่ยนแปลงสถานะ
       setMembers(prevMembers =>
         prevMembers.map(member =>
           member.memberId === user.memberId
-            ? { ...member, status: newStatus } // อัปเดตสถานะของสมาชิกคนนี้
-            : member // สมาชิกคนอื่นยังคงเดิม
+            ? { ...member, status: newStatus }
+            : member
         )
       );
-
-      // ไม่จำเป็นต้องเรียก fetchMembers อีกครั้ง
-      // เพราะเราได้อัปเดตข้อมูลใน UI โดยตรงแล้ว
     } catch (error) {
       Swal.fire("เกิดข้อผิดพลาดในการอัปเดตสถานะ", error.message, "error");
     }
   };
 
-  // Function to reset all member statuses to "ไม่มา"
   const handleResetAllStatus = async () => {
     const result = await Swal.fire({
       title: "รีเซ็ตสถานะทั้งหมด?",
@@ -902,7 +861,7 @@ useEffect(() => {
       showCancelButton: true,
       confirmButtonText: "รีเซ็ต",
       cancelButtonText: "ยกเลิก",
-      confirmButtonColor: "#d33", // Red color for danger action
+      confirmButtonColor: "#d33",
     });
 
     if (!result.isConfirmed) return;
@@ -917,21 +876,16 @@ useEffect(() => {
 
       const batch = writeBatch(db);
       const membersRef = collection(db, `users/${currentUserId}/Members`);
-      // To reset all status, we still need to read all members to update them.
-      // For very large collections, this operation would be costly in terms of reads and writes.
-      // A Cloud Function triggered by a manual event would be more scalable for this.
-      // For now, we'll fetch all members and update in a batch.
-      // If this operation is frequent with huge datasets, consider a Cloud Function.
-      const membersSnapshot = await getDocs(membersRef); 
+      const membersSnapshot = await getDocs(membersRef);
 
       membersSnapshot.docs.forEach((memberDoc) => {
         const memberRef = doc(db, `users/${currentUserId}/Members`, memberDoc.id);
         batch.update(memberRef, { status: "ไม่มา" });
       });
 
-      await batch.commit(); // Commit all updates in a single batch
+      await batch.commit();
       Swal.fire("สำเร็จ!", "รีเซ็ตสถานะสมาชิกทั้งหมดเป็น 'ไม่มา' สำเร็จ!", "success");
-      fetchMembers('current', null); // Re-fetch first page to update UI
+      fetchMembers('current', null);
     } catch (error) {
       console.error("Error resetting all statuses:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถรีเซ็ตสถานะได้: " + error.message, "error");
@@ -944,45 +898,39 @@ useEffect(() => {
     setName("");
     setLevel("");
     setLineId("");
-    setHanded("Right"); // Set default
+    setHanded("Right");
     setPhone("");
-    setBirthDate(new Date().toISOString().split('T')[0]); // Set default
-    setStatus("ไม่มา"); // Set default
+    setBirthDate(new Date().toISOString().split('T')[0]);
+    setStatus("ไม่มา");
     setExperience("");
     setSelectedUser(null);
     setIsEditing(false);
   };
 
-  // Function to toggle form expansion
   const toggleFormExpansion = () => {
     setIsFormExpanded((prev) => !prev);
   };
 
-  // Function to handle sorting requests
   const requestSort = (key) => {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-    setCurrentPage(1); // Reset to first page on sort change
+    setCurrentPage(1);
   };
 
-  // Function to get sorting icon
   const getSortIcon = (key) => {
     if (sortConfig.key === key) {
-      // If this column is currently sorted
       if (sortConfig.direction === 'ascending') {
         return <ChevronUp size={16} className="sort-icon" />;
       } else {
         return <ChevronDown size={16} className="sort-icon" />;
       }
     }
-    // If this column is not currently sorted, show the combined icon
     return <ArrowUpDown size={16} className="sort-icon" />;
   };
 
-  // Pagination handlers for next/previous buttons
   const goToNextPage = () => {
     if (hasMoreNext) {
         setCurrentPage(prev => prev + 1);
@@ -997,15 +945,11 @@ useEffect(() => {
     }
   };
 
-  // --- ✨ FIXED & RE-IMPLEMENTED ✨ ---
-  // Function to handle clicking the avatar: shows modal or triggers upload if no image.
   const handleAvatarClick = (user) => {
     if (user.profileImageUrl) {
-      // If image exists, show the preview modal.
       setModalImageUrl(user.profileImageUrl);
       setShowImageModal(true);
     } else {
-      // If no image, clicking the main area triggers an upload.
       setUploadTargetMemberId(user.memberId);
       if (memberFileInputRef.current) {
         memberFileInputRef.current.click();
@@ -1013,16 +957,14 @@ useEffect(() => {
     }
   };
 
-  // Function to trigger image upload, typically from an overlay button.
   const handleUploadTrigger = (event, user) => {
-    event.stopPropagation(); // Prevents the modal from opening when clicking the upload icon.
+    event.stopPropagation();
     setUploadTargetMemberId(user.memberId);
     if (memberFileInputRef.current) {
       memberFileInputRef.current.click();
     }
   };
 
-  // This function runs when a user selects an image file
   const handleMemberImageUpload = async (event) => {
     const imageFile = event.target.files[0];
     if (!imageFile || !uploadTargetMemberId || !currentUserId) {
@@ -1036,24 +978,21 @@ useEffect(() => {
     };
 
     try {
-      setIsMemberUploading(uploadTargetMemberId); // Show spinner on the member's row
+      setIsMemberUploading(uploadTargetMemberId);
 
       const compressedFile = await imageCompression(imageFile, options);
 
-      // Create a storage path for the member's image, organized by admin (currentUserId) and memberId
       const storagePath = `member_profiles/${currentUserId}/${uploadTargetMemberId}`;
       const storageRef = ref(storage, storagePath);
 
       await uploadBytes(storageRef, compressedFile);
       const downloadURL = await getDownloadURL(storageRef);
 
-      // Update the image URL in the member's Firestore document
       const memberDocRef = doc(db, `users/${currentUserId}/Members/${uploadTargetMemberId}`);
       await updateDoc(memberDocRef, {
         profileImageUrl: downloadURL,
       });
 
-      // Update the 'members' state directly to show the new image immediately without a full reload
       setMembers(prevMembers =>
         prevMembers.map(member =>
           member.memberId === uploadTargetMemberId
@@ -1066,27 +1005,24 @@ useEffect(() => {
       console.error("Error uploading member image:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถอัปโหลดรูปภาพได้", "error");
     } finally {
-      setIsMemberUploading(null); // Stop showing the spinner
-      // Reset the file input so the same file can be chosen again if needed
+      setIsMemberUploading(null);
       if (memberFileInputRef.current) {
         memberFileInputRef.current.value = "";
       }
-      setUploadTargetMemberId(null); // Clear the upload target
+      setUploadTargetMemberId(null);
     }
   };
-
 
   return (
     <div className="overall-layout">
     <Head>
-      <title>หน้าหลัก PlayMatch - จัดการสมาชิกก๊วนแบดมินตัน</title> {/* เพิ่ม Title ที่นี่ */}
-      <meta name="description" content="จัดการข้อมูลสมาชิกก๊วนแบดมินตันของคุณได้อย่างง่ายดาย เพิ่ม, แก้ไข, ลบ, ค้นหา, จัดเรียง และนำเข้า/ส่งออกข้อมูลสมาชิกด้วย PlayMatch." /> {/* เพิ่ม Description ที่นี่ */}
+      <title>หน้าหลัก PlayMatch - จัดการสมาชิกก๊วนแบดมินตัน</title>
+      <meta name="description" content="จัดการข้อมูลสมาชิกก๊วนแบดมินตันของคุณได้อย่างง่ายดาย เพิ่ม, แก้ไข, ลบ, ค้นหา, จัดเรียง และนำเข้า/ส่งออกข้อมูลสมาชิกด้วย PlayMatch." />
     </Head>
       <main className="main-content">
         <h2>สมาชิก</h2>
-        <hr className="title-separator" /> {/* Changed hr to use common class for consistency */}
+        <hr className="title-separator" />
 
-        {/* --- ✨ NEW ✨ Add the Image Preview Modal here --- */}
         <ImagePreviewModal
           show={showImageModal}
           imageUrl={modalImageUrl}
@@ -1101,7 +1037,7 @@ useEffect(() => {
             accept="image/png, image/jpeg, image/gif"
         />
 
-        <div className="action-buttons-top"> {/* New container for action buttons */}
+        <div className="action-buttons-top">
           <button
             onClick={() => setShowModal(true)}
             className="generate-excel-button"
@@ -1131,9 +1067,8 @@ useEffect(() => {
           onFileUpload={handleFileUpload}
         />
 
-        {/* Container for the Form Section (Header + Collapsible Content) */}
         <div className="member-form-section">
-          <div className="form-header-with-toggle" onClick={toggleFormExpansion}> {/* Added onClick to header */}
+          <div className="form-header-with-toggle" onClick={toggleFormExpansion}>
             <h3 className="form-section-title">กรอกข้อมูลสมาชิก</h3>
             <button
               className="toggle-form-button"
@@ -1148,7 +1083,6 @@ useEffect(() => {
               isFormExpanded ? "expanded" : "collapsed"
             }`}
           >
-            {/* Note for required fields */}
             <p className="form-required-note">ช่องที่มีเครื่องหมาย <span className="required-asterisk">*</span> จำเป็นต้องกรอก</p>
 
             <form onSubmit={handleSubmit} className="form-box" noValidate>
@@ -1188,7 +1122,7 @@ useEffect(() => {
                   <label className="form-label">วันเดือนปีเกิด</label>{" "}
                   <input
                     className="modern-input"
-                    type="date" // Use type="date"
+                    type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
                   />
@@ -1201,7 +1135,7 @@ useEffect(() => {
                     onChange={(e) => setLevel(e.target.value)}
                   >
                     <option value="">เลือกระดับ</option>
-                    {levelOrder.map(lvl => ( // Use levelOrder to populate options
+                    {levelOrder.map(lvl => (
                         <option key={lvl} value={lvl}>{lvl}</option>
                     ))}
                   </select>
@@ -1230,7 +1164,6 @@ useEffect(() => {
                     value={handed}
                     onChange={(e) => setHanded(e.target.value)}
                   >
-                    {/* Default value is "Right" now */}
                     <option value="Right">ขวา</option>
                     <option value="Left">ซ้าย</option>
                   </select>
@@ -1242,7 +1175,6 @@ useEffect(() => {
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
                   >
-                    {/* Default value is "ไม่มา" now */}
                     <option value="มา">มา</option>
                     <option value="ไม่มา">ไม่มา</option>
                   </select>
@@ -1272,7 +1204,6 @@ useEffect(() => {
 
         <hr className="divider-line" />
 
-        {/* Region Selection */}
         <div className="region-selection-container">
           <label className="form-label">ลำดับระดับมือ:</label>
           <select
@@ -1295,7 +1226,6 @@ useEffect(() => {
           />
         </div>
 
-        {/* Updated Table Controls Container */}
         <div className="table-controls-container">
             <div className="left-controls-wrapper">
                 <div className="status-summary">
@@ -1333,7 +1263,7 @@ useEffect(() => {
                         onChange={(e) => {
                             const newSize = Number(e.target.value);
                             setMembersPerPage(newSize);
-                            setCurrentPage(1); // กลับไปหน้า 1 เสมอเมื่อเปลี่ยนจำนวนแสดงผล
+                            setCurrentPage(1);
                         }}
                     >
                         <option value="10">10 รายชื่อ</option>
@@ -1345,15 +1275,16 @@ useEffect(() => {
             </div>
         </div>
 
-
         <div className="table-responsive-container">
           <table className="user-table">
             <thead>
               <tr>
                 <th>เลือก</th>
-                <th className="avatar-column-header">รูป</th>
+                {showMemberImagesColumn && ( // ✨ แสดง/ซ่อนตามค่า showMemberImagesColumn ✨
+                    <th className="avatar-column-header">รูป</th>
+                )}
                 <th>ชื่อ</th>
-                <th onClick={() => requestSort('level')} className="sortable-header"> {/* Clickable header for sorting */}
+                <th onClick={() => requestSort('level')} className="sortable-header">
                     ระดับ {getSortIcon('level')}
                 </th>
                 <th>Line</th>
@@ -1369,14 +1300,14 @@ useEffect(() => {
             <tbody>
               {members.length === 0 && !search && (
                 <tr>
-                  <td colSpan="10" className="no-data-message">
+                  <td colSpan={showMemberImagesColumn ? "10" : "9"} className="no-data-message"> {/* ✨ ปรับ colspan ✨ */}
                     ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่
                   </td>
                 </tr>
               )}
               {members.length === 0 && search && (
                 <tr>
-                  <td colSpan="10" className="no-data-message">
+                  <td colSpan={showMemberImagesColumn ? "10" : "9"} className="no-data-message"> {/* ✨ ปรับ colspan ✨ */}
                     ไม่พบข้อมูลสมาชิกที่ค้นหา
                   </td>
                 </tr>
@@ -1397,23 +1328,24 @@ useEffect(() => {
                       onChange={() => handleSelectUser(user)}
                     />
                   </td>
-                  <td data-label="รูป">
-                    {/* --- ✨ FIXED & RE-IMPLEMENTED as per user request --- */}
-                    <div className="member-avatar-cell" onClick={() => handleAvatarClick(user)}>
-                      {isMemberUploading === user.memberId ? (
-                        <Loader size={24} className="avatar-spinner" />
-                      ) : user.profileImageUrl ? (
-                        <>
-                          <img src={user.profileImageUrl} alt={user.name} className="member-avatar-image" />
-                          <div className="edit-avatar-overlay" onClick={(e) => handleUploadTrigger(e, user)}>
-                            <Camera size={14} />
-                          </div>
-                        </>
-                      ) : (
-                        <Camera size={20} className="avatar-placeholder-icon" />
-                      )}
-                    </div>
-                  </td>
+                  {showMemberImagesColumn && ( // ✨ แสดง/ซ่อนตามค่า showMemberImagesColumn ✨
+                    <td data-label="รูป">
+                      <div className="member-avatar-cell" onClick={() => handleAvatarClick(user)}>
+                        {isMemberUploading === user.memberId ? (
+                          <Loader size={24} className="avatar-spinner" />
+                        ) : user.profileImageUrl ? (
+                          <>
+                            <img src={user.profileImageUrl} alt={user.name} className="member-avatar-image" />
+                            <div className="edit-avatar-overlay" onClick={(e) => handleUploadTrigger(e, user)}>
+                              <Camera size={14} />
+                            </div>
+                          </>
+                        ) : (
+                          <Camera size={20} className="avatar-placeholder-icon" />
+                        )}
+                      </div>
+                    </td>
+                  )}
                   <td data-label="ชื่อ">{user.name}</td>
                   <td data-label="ระดับ">{user.level}</td>
                   <td data-label="Line">{user.lineId}</td>
@@ -1442,36 +1374,36 @@ useEffect(() => {
         /* Reset box-sizing for all elements */
         * {
           box-sizing: border-box;
-          font-family: 'Kanit', sans-serif; /* Apply Kanit font globally within this component */
+          font-family: 'Kanit', sans-serif;
         }
 
         /* Base Layout */
         .overall-layout {
           display: block;
-          width: 100%; /* Ensure it spans the full width */
-          min-height: 100vh; /* Ensure it takes full viewport height */
+          width: 100%;
+          min-height: 100vh;
         }
 
         /* Main Content Area */
         .main-content {
-          flex-grow: 1; /* This is the key: makes it fill remaining space */
-          padding: 20px; /* Adjust as needed */
+          flex-grow: 1;
+          padding: 20px;
           padding-bottom: 50px;
-          margin-left: 0; /* Ensure no leftover margin from where sidebar used to be */
-          width: auto; /* Reset any fixed width */
-          max-width: 100%; /* Ensure it doesn't exceed 100% of parent */
-          background-color: var(--background-color, #f7f7f7); /* Use theme variable */
+          margin-left: 0;
+          width: auto;
+          max-width: 100%;
+          background-color: var(--background-color, #f7f7f7);
         }
 
         .main-content h2 {
           font-size: 18px;
           margin-bottom: 10px;
-          color: var(--text-color, #333); /* Use theme variable */
+          color: var(--text-color, #333);
         }
 
-        .main-content .title-separator { /* Use the common class */
+        .main-content .title-separator {
           border: 0;
-          border-top: 1px solid var(--border-color, #aebdc9); /* Use theme variable */
+          border-top: 1px solid var(--border-color, #aebdc9);
           margin-bottom: 18px;
         }
 
@@ -1480,7 +1412,7 @@ useEffect(() => {
             display: flex;
             gap: 15px;
             margin-bottom: 20px;
-            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            flex-wrap: wrap;
         }
 
         /* Excel Button Container (repurposed from .excel-button-container) */
@@ -1501,7 +1433,7 @@ useEffect(() => {
 
         /* Reset Status Button */
         .reset-status-button {
-            background-color: #f44336; /* Red color for warning/danger */
+            background-color: #f44336;
             color: white;
             padding: 10px 20px;
             border-radius: 6px;
@@ -1539,11 +1471,11 @@ useEffect(() => {
 
         /* Container for the Form Section (Header + Collapsible Content) */
         .member-form-section {
-          background-color: var(--card-background, #ffffff); /* Use theme variable */
+          background-color: var(--card-background, #ffffff);
           border-radius: 8px;
           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
           margin-bottom: 20px;
-          border: 1px solid var(--border-color, #e9e9e9); /* Use theme variable */
+          border: 1px solid var(--border-color, #e9e9e9);
         }
 
         /* Header for the collapsible form */
@@ -1552,23 +1484,23 @@ useEffect(() => {
           justify-content: space-between;
           align-items: center;
           padding: 10px 15px;
-          background-color: var(--header-background, #e9e9e9); /* Use theme variable */
+          background-color: var(--header-background, #e9e9e9);
           border-top-left-radius: 8px;
           border-top-right-radius: 8px;
-          border-bottom: 1px solid var(--border-color, #ddd); /* Use theme variable */
+          border-bottom: 1px solid var(--border-color, #ddd);
           cursor: pointer;
           user-select: none;
           transition: background-color 0.2s ease-in-out;
         }
 
         .form-header-with-toggle:hover {
-          background-color: var(--border-color, #dcdcdc); /* Use theme variable */
+          background-color: var(--border-color, #dcdcdc);
         }
 
         .form-section-title {
           margin: 0;
           font-size: 14px;
-          color: var(--text-color, #333); /* Use theme variable */
+          color: var(--text-color, #333);
         }
 
         .toggle-form-button {
@@ -1577,14 +1509,14 @@ useEffect(() => {
           font-size: 20px;
           font-weight: bold;
           cursor: pointer;
-          color: var(--text-color, #555); /* Use theme variable */
+          color: var(--text-color, #555);
           padding: 5px 8px;
           line-height: 1;
           transition: color 0.2s ease-in-out;
         }
 
         .toggle-form-button:hover {
-          color: var(--text-color, #000); /* Use theme variable */
+          color: var(--text-color, #000);
         }
 
         /* Collapsible content for the form */
@@ -1592,7 +1524,7 @@ useEffect(() => {
           overflow: hidden;
           transition: max-height 0.5s ease-out, opacity 0.5s ease-out,
             padding 0.5s ease-out;
-          max-height: 500px; /* Adjust if your form is taller! */
+          max-height: 500px;
           opacity: 1;
           padding: 20px 15px;
         }
@@ -1621,26 +1553,26 @@ useEffect(() => {
 
         /* Original Form Styles (from image_f08aa0.png) */
         .form-label {
-          font-size: 12px; /* Adjusted font size */
-          color: var(--text-color, #333); /* Use theme variable */
+          font-size: 12px;
+          color: var(--text-color, #333);
           display: block;
           margin-bottom: 4px;
         }
 
         .modern-input {
           outline: none;
-          border: 1px solid var(--input-border, #ccc); /* Use theme variable */
+          border: 1px solid var(--input-border, #ccc);
           padding: 8px;
-          font-size: 12px; /* Adjusted font size */
-          color: var(--text-color, #333); /* Use theme variable */
+          font-size: 12px;
+          color: var(--text-color, #333);
           width: 100%;
           border-radius: 5px;
           transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-          background-color: var(--input-background, #fff); /* Use theme variable */
+          background-color: var(--input-background, #fff);
         }
 
         .modern-input:focus {
-          border-color: var(--text-color, #333); /* Use theme variable */
+          border-color: var(--text-color, #333);
           box-shadow: 0 0 0 3px rgba(226, 226, 226, 0.2);
         }
 
@@ -1663,7 +1595,7 @@ useEffect(() => {
           padding: 8px 20px;
           border-radius: 6px;
           border: none;
-          font-size: 12px; /* Adjusted font size */
+          font-size: 12px;
           cursor: pointer;
           transition: all 0.3s ease-in-out;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -1672,14 +1604,14 @@ useEffect(() => {
         }
 
         .submit-btn {
-          background-color: var(--toggle-on-background, #57e497); /* Use theme variable */
+          background-color: var(--toggle-on-background, #57e497);
           color: black;
         }
         .submit-btn.edit {
           background-color: #ff9800;
         }
         .submit-btn:hover {
-          background-color: var(--toggle-on-background-hover, #3fc57b); /* Use theme variable (or define specific hover) */
+          background-color: var(--toggle-on-background-hover, #3fc57b);
         }
         .submit-btn.edit:hover {
           background-color: #ffa500;
@@ -1699,7 +1631,7 @@ useEffect(() => {
 
         .divider-line {
           margin: 20px 0;
-          border-top: 1px solid var(--border-color, #aebdc9); /* Use theme variable */
+          border-top: 1px solid var(--border-color, #aebdc9);
         }
 
         /* Region Selection Container */
@@ -1710,11 +1642,11 @@ useEffect(() => {
             gap: 10px;
         }
         .region-selection-container .form-label {
-            margin-bottom: 0; /* Override default label margin */
-            flex-shrink: 0; /* Prevent label from shrinking */
+            margin-bottom: 0;
+            flex-shrink: 0;
         }
         .region-selection-container .modern-input {
-            max-width: 200px; /* Limit width of the select box */
+            max-width: 200px;
         }
 
         /* Search box style */
@@ -1724,47 +1656,47 @@ useEffect(() => {
         .search-input {
           width: 100%;
           padding: 8px 12px;
-          border: 1px solid var(--input-border, #ddd); /* Use theme variable */
+          border: 1px solid var(--input-border, #ddd);
           border-radius: 5px;
-          font-size: 12px; /* Adjusted font size */
+          font-size: 12px;
           outline: none;
-          background-color: var(--input-background, #fff); /* Use theme variable */
-          color: var(--text-color, #333); /* Use theme variable */
+          background-color: var(--input-background, #fff);
+          color: var(--text-color, #333);
         }
         .search-input:focus {
-          border-color: var(--text-color, #333); /* Use theme variable */
+          border-color: var(--text-color, #333);
           box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
         }
 
         /* --- Updated CSS for Table Controls Container --- */
         .table-controls-container {
             display: flex;
-            justify-content: space-between; /* Pushes children to ends */
-            align-items: flex-start; /* Aligns items to the top of the container */
+            justify-content: space-between;
+            align-items: flex-start;
             margin-bottom: 20px;
-            flex-wrap: wrap; /* Allows wrapping on smaller screens */
-            gap: 15px 20px; /* Vertical and horizontal gap */
+            flex-wrap: wrap;
+            gap: 15px 20px;
         }
 
         .left-controls-wrapper,
         .right-controls-wrapper {
             display: flex;
-            flex-direction: column; /* Stacks children vertically */
-            gap: 10px; /* Space between rows (status/pagination, total/per-page) */
+            flex-direction: column;
+            gap: 10px;
         }
 
         .left-controls-wrapper {
-            align-items: flex-start; /* Align left group to the start (left) */
+            align-items: flex-start;
         }
 
         .right-controls-wrapper {
-            align-items: flex-end; /* Align right group to the end (right) */
-            text-align: right; /* Ensure text within this wrapper aligns right */
+            align-items: flex-end;
+            text-align: right;
         }
 
         .status-summary {
             display: flex;
-            gap: 20px; /* Space between 'มาแล้ว' and 'ยังไม่มา' */
+            gap: 20px;
             font-size: 12px;
             color: var(--text-color, #555);
         }
@@ -1787,7 +1719,7 @@ useEffect(() => {
         }
 
         .per-page-selector .modern-input {
-            width: auto; 
+            width: auto;
             min-width: 120px;
         }
 
@@ -1801,29 +1733,29 @@ useEffect(() => {
 
         .pagination-button {
           padding: 8px 12px;
-          border: 1px solid var(--border-color, #ddd); /* Use theme variable */
+          border: 1px solid var(--border-color, #ddd);
           border-radius: 5px;
-          background-color: var(--input-background, #f0f0f0); /* Use theme variable */
+          background-color: var(--input-background, #f0f0f0);
           cursor: pointer;
-          font-size: 12px; /* Adjusted font size */
+          font-size: 12px;
           transition: background-color 0.2s, border-color 0.2s;
-          color: var(--text-color, #333); /* Use theme variable */
+          color: var(--text-color, #333);
         }
 
         .pagination-button:hover {
-          background-color: var(--border-color, #e0e0e0); /* Use theme variable */
+          background-color: var(--border-color, #e0e0e0);
         }
 
         .pagination-button.active {
           background-color: #6c757d;
-          color: white; /* Changed to white for better contrast */
+          color: white;
           border-color: #6c757d;
         }
 
         .pagination-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
-          background-color: var(--background-color, #f7f7f7); /* Use theme variable */
+          background-color: var(--background-color, #f7f7f7);
         }
 
         .current-page-display {
@@ -1836,32 +1768,31 @@ useEffect(() => {
         .user-table {
           width: 100%;
           border-collapse: collapse;
-          min-width: 700px; /* Keep minimum width for desktop view */
-          background-color: var(--card-background, #ffffff); /* Use theme variable */
-          border: 1px solid var(--border-color, #e0e0e0); /* Use theme variable */
+          min-width: 700px;
+          background-color: var(--card-background, #ffffff);
+          border: 1px solid var(--border-color, #e0e0e0);
           border-radius: 8px;
           overflow: hidden;
         }
 
         .user-table th,
         .user-table td {
-          padding: 10px 12px; /* Slightly reduced padding */
-          border-bottom: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
-          border-right: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
-          text-align: center; /* ALIGN TEXT TO CENTER */
-          font-size: 12px; /* Adjusted font size */
-          color: var(--text-color, #333); /* Use theme variable */
+          padding: 10px 12px;
+          border-bottom: 1px solid var(--border-color, #f0f0f0);
+          border-right: 1px solid var(--border-color, #f0f0f0);
+          text-align: center;
+          font-size: 12px;
+          color: var(--text-color, #333);
         }
 
-        /* Remove right border for the last column in header and body */
         .user-table th:last-child,
         .user-table td:last-child {
           border-right: none;
         }
 
         .user-table th {
-          background-color: var(--header-background, #323943); /* Use theme variable */
-          color: var(--header-text, white); /* Use theme variable */
+          background-color: var(--header-background, #323943);
+          color: var(--header-text, white);
           font-weight: 600;
           text-transform: none;
         }
@@ -1871,16 +1802,16 @@ useEffect(() => {
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: center; /* Center content */
-            gap: 5px; /* Space between text and icon */
-            white-space: nowrap; /* Prevent text and icon from wrapping */
+            justify-content: center;
+            gap: 5px;
+            white-space: nowrap;
         }
         .sortable-header .sort-icon {
-            color: #ccc; /* Default icon color */
+            color: #ccc;
             transition: color 0.2s;
         }
         .sortable-header:hover .sort-icon {
-            color: white; /* Highlight on hover */
+            color: white;
         }
 
         /* Remove bottom border for the last row */
@@ -1890,10 +1821,10 @@ useEffect(() => {
 
         /* Row Highlighting and Stripes */
         .user-table tbody tr:nth-child(odd) {
-          background-color: var(--card-background, #ffffff); /* Use theme variable */
+          background-color: var(--card-background, #ffffff);
         }
         .user-table tbody tr:nth-child(even) {
-          background-color: var(--background-color-even-row, #fdfdfd); /* Can define new for even rows */
+          background-color: var(--background-color-even-row, #fdfdfd);
         }
 
         /* Selected row background */
@@ -1903,7 +1834,7 @@ useEffect(() => {
 
         /* Hover effect */
         .user-table tbody tr:hover:not(.selected-row) {
-          background-color: var(--border-color, #f5f5f5); /* Use theme variable */
+          background-color: var(--border-color, #f5f5f5);
         }
 
         /* Checkbox Column */
@@ -1913,21 +1844,21 @@ useEffect(() => {
 
         /* Add this to your <style jsx> block */
         .table-responsive-container {
-          overflow-x: auto; /* Adds horizontal scroll if content overflows */
-          -webkit-overflow-scrolling: touch; /* Improves scrolling on iOS */
-          padding-bottom: 10px; /* Gives some space for the scrollbar */
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          padding-bottom: 10px;
         }
 
         /* Status Button */
         .status-button {
-          padding: 5px 8px; /* Adjusted padding */
+          padding: 5px 8px;
           border-radius: 5px;
           border: none;
           cursor: pointer;
-          font-size: 11px; /* Slightly smaller for button text */
+          font-size: 11px;
           font-weight: 500;
           transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-          min-width: 60px; /* Adjusted min-width */
+          min-width: 60px;
           text-align: center;
           color: white;
         }
@@ -1953,13 +1884,13 @@ useEffect(() => {
         .no-data-message {
           text-align: center;
           font-style: italic;
-          color: var(--text-color, #888); /* Use theme variable */
+          color: var(--text-color, #888);
           padding: 20px;
-          font-size: 12px; /* Adjusted font size */
+          font-size: 12px;
         }
 
         .avatar-column-header {
-            width: 100px; /* กำหนดความกว้างคอลัมน์รูปภาพ */
+            width: 100px;
         }
 
         .member-avatar-cell {
@@ -1972,10 +1903,9 @@ useEffect(() => {
             background-color: #f0f0f0;
             margin: 0 auto;
             cursor: pointer;
-            /* overflow: hidden; --- REMOVED this line to fix clipping issue --- */
             border: 1px solid #ddd;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
-            position: relative; 
+            position: relative;
         }
 
         .member-avatar-cell:hover {
@@ -1987,18 +1917,17 @@ useEffect(() => {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 50%; /* Ensure image itself is circular */
+            border-radius: 50%;
         }
 
         .avatar-placeholder-icon {
             color: #888;
         }
 
-        /* --- ✨ UPDATED CSS for Edit Overlay ✨ --- */
         .edit-avatar-overlay {
             position: absolute;
-            bottom: 0px;  /* ADJUSTED position */
-            left: 35px;   /* ADJUSTED position */
+            bottom: 0px;
+            left: 35px;
             background-color: rgba(40, 40, 40, 0.7);
             color: white;
             border-radius: 50%;
@@ -2010,16 +1939,15 @@ useEffect(() => {
             cursor: pointer;
             border: 2px solid white;
             transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
-            opacity: 0; /* Hide by default */
+            opacity: 0;
             transform: scale(0.8);
-            z-index: 1; /* Ensure it's on top */
+            z-index: 1;
         }
 
         .member-avatar-cell:hover .edit-avatar-overlay {
-            opacity: 1; /* Show on hover */
+            opacity: 1;
             transform: scale(1);
         }
-        /* -------------------------------------- */
 
         @keyframes spinner-anim {
           to { transform: rotate(360deg); }
@@ -2036,7 +1964,7 @@ useEffect(() => {
           }
 
           .user-table {
-            min-width: unset; /* Remove min-width on mobile */
+            min-width: unset;
           }
           .user-table,
           .user-table thead,
@@ -2055,7 +1983,7 @@ useEffect(() => {
 
           .user-table tr {
             margin-bottom: 10px;
-            border: 1px solid var(--border-color, #ddd); /* Use theme variable */
+            border: 1px solid var(--border-color, #ddd);
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
           }
@@ -2063,72 +1991,68 @@ useEffect(() => {
           .user-table td {
             border: none;
             position: relative;
-            padding-left: 55%; /* Increased padding-left to make space for data-label */
+            padding-left: 55%;
             text-align: right;
-            border-bottom: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
+            border-bottom: 1px solid var(--border-color, #f0f0f0);
           }
+          /* ✨ ปรับ padding-left สำหรับ data-label รูปภาพบนมือถือ ✨ */
           .user-table td[data-label="รูป"] {
             padding-left: 55%;
           }
           .user-table td[data-label="รูป"] .member-avatar-cell {
-              margin: 0; /* ไม่ต้องจัดกลางใน mobile */
-              margin-left: auto; /* จัดชิดขวา */
+              margin: 0;
+              margin-left: auto;
           }
-          /* Specific adjustments for 'ระดับ' and 'อายุ' columns */
           .user-table td[data-label="ระดับ"]:before,
           .user-table td[data-label="อายุ"]:before {
-            width: 45%; /* Give more space for these labels */
+            width: 45%;
           }
 
           .user-table td:last-child {
-            /* Fix for the last td in a row */
             border-bottom: none;
           }
 
           .user-table td:before {
             position: absolute;
             left: 15px;
-            width: 40%; /* Adjusted width for the data-label */
+            width: 40%;
             padding-right: 10px;
             white-space: nowrap;
             content: attr(data-label);
             font-weight: bold;
-            text-align: left; /* Ensure data-label text is left-aligned */
-            color: var(--text-color, #555); /* Use theme variable */
-            font-size: 12px; /* Adjusted font size */
+            text-align: left;
+            color: var(--text-color, #555);
+            font-size: 12px;
           }
 
-          /* Ensure sorting icons are visible and aligned on mobile */
           .user-table th.sortable-header {
               display: flex;
-              justify-content: flex-start; /* Align text to start */
+              justify-content: flex-start;
               align-items: center;
-              padding-left: 15px; /* Match td:before left padding */
+              padding-left: 15px;
           }
 
           .form-buttons-container {
             justify-content: center;
           }
 
-          /* Mobile adjustments for new table controls */
           .table-controls-container {
-              flex-direction: column; /* Stack them vertically on small screens */
-              align-items: center; /* Center horizontally */
-              gap: 20px; /* More space between stacked blocks */
+              flex-direction: column;
+              align-items: center;
+              gap: 20px;
           }
 
           .left-controls-wrapper,
           .right-controls-wrapper {
-              width: 100%; /* Take full width */
-              align-items: center; /* Center content within their own blocks */
+              width: 100%;
+              align-items: center;
           }
 
-          /* For mobile, ensure elements within wrappers are also centered if needed */
           .pagination-controls,
           .status-summary,
           .per-page-selector,
           .total-members-on-page-display {
-              justify-content: center; /* Center elements in their rows */
+              justify-content: center;
           }
         }
 
