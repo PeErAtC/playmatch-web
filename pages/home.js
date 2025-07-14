@@ -1214,15 +1214,13 @@ useEffect(() => {
           color: var(--text-color, #000);
         }
 
-        /* --- START: โค้ดที่แก้ไข --- */
         .form-content-collapsible {
           overflow: hidden;
           transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding 0.5s ease-out;
-          max-height: 1200px; /* แก้ไขค่านี้ให้สูงพอสำหรับ mobile view */
+          max-height: 1200px;
           opacity: 1;
           padding: 20px 15px;
         }
-        /* --- END: โค้ดที่แก้ไข --- */
 
         .form-content-collapsible.collapsed {
           max-height: 0;
@@ -1583,7 +1581,7 @@ useEffect(() => {
         @keyframes spinner-anim { to { transform: rotate(360deg); } }
         .avatar-spinner { animation: spinner-anim 1s linear infinite; }
 
-
+        /* --- START: โค้ดที่แก้ไขสำหรับ Mobile --- */
         @media (max-width: 768px) {
           .form-grid-container {
             grid-template-columns: repeat(2, 1fr);
@@ -1644,27 +1642,34 @@ useEffect(() => {
             justify-content: center;
           }
 
+          /* จัดการ Layout ของส่วนควบคุมให้อยู่ตรงกลาง */
           .table-controls-container {
               flex-direction: column;
-              align-items: flex-start;
+              align-items: center;
               gap: 20px;
           }
           .left-controls-wrapper,
           .right-controls-wrapper {
               width: 100%;
-              align-items: flex-start;
+              display: flex; /* <<< เพิ่ม: เพื่อให้ align-items และ gap ทำงาน */
+              flex-direction: column;
+              align-items: center;
+              gap: 10px; /* <<< เพิ่ม: ระยะห่างระหว่าง items ภายใน group */
           }
           .pagination-controls,
           .status-summary,
-          .per-page-selector,
-          .total-members-on-page-display {
-              width: 100%;
-              justify-content: flex-start;
-          }
           .per-page-selector {
+              display: flex;
+              justify-content: center;
               flex-wrap: wrap;
+              gap: 15px;
+          }
+          /* เพิ่ม text-align: center เพื่อจัดข้อความให้อยู่กลาง */
+          .total-members-on-page-display {
+              text-align: center;
           }
         }
+        /* --- END: โค้ดที่แก้ไขสำหรับ Mobile --- */
 
         @media (max-width: 600px) {
           .main-content {
