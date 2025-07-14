@@ -55,6 +55,14 @@ const MatchDetails = () => {
   const [isSavingRanking, setIsSavingRanking] = useState(false);
   const [memberPaidStatus, setMemberPaidStatus] = useState({});
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
+  const [showDateInDownloadImage, setShowDateInDownloadImage] = useState(false);
+
+
+  // New states for managing multiple coupons applied to multiple members
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [currentCouponSelection, setCurrentCouponSelection] = useState({ id: "", amount: 0, reason: "" });
+  const [currentMemberSelection, setCurrentMemberSelection] = useState("");
+  const [appliedCoupons, setAppliedCoupons] = useState([]); // Array of { couponId, amount, reason, memberName }
 
   const tableRef = useRef(null);
   const gameDetailsTableRef = useRef(null);
@@ -97,6 +105,40 @@ const MatchDetails = () => {
     }
   }, []);
 
+  // Fetch available coupons
+  const fetchCoupons = useCallback(async () => {
+    if (!loggedInEmail) return;
+    try {
+      const usersRef = collection(db, "users");
+      const userQuery = query(usersRef, where("email", "==", loggedInEmail));
+      const userSnap = await getDocs(userQuery);
+      let userId = null;
+      userSnap.forEach((doc) => { userId = doc.id; });
+
+      if (!userId) {
+        console.warn("User ID not found for fetching coupons.");
+        setAvailableCoupons([]);
+        return;
+      }
+
+      const couponsRef = collection(db, `users/${userId}/Coupons`);
+      const q = query(couponsRef, where("status", "==", "ACTIVE"));
+      const querySnapshot = await getDocs(q);
+      const couponsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAvailableCoupons(couponsData);
+    } catch (err) {
+      console.error("Error fetching coupons:", err);
+      setAvailableCoupons([]);
+    }
+  }, [loggedInEmail]);
+
+  useEffect(() => {
+    fetchCoupons();
+  }, [fetchCoupons]); // Run once on mount and when loggedInEmail changes
+
   const isAdmin = loggedInEmail && adminEmail && loggedInEmail === adminEmail;
 
   // Function to calculate expenses and player statistics
@@ -107,7 +149,8 @@ const MatchDetails = () => {
       currentBallPrice,
       currentOrganizeFee,
       currentCourtFeePerGame,
-      currentFixedCourtFeePerPerson
+      currentFixedCourtFeePerPerson,
+      currentAppliedCoupons // New parameter: array of applied coupons
     ) => {
       if (
         !currentMatchData ||
@@ -173,7 +216,23 @@ const MatchDetails = () => {
       const initialPaidStatus = { ...currentMatchData.paidStatus };
 
       playersInMatch.forEach((player) => {
-        tempMemberCalculations[player] = { name: player, level: "", totalGames: 0, totalBalls: 0, wins: 0, score: 0, ballCost: 0, courtCostPerPerson: 0, organizeFeePerPerson: parsedOrganizeFee, total: 0, calculatedWins: 0, calculatedScore: 0, isPaid: initialPaidStatus[player] || false };
+        tempMemberCalculations[player] = { 
+          name: player, 
+          level: "", 
+          totalGames: 0, 
+          totalBalls: 0, 
+          wins: 0, 
+          score: 0, 
+          ballCost: 0, 
+          courtCostPerPerson: 0, 
+          organizeFeePerPerson: parsedOrganizeFee, 
+          total: 0, 
+          calculatedWins: 0, 
+          calculatedScore: 0, 
+          isPaid: initialPaidStatus[player] || false,
+          couponAmountUsed: 0, // Reset for each calculation
+          couponIdUsed: null, // Reset for each calculation
+        };
         memberWinsInMatch[player] = 0;
         memberGamesPlayed[player] = 0;
         memberBallsUsed[player] = 0;
@@ -240,7 +299,31 @@ const MatchDetails = () => {
         const roundedOrganizeFee = Math.ceil(parsedOrganizeFee);
         const playerCourtCost = tempMemberCalculations[player].courtCostPerPerson;
         let totalMemberCost = roundedBallCost + playerCourtCost + roundedOrganizeFee;
-        tempMemberCalculations[player] = { ...tempMemberCalculations[player], totalGames, totalBalls: ballsUsed, wins: calculatedWins, score: calculatedScore, ballCost: roundedBallCost, courtCostPerPerson: playerCourtCost, organizeFeePerPerson: roundedOrganizeFee, total: totalMemberCost, calculatedWins, calculatedScore };
+
+        // Apply coupon discount if applicable (iterating through currentAppliedCoupons)
+        const couponAppliedToThisMember = currentAppliedCoupons.find(
+          (coupon) => coupon.memberName === player
+        );
+
+        if (couponAppliedToThisMember) {
+          totalMemberCost = Math.max(0, totalMemberCost - couponAppliedToThisMember.amount); // Ensure total doesn't go below zero
+          tempMemberCalculations[player].couponAmountUsed = couponAppliedToThisMember.amount;
+          tempMemberCalculations[player].couponIdUsed = couponAppliedToThisMember.couponId;
+        }
+
+        tempMemberCalculations[player] = { 
+          ...tempMemberCalculations[player], 
+          totalGames, 
+          totalBalls: ballsUsed, 
+          wins: calculatedWins, 
+          score: calculatedScore, 
+          ballCost: roundedBallCost, 
+          courtCostPerPerson: playerCourtCost, 
+          organizeFeePerPerson: roundedOrganizeFee, 
+          total: totalMemberCost, 
+          calculatedWins, 
+          calculatedScore,
+        };
       });
 
       const newPaidStatus = {};
@@ -252,7 +335,7 @@ const MatchDetails = () => {
       setMemberCalculations(tempMemberCalculations);
       setIsDataCalculated(true);
     },
-    []
+    [] // Dependencies will be handled by passing values explicitly
   );
 
   const fetchMatchAndMemberDetails = useCallback(async () => {
@@ -301,8 +384,20 @@ const MatchDetails = () => {
       setIsRankingSaved(!!data.hasRankingSaved);
       setIsPaymentHistorySaved(!!data.hasPaymentHistorySaved);
 
+      // Load previously applied coupons from matchData
+      const loadedAppliedCoupons = data.appliedCouponsDetails || [];
+      setAppliedCoupons(loadedAppliedCoupons);
+
       if (data.matches && data.matches.length > 0) {
-        calculateMemberStats(data, loadedCourtFee, loadedBallPrice, loadedOrganizeFee, loadedCourtFeePerGame, loadedFixedCourtFeePerPerson);
+        calculateMemberStats(
+          data,
+          loadedCourtFee,
+          loadedBallPrice,
+          loadedOrganizeFee,
+          loadedCourtFeePerGame,
+          loadedFixedCourtFeePerPerson,
+          loadedAppliedCoupons // Pass the loaded applied coupons
+        );
       } else {
         setMemberCalculations({});
         setIsDataCalculated(false);
@@ -314,7 +409,7 @@ const MatchDetails = () => {
     } finally {
       setLoading(false);
     }
-  }, [matchId, loggedInEmail, calculateMemberStats]);
+  }, [matchId, loggedInEmail, calculateMemberStats]); // Removed availableCoupons from dependencies here, as fetchCoupons handles its own data.
 
   useEffect(() => {
     fetchMatchAndMemberDetails();
@@ -347,6 +442,127 @@ const MatchDetails = () => {
     }
   };
 
+  const handleAddCoupon = () => {
+    if (!currentCouponSelection.id || !currentMemberSelection) {
+      Swal.fire("Missing Selection", "กรุณาเลือกคูปองและสมาชิกที่จะใช้คูปอง", "warning");
+      return;
+    }
+
+    // Check if this member already has a coupon applied in this session
+    const memberAlreadyHasCoupon = appliedCoupons.some(
+      (coupon) => coupon.memberName === currentMemberSelection
+    );
+
+    if (memberAlreadyHasCoupon) {
+      Swal.fire(
+        "Duplicate Coupon",
+        `${currentMemberSelection} ได้รับการใช้คูปองแล้วในเซสชันนี้`,
+        "warning"
+      );
+      return;
+    }
+
+    // Check if this specific coupon ID is already applied to someone else in this session
+    // (This is if one coupon can only be used once even across different members in the same calculation)
+    const couponIdAlreadyApplied = appliedCoupons.some(
+      (coupon) => coupon.couponId === currentCouponSelection.id
+    );
+    if (couponIdAlreadyApplied) {
+        Swal.fire(
+            "คูปองถูกใช้แล้ว",
+            `คูปอง ${currentCouponSelection.reason} ได้รับการใช้ไปแล้วกับสมาชิกคนอื่นในเซสชันนี้`,
+            "warning"
+        );
+        return;
+    }
+
+
+    setAppliedCoupons((prev) => [
+      ...prev,
+      {
+        couponId: currentCouponSelection.id,
+        amount: currentCouponSelection.amount,
+        reason: currentCouponSelection.reason,
+        memberName: currentMemberSelection,
+      },
+    ]);
+
+    // Reset current selections
+    setCurrentCouponSelection({ id: "", amount: 0, reason: "" });
+    setCurrentMemberSelection("");
+
+    Toast.fire({
+      icon: 'success',
+      title: `คูปอง ${currentCouponSelection.reason} ถูกเพิ่มให้ ${currentMemberSelection}`
+    });
+  };
+
+  const handleRemoveAppliedCoupon = async (indexToRemove) => {
+    const couponToRemove = appliedCoupons[indexToRemove];
+    if (!couponToRemove) return;
+
+    // Get the *new* appliedCoupons array immediately for recalculation
+    const updatedAppliedCoupons = appliedCoupons.filter((_, index) => index !== indexToRemove);
+
+    // Update local state first for responsiveness
+    setAppliedCoupons(updatedAppliedCoupons);
+    Toast.fire({ icon: 'info', title: `ลบคูปอง ${couponToRemove.reason} ที่เลือกแล้ว` });
+
+    try {
+        const usersRef = collection(db, "users");
+        const userQuery = query(usersRef, where("email", "==", loggedInEmail));
+        const userSnap = await getDocs(userQuery);
+        let userId = null;
+        userSnap.forEach((doc) => { userId = doc.id; });
+
+        if (!userId) {
+            console.error("User ID not found. Cannot update coupon status in DB.");
+            return;
+        }
+
+        const couponDocRef = doc(db, `users/${userId}/Coupons`, couponToRemove.couponId);
+        await updateDoc(couponDocRef, {
+            status: "ACTIVE",
+            redeemedAt: null,
+            redeemedBy: null,
+            redeemedForMatchId: null,
+            redeemedForMembers: [] // Clear members if this field exists
+        });
+        Toast.fire({ icon: 'success', title: `คูปอง ${couponToRemove.reason} ถูกเปลี่ยนเป็น ACTIVE แล้ว!` });
+
+        // Re-fetch available coupons to update the dropdown list
+        await fetchCoupons();
+
+        // Trigger recalculation with the updated appliedCoupons array
+        if (matchData) {
+            calculateMemberStats(
+                matchData,
+                courtFee,
+                ballPrice,
+                organizeFee,
+                courtFeePerGame,
+                fixedCourtFeePerPerson,
+                updatedAppliedCoupons // Pass the immediately available updated array
+            );
+        }
+
+        // Inform user about recalculation and need to save
+        Swal.fire({
+            title: "การคำนวณถูกอัปเดตแล้ว",
+            text: "ข้อมูลค่าใช้จ่ายถูกคำนวณใหม่โดยอัตโนมัติ กรุณาตรวจสอบและกด 'บันทึกประวัติการชำระ' อีกครั้ง",
+            icon: "info",
+            confirmButtonText: "รับทราบ"
+        });
+
+    } catch (err) {
+        console.error("Error setting coupon status back to ACTIVE:", err);
+        Swal.fire("เกิดข้อผิดพลาด", `ไม่สามารถเปลี่ยนสถานะคูปอง ${couponToRemove.reason} เป็น ACTIVE ได้: ${err.message}`, "error");
+        // Optionally, revert the local state if the DB update fails significantly
+        setAppliedCoupons((prev) => [...prev, couponToRemove]); // Revert only if it was removed locally
+    }
+  };
+
+
   const handleCalculateClick = () => {
     if (!matchData) {
       Swal.fire("Error", "No match data found for calculation", "error");
@@ -365,7 +581,16 @@ const MatchDetails = () => {
       Swal.fire("Invalid Input", "กรุณากรอกค่าจัดก๊วน และต้องไม่เป็นค่าติดลบ", "warning");
       return;
     }
-    calculateMemberStats(matchData, courtFee, ballPrice, organizeFee, courtFeePerGame, fixedCourtFeePerPerson);
+    // Pass the array of applied coupons to calculateMemberStats
+    calculateMemberStats(
+      matchData,
+      courtFee,
+      ballPrice,
+      organizeFee,
+      courtFeePerGame,
+      fixedCourtFeePerPerson,
+      appliedCoupons
+    );
     Swal.fire("Calculation Successful", "Expense data calculated", "success");
   };
 
@@ -460,12 +685,78 @@ const MatchDetails = () => {
       let userId = null;
       userSnap.forEach((doc) => { userId = doc.id; });
       if (!userId) { throw new Error("User data not found. Please log in again."); }
+
       const totalOverallCost = Object.values(memberCalculations).reduce((sum, m) => sum + m.total, 0);
-      const paymentHistoryData = { matchId: matchId, matchDate: matchData.matchDate, topic: matchData.topic, totalOverall: Math.ceil(totalOverallCost), membersData: Object.values(memberCalculations).map((member) => ({ name: member.name, total: member.total, isPaid: member.isPaid, level: member.level, totalGames: member.totalGames, totalBalls: member.totalBalls, ballCost: member.ballCost, courtCostPerPerson: member.courtCostPerPerson, organizeFeePerPerson: member.organizeFeePerPerson, wins: member.wins, score: member.score, })), lastUpdated: serverTimestamp() };
+
+      // Prepare appliedCouponsDetails for storage
+      const appliedCouponsDetailsForStorage = Object.values(memberCalculations)
+        .filter(m => m.couponIdUsed && m.couponAmountUsed > 0)
+        .map(m => ({
+          couponId: m.couponIdUsed,
+          amount: m.couponAmountUsed,
+          memberName: m.name,
+        }));
+
+      const paymentHistoryData = {
+        matchId: matchId,
+        matchDate: matchData.matchDate,
+        topic: matchData.topic,
+        totalOverall: Math.ceil(totalOverallCost),
+        membersData: Object.values(memberCalculations).map((member) => ({
+          name: member.name,
+          total: member.total,
+          isPaid: member.isPaid,
+          level: member.level,
+          totalGames: member.totalGames,
+          totalBalls: member.totalBalls,
+          ballCost: member.ballCost,
+          courtCostPerPerson: member.courtCostPerPerson,
+          organizeFeePerPerson: member.organizeFeePerPerson,
+          wins: member.wins,
+          score: member.score,
+          couponAmountUsed: member.couponAmountUsed || 0, // Save coupon amount used by member
+          couponIdUsed: member.couponIdUsed || null, // Save coupon ID used by member
+        })),
+        lastUpdated: serverTimestamp(),
+        appliedCouponsDetails: appliedCouponsDetailsForStorage, // Save all applied coupon details
+      };
+
       const paymentHistoryDocRef = doc(db, `users/${userId}/PaymentHistory`, matchId);
       await setDoc(paymentHistoryDocRef, paymentHistoryData, { merge: true });
+
       const matchDocRef = doc(db, `users/${userId}/Matches`, matchId);
-      await updateDoc(matchDocRef, { hasPaymentHistorySaved: true, lastPaymentHistorySavedAt: serverTimestamp(), courtFee: parseFloat(courtFee) || 0, ballPrice: parseFloat(ballPrice) || 0, organizeFee: parseFloat(organizeFee) || 0, courtFeePerGame: parseFloat(courtFeePerGame) || 0, fixedCourtFeePerPerson: parseFloat(fixedCourtFeePerPerson) || 0 });
+      await updateDoc(matchDocRef, {
+        hasPaymentHistorySaved: true,
+        lastPaymentHistorySavedAt: serverTimestamp(),
+        courtFee: parseFloat(courtFee) || 0,
+        ballPrice: parseFloat(ballPrice) || 0,
+        organizeFee: parseFloat(organizeFee) || 0,
+        courtFeePerGame: parseFloat(courtFeePerGame) || 0,
+        fixedCourtFeePerPerson: parseFloat(fixedCourtFeePerPerson) || 0,
+        appliedCouponsDetails: appliedCouponsDetailsForStorage, // Update match document with all coupon details
+      });
+
+      // Update status for each unique coupon ID that was used in this calculation
+      const uniqueCouponIdsUsed = new Set(appliedCouponsDetailsForStorage.map(c => c.couponId));
+      for (const couponId of uniqueCouponIdsUsed) {
+        const couponDocRef = doc(db, `users/${userId}/Coupons`, couponId);
+        const usedCoupon = availableCoupons.find(c => c.id === couponId); // Find reason for Toast
+        await updateDoc(couponDocRef, {
+          status: "USED",
+          redeemedAt: serverTimestamp(),
+          redeemedBy: loggedInEmail, // Who redeemed it
+          redeemedForMatchId: matchId, // Which match it was used in
+          redeemedForMembers: appliedCouponsDetailsForStorage.filter(c => c.couponId === couponId).map(c => c.memberName) // Members it was applied to
+        });
+        Toast.fire({ icon: 'info', title: `คูปอง ${usedCoupon ? usedCoupon.reason : couponId} ถูกใช้แล้ว!` });
+      }
+
+      // Reset applied coupons and re-fetch available coupons after saving
+      setAppliedCoupons([]);
+      setCurrentCouponSelection({ id: "", amount: 0, reason: "" });
+      setCurrentMemberSelection("");
+      await fetchCoupons(); // Re-fetch to update availableCoupons list
+
       Swal.fire("บันทึกสำเร็จ", "ประวัติการชำระเงินของ Match นี้ถูกบันทึกแล้ว!", "success");
       setIsPaymentHistorySaved(true);
     } catch (err) {
@@ -479,17 +770,30 @@ const MatchDetails = () => {
       Swal.fire("Insufficient Data", "Please calculate expenses before downloading data", "warning");
       return;
     }
-    const ws_data = [["No.", "ชื่อ", "จำนวนเกม", "จำนวนลูก", "ราคารวมลูกที่ใช้", "ค่าสนาม (เฉลี่ย)", "ค่าจัดก๊วน", "จำนวนชนะ", "คะแนน", "Total (บาท)", "จ่ายแล้ว"]];
+    const ws_data = [["No.", "ชื่อ", "จำนวนเกม", "จำนวนลูก", "ราคารวมลูกที่ใช้", "ค่าสนาม (เฉลี่ย)", "ค่าจัดก๊วน", "คูปองส่วนลด", "จำนวนชนะ", "คะแนน", "Total (บาท)", "จ่ายแล้ว"]];
     const sortedMembersForExcel = Object.values(memberCalculations).sort((a, b) => b.score - a.score);
     sortedMembersForExcel.forEach((member, index) => {
-      ws_data.push([index + 1, member.name, member.totalGames, member.totalBalls, member.ballCost, member.courtCostPerPerson, member.organizeFeePerPerson, member.wins, member.score, member.total, member.isPaid ? "ใช่" : "ไม่"]);
+      ws_data.push([
+        index + 1, 
+        member.name, 
+        member.totalGames, 
+        member.totalBalls, 
+        member.ballCost, 
+        member.courtCostPerPerson, 
+        member.organizeFeePerPerson,
+        member.couponAmountUsed > 0 ? member.couponAmountUsed : "-", // Add coupon amount
+        member.wins, 
+        member.score, 
+        member.total, 
+        member.isPaid ? "ใช่" : "ไม่"
+      ]);
     });
     if (sortedMembersForExcel.length > 0) {
-      ws_data.push(["", "", "", "", "", "", "", "", "", "Total All:", Math.ceil(Object.values(memberCalculations).reduce((sum, m) => sum + m.total, 0))]);
+      ws_data.push(["", "", "", "", "", "", "", "", "", "", "Total All:", Math.ceil(Object.values(memberCalculations).reduce((sum, m) => sum + m.total, 0))]);
     }
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
     const centerAlignStyle = { alignment: { horizontal: "center", vertical: "center" } };
-    const headerStyle = { font: { bold: true, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "E0E0E0" } }, alignment: { horizontal: "center", vertical: "center" }, border: { top: { style: "thin", color: { auto: 1 } }, bottom: { style: "thin", color: { auto: 1 } }, left: { style: "thin", color: { auto: 1 } }, right: { style: "thin", color: { auto: 1 } } } };
+    const headerStyle = { font: { bold: true, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "E0E0E0" } }, alignment: { horizontal: "center", vertical: "center" }, border: { top: { style: "thin", color: { auto: 1 } }, bottom: { style: "thin", color: { auto: 1 } }, left: { style: "thin", color: { auto: 1 } }, right: { style: { auto: 1 } } } };
     for (let C = 0; C < ws_data[0].length; ++C) {
       const cell = XLSX.utils.encode_cell({ r: 0, c: C });
       if (!ws[cell]) ws[cell] = {};
@@ -500,9 +804,9 @@ const MatchDetails = () => {
         const cell = XLSX.utils.encode_cell({ r: R, c: C });
         if (!ws[cell]) ws[cell] = {};
         ws[cell].s = { ...(ws[cell].s || {}), ...centerAlignStyle };
-        if (C === 9 && R < ws_data.length - 1) { ws[cell].s = { ...ws[cell].s, font: { color: { rgb: "FF0000" } } }; }
-        if (C === 10 && R === ws_data.length - 1) { ws[cell].s = { ...ws[cell].s, font: { bold: true, color: { rgb: "FF0000" } } }; }
-        if (C === 9 && R === ws_data.length - 1) { ws[cell].s = { ...ws[cell].s, font: { bold: true }, ...centerAlignStyle }; }
+        if (C === 10 && R < ws_data.length - 1) { ws[cell].s = { ...ws[cell].s, font: { color: { rgb: "FF0000" } } }; } // Total (บาท) column
+        if (C === 11 && R === ws_data.length - 1) { ws[cell].s = { ...ws[cell].s, font: { bold: true, color: { rgb: "FF0000" } } }; } // Total All value
+        if (C === 10 && R === ws_data.length - 1) { ws[cell].s = { ...ws[cell].s, font: { bold: true }, ...centerAlignStyle }; } // Total All text
       }
     }
     const colWidths = ws_data[0].map((_, i) => ({ wch: Math.max(...ws_data.map((row) => (row[i] ? String(row[i]).length : 0))) + 2 }));
@@ -519,39 +823,70 @@ const MatchDetails = () => {
       Swal.fire("ไม่มีข้อมูล", "กรุณาคำนวณข้อมูลก่อนดาวน์โหลดรูปภาพ", "warning");
       return;
     }
+
     try {
+      // 1. ตั้งค่าให้วันที่แสดงบน DOM ชั่วคราว
+      setShowDateInDownloadImage(true);
+
+      // 2. รอให้ DOM อัปเดต (สำคัญมาก)
+      await new Promise(resolve => setTimeout(resolve, 0)); // หรือ requestAnimationFrame
+
+      // 3. จับภาพ
       const canvas = await html2canvas(tableRef.current, {
         scale: 2,
         useCORS: true,
+        backgroundColor: '#ffffff', // กำหนดพื้นหลังให้เป็นสีขาวชัดเจน
       });
+
+      // 4. ตั้งค่าให้วันที่ซ่อนกลับไปทันทีหลังจากจับภาพ
+      setShowDateInDownloadImage(false);
+
       const fileName = `MatchSummary_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
       saveAs(canvas.toDataURL("image/png"), fileName);
       Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพสำเร็จ!' });
+
     } catch (error) {
       console.error("Error generating image:", error);
       Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพได้", "error");
+      // ตรวจสอบให้แน่ใจว่าวันที่ถูกซ่อนกลับไปแม้เกิดข้อผิดพลาด
+      setShowDateInDownloadImage(false);
     }
   };
+  // ******************************************************
 
+  // ******************************************************
+  // พิจารณาแก้ไข handleDownloadGameDetailsImage ด้วยวิธีเดียวกัน ถ้าต้องการให้มีวันที่ในภาพนั้นด้วย
+  // หากต้องการ ให้ทำตามขั้นตอนเดียวกับ handleDownloadImage ด้านบน
   const handleDownloadGameDetailsImage = async () => {
-    if (!gameDetailsTableRef.current || !matchData?.matches?.length) {
-      Swal.fire("ไม่มีข้อมูล", "ไม่มีข้อมูลเกมสำหรับดาวน์โหลดรูปภาพ", "warning");
-      return;
-    }
-    try {
-        const canvas = await html2canvas(gameDetailsTableRef.current, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-        });
-        const fileName = `GameDetails_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
-        saveAs(canvas.toDataURL("image/png"), fileName);
-        Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพรายละเอียดเกมสำเร็จ!' });
-    } catch (error) {
-        console.error("Error generating game details image:", error);
-        Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพรายละเอียดเกมได้", "error");
-    }
-  };
+      if (!gameDetailsTableRef.current || !matchData?.matches?.length) {
+        Swal.fire("ไม่มีข้อมูล", "ไม่มีข้อมูลเกมสำหรับดาวน์โหลดรูปภาพ", "warning");
+        return;
+      }
+      try {
+          const canvas = await html2canvas(gameDetailsTableRef.current, {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+          });
+          const fileName = `GameDetails_${matchData?.matchDate ? formatDate(matchData.matchDate).replace(/\//g, "-") : "data"}.png`;
+          saveAs(canvas.toDataURL("image/png"), fileName);
+          Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพรายละเอียดเกมสำเร็จ!' });
+      } catch (error) {
+          console.error("Error generating game details image:", error);
+          Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถสร้างไฟล์รูปภาพรายละเอียดเกมได้", "error");
+      }
+    };
+
+  // Get list of members who have NOT been assigned a coupon in the current session
+  const membersWithNoCouponAssigned = Object.values(memberCalculations)
+    .filter(member => !appliedCoupons.some(ac => ac.memberName === member.name))
+    .map(member => member.name)
+    .sort(); // Sort alphabetically
+
+  // Get list of available coupons that have NOT been applied in the current session
+  const unappliedAvailableCoupons = availableCoupons.filter(
+    coupon => !appliedCoupons.some(ac => ac.couponId === coupon.id)
+  );
 
 
   if (loading) { return (<div style={{ textAlign: "center", padding: "50px" }}>Loading Match Details...</div>); }
@@ -616,7 +951,7 @@ const MatchDetails = () => {
 
         <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #d0d0d0", borderRadius: "5px", backgroundColor: "#f9f9f9" }}>
           <h4 style={{ fontSize: "16px", marginBottom: "10px", color: "#333" }}>ค่าลูกและค่าจัดก๊วน:</h4>
-          <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "15px" }}>
             <div>
               <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#333" }}>ราคาลูกละ:</label>
               <input type="number" value={ballPrice} onChange={(e) => setBallPrice(e.target.value)} placeholder="ราคาลูกละ" style={{ padding: "8px 12px", borderRadius: "5px", border: "1px solid #ccc", fontSize: "15px", width: "120px" }} />
@@ -625,6 +960,65 @@ const MatchDetails = () => {
               <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#333" }}>ค่าจัดก๊วน:</label>
               <input type="number" value={organizeFee} onChange={(e) => setOrganizeFee(e.target.value)} placeholder="ค่าจัดก๊วน" style={{ padding: "8px 12px", borderRadius: "5px", border: "1px solid #ccc", fontSize: "15px", width: "120px" }} />
             </div>
+          </div>
+          {/* Section for applying coupons */}
+          <div style={{ padding: "15px", border: "1px dashed #ccc", borderRadius: "5px", backgroundColor: "#f0f0f0", marginTop: "15px" }}>
+            <h4 style={{ fontSize: "16px", marginBottom: "10px", color: "#333" }}>เพิ่มคูปองส่วนลด:</h4>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#333" }}>เลือกคูปอง:</label>
+                <select
+                  value={currentCouponSelection.id}
+                  onChange={(e) => {
+                    const couponId = e.target.value;
+                    const selected = unappliedAvailableCoupons.find(coupon => coupon.id === couponId);
+                    setCurrentCouponSelection(selected ? { id: selected.id, amount: selected.amount, reason: selected.reason } : { id: "", amount: 0, reason: "" });
+                  }}
+                  style={{ padding: "8px 12px", borderRadius: "5px", border: "1px solid #ccc", fontSize: "15px", width: "180px" }}
+                >
+                  <option value="">-- เลือกคูปอง --</option>
+                  {unappliedAvailableCoupons.map(coupon => (
+                    <option key={coupon.id} value={coupon.id}>
+                      {coupon.reason} ({coupon.amount} บาท)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", color: "#333" }}>ใช้กับสมาชิก:</label>
+                <select
+                  value={currentMemberSelection}
+                  onChange={(e) => setCurrentMemberSelection(e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: "5px", border: "1px solid #ccc", fontSize: "15px", width: "180px" }}
+                >
+                  <option value="">-- เลือกสมาชิก --</option>
+                  {membersWithNoCouponAssigned.map(memberName => (
+                    <option key={memberName} value={memberName}>
+                      {memberName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={handleAddCoupon} style={{ backgroundColor: "#17a2b8", color: "#fff", padding: "8px 15px", borderRadius: "5px", border: "none", cursor: "pointer", fontSize: "14px" }}>
+                เพิ่มคูปอง
+              </button>
+            </div>
+
+            {appliedCoupons.length > 0 && (
+              <div style={{ marginTop: "15px", borderTop: "1px solid #eee", paddingTop: "10px" }}>
+                <h5 style={{ fontSize: "15px", marginBottom: "8px", color: "#555" }}>คูปองที่ใช้ในเซสชันนี้:</h5>
+                <ul style={{ listStyle: "none", padding: 0 }}>
+                  {appliedCoupons.map((item, index) => (
+                    <li key={index} style={{ background: "#e9ecef", padding: "8px", borderRadius: "4px", marginBottom: "5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{item.reason} ({item.amount} บาท) สำหรับ {item.memberName}</span>
+                      <button onClick={() => handleRemoveAppliedCoupon(index)} style={{ background: "#dc3545", color: "white", border: "none", borderRadius: "3px", padding: "5px 8px", cursor: "pointer", fontSize: "12px" }}>
+                        X
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -676,6 +1070,12 @@ const MatchDetails = () => {
       </div>
 
       <div ref={tableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '12px' }}>
+        {/* แสดงวันที่เฉพาะเมื่อ showDateInDownloadImage เป็น true */}
+        {showDateInDownloadImage && (
+          <div style={{ padding: "8px 0", marginBottom: "10px", fontSize: "16px", fontWeight: "bold", textAlign: "left", color: "#333", borderBottom: "1px solid #eee" }}>
+            สรุปค่าใช้จ่าย Match วันที่: {formatDate(matchData.matchDate)}
+          </div>
+        )}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
           <thead>
             <tr style={{ backgroundColor: "#323943", color: "white" }}>
@@ -686,6 +1086,7 @@ const MatchDetails = () => {
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ราคารวมลูกที่ใช้</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ค่าสนาม (เฉลี่ย)</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>ค่าจัดก๊วน</th>
+              <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>คูปองส่วนลด</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>จำนวนชนะ</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>คะแนน</th>
               <th style={{ padding: "12px 10px", borderRight: "1px solid #444", textAlign: "center" }}>Total (บาท)</th>
@@ -694,7 +1095,7 @@ const MatchDetails = () => {
           </thead>
           <tbody>
             {Object.keys(memberCalculations).length === 0 ? (
-              <tr><td colSpan={"11"} style={{ textAlign: "center", padding: "20px", color: "#777" }}>{isDataCalculated ? "ไม่มีข้อมูลการคำนวณ" : "กรุณากรอกค่าใช้จ่ายแล้วกด 'คำนวณค่าใช้จ่าย' เพื่อดูรายละเอียด"}</td></tr>
+              <tr><td colSpan={"12"} style={{ textAlign: "center", padding: "20px", color: "#777" }}>{isDataCalculated ? "ไม่มีข้อมูลการคำนวณ" : "กรุณากรอกค่าใช้จ่ายแล้วกด 'คำนวณค่าใช้จ่าย' เพื่อดูรายละเอียด"}</td></tr>
             ) : (
               sortedMembers.map((member, index) => (
                 <tr key={member.name || index} style={{ borderBottom: "1px solid #eee", backgroundColor: index === 0 ? "#FFFACD" : "inherit" }}>
@@ -702,13 +1103,16 @@ const MatchDetails = () => {
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "left", fontWeight: "bold" }}>
                     {index === 0 && (<span style={{ color: "#DAA520", marginRight: "5px", fontWeight: "bold" }}>MVP ✨ </span>)}
                     {member.name}
-                    {member.level ? ` (${member.level})` : ""}
+                    {/* บรรทัดนี้ถูกซ่อนไว้: {member.level ? ` (${member.level})` : ""} */}
                   </td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.totalGames}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.totalBalls}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.ballCost}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.courtCostPerPerson}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.organizeFeePerPerson}</td>
+                  <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>
+                    {member.couponAmountUsed > 0 ? member.couponAmountUsed : "-"}
+                  </td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.wins}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center" }}>{member.score}</td>
                   <td style={{ padding: "10px", borderRight: "1px solid #eee", textAlign: "center", fontWeight: "bold", color: "#e63946" }}>{member.total}</td>
@@ -718,7 +1122,7 @@ const MatchDetails = () => {
             )}
             {Object.keys(memberCalculations).length > 0 && (
               <tr style={{ backgroundColor: "#f0f0f0", fontWeight: "bold" }}>
-                <td colSpan={"10"} style={{ padding: "10px", textAlign: "right", borderRight: "1px solid #eee" }}>Total All:</td>
+                <td colSpan={"11"} style={{ padding: "10px", textAlign: "right", borderRight: "1px solid #eee" }}>Total All:</td>
                 <td style={{ padding: "10px", textAlign: "center", color: "#e63946" }}>{Math.ceil(Object.values(memberCalculations).reduce((sum, m) => sum + m.total, 0))}</td>
                 <td style={{ padding: "10px", textAlign: "center" }}></td>
               </tr>
