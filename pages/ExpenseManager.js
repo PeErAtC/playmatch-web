@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { db } from '../lib/firebaseConfig';
+import { db,auth  } from '../lib/firebaseConfig';
+import { onAuthStateChanged } from "firebase/auth";
+
 import {
   collection,
   doc,
@@ -10,6 +12,8 @@ import {
   query,
   where,
   serverTimestamp,
+  startAt,
+  endAt 
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import Swal from 'sweetalert2';
@@ -206,6 +210,18 @@ const ExpenseManager = () => {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loggedInUser, setLoggedInUser] = useState(null);
+          useEffect(() => {
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+              if (user) {
+                setLoggedInUser(user);
+              } else {
+                setLoggedInUser(null);
+              }
+          });
+
+  return () => unsubscribe();
+}, []);
 
   const [newEntry, setNewEntry] = useState({
     name: '',
@@ -319,128 +335,130 @@ const ExpenseManager = () => {
     setOriginalNewEntryState(null);
   }, []);
 
-  const handleSaveOrAdd = useCallback(async () => {
-    if (!newEntry.name || !newEntry.amount || newEntry.amount <= 0 || !currentUserId) {
-      Swal.fire({
-        title: '⚠️ ข้อมูลไม่ครบ',
-        text: 'โปรดกรอกชื่อรายการและจำนวนเงินให้ครบถ้วน',
-        icon: 'warning',
-        showConfirmButton: false,
-        timer: 2500,
-        timerProgressBar: true,
-        background: '#fffaf0',
-        customClass: {
-          popup: 'swal2-rounded swal2-shadow',
-          title: 'swal2-title-kanit',
-          content: 'swal2-content-kanit'
-        }
-      });
-      return;
-    }
+const handleSaveOrAdd = useCallback(async () => {
+  const userId = loggedInUser?.uid;
+  // const username = loggedInUser?.displayName || 'unknown-user';
 
-    let parsedDate;
-    try {
-      // Append T00:00:00 to ensure consistent parsing as UTC midnight
-      parsedDate = new Date(newEntry.date + 'T00:00:00');
-      if (isNaN(parsedDate.getTime())) {
-        // If getTime() returns NaN, the date string was invalid
-        throw new Error("Invalid date format or value.");
+  if (!newEntry.name || !newEntry.amount || newEntry.amount <= 0 || !userId) {
+    Swal.fire({
+      title: '⚠️ ข้อมูลไม่ครบ',
+      text: 'โปรดกรอกชื่อรายการและจำนวนเงินให้ครบถ้วน',
+      icon: 'warning',
+      showConfirmButton: false,
+      timer: 2500,
+      timerProgressBar: true,
+      background: '#fffaf0',
+      customClass: {
+        popup: 'swal2-rounded swal2-shadow',
+        title: 'swal2-title-kanit',
+        content: 'swal2-content-kanit'
       }
-    } catch (e) {
-      console.error("Error parsing date:", e);
-      Swal.fire({
-        icon: 'error',
-        title: '❌ วันที่ไม่ถูกต้อง',
-        text: 'โปรดตรวจสอบรูปแบบวันที่ (เช่น YYYY-MM-DD)',
-        showConfirmButton: false,
-        timer: 2500,
-        background: '#fff0f0',
-        timerProgressBar: true,
-        customClass: {
-          popup: 'swal2-rounded swal2-shadow',
-          title: 'swal2-title-kanit',
-          content: 'swal2-content-kanit'
-        }
-      });
+    });
+    return;
+  }
 
-      return;
-    }
+  let parsedDate;
+  try {
+    parsedDate = new Date(newEntry.date + 'T00:00:00');
+    if (isNaN(parsedDate.getTime())) throw new Error("Invalid date");
+  } catch (e) {
+    Swal.fire({
+      icon: 'error',
+      title: '❌ วันที่ไม่ถูกต้อง',
+      text: 'โปรดตรวจสอบรูปแบบวันที่ (เช่น YYYY-MM-DD)',
+      showConfirmButton: false,
+      timer: 2500,
+      background: '#fff0f0',
+      timerProgressBar: true,
+      customClass: {
+        popup: 'swal2-rounded swal2-shadow',
+        title: 'swal2-title-kanit',
+        content: 'swal2-content-kanit'
+      }
+    });
+    return;
+  }
 
-    const dataToSave = {
-      ...newEntry,
-      userId: currentUserId,
-      amount: parseFloat(newEntry.amount),
-      date: parsedDate, // Use the safely parsed date
+  const day = String(parsedDate.getDate()).padStart(2, '0');
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+  const yearBE = parsedDate.getFullYear() + 543;
+  const prefix = `${day}-${month}-${yearBE}`;
+
+  const collectionRef = collection(db, `users/${userId}/financial_entries`);
+
+  let docName;
+
+  if (isEditing && editEntryId) {
+    docName = editEntryId;
+  } else {
+    const q = query(
+      collectionRef,
+      where('__name__', '>=', prefix),
+      where('__name__', '<=', prefix + '\uf8ff')
+    );
+    const querySnapshot = await getDocs(q);
+    const count = querySnapshot.size;
+    const suffix = String(count + 1).padStart(3, '0');
+    docName = `${prefix}-${suffix}`;
+  }
+
+  const docRef = doc(db, `users/${userId}/financial_entries/${docName}`);
+
+  const dataToSave = {
+    name: newEntry.name,
+    amount: parseFloat(newEntry.amount),
+    type: newEntry.type,
+    date: parsedDate,
+    createdAt: serverTimestamp(),
+    category: newEntry.category,
+    // ลบบรรทัด 'userId: username,' ออก
+  };
+
+  try {
+    await setDoc(docRef, dataToSave, { merge: true });
+
+    Swal.fire({
+      title: isEditing ? '✅ แก้ไขเรียบร้อย' : '🎉 เพิ่มรายการสำเร็จ!',
+      text: isEditing ? 'ข้อมูลถูกบันทึกสำเร็จแล้ว' : 'ข้อมูลถูกบันทึกเรียบร้อยแล้ว',
+      icon: 'success',
+      showConfirmButton: false,
+      timer: 2000,
+      timerProgressBar: true,
+      background: '#f0fff0',
+      customClass: {
+        popup: 'swal2-rounded swal2-shadow',
+        title: 'swal2-title-kanit',
+        content: 'swal2-content-kanit'
+      }
+    });
+
+    const newEntryObject = {
+      ...dataToSave,
+      id: docName,
+      date: newEntry.date
     };
 
-    if (isEditing && editEntryId) {
-      // Save Changes (Update)
-      const docRef = doc(db, `users/${currentUserId}/financial_entries/${editEntryId}`);
-      try {
-        await updateDoc(docRef, { ...dataToSave, updatedAt: serverTimestamp() });
-        // Update the state with the date in string format for consistency
-        setEntries(prev => prev.map(e => (e.id === editEntryId ? { ...dataToSave, id: editEntryId, date: dataToSave.date.toISOString().substring(0,10) } : e)));
-        Swal.fire({
-          icon: 'success',
-          title: '✅ แก้ไขเรียบร้อย',
-          text: 'ข้อมูลถูกบันทึกสำเร็จแล้ว',
-          showConfirmButton: false,
-          timer: 2000,
-          timerProgressBar: true,
-          background: '#f0fff0',
-          customClass: {
-            popup: 'swal2-rounded swal2-shadow',
-            title: 'swal2-title-kanit',
-            content: 'swal2-content-kanit'
-          }
-        });
-      } catch (error) {
-        console.error("Error updating document: ", error);
-        Swal.fire({
-          icon: 'error',
-          title: 'เกิดข้อผิดพลาด',
-          text: "เกิดข้อผิดพลาดในการเพิ่ม/แก้ไขรายการ: " + error.message,
-          confirmButtonText: 'ตกลง'
-        });
+    setEntries(prev => {
+      if (isEditing) {
+        return prev.map(e => (e.id === editEntryId ? newEntryObject : e));
+      } else {
+        return [...prev, newEntryObject];
       }
-    } else {
-      // Add New Entry
-      const id = uuidv4();
-      const docRef = doc(db, `users/${currentUserId}/financial_entries/${id}`);
-      try {
-        await setDoc(docRef, { ...dataToSave, id, createdAt: serverTimestamp() });
-        // Update the state with the date in string format for consistency
-        setEntries(prev => [...prev, { ...dataToSave, id, date: dataToSave.date.toISOString().substring(0,10) }]);
-          Swal.fire({
-            title: '🎉 เพิ่มรายการสำเร็จ!',
-            text: 'ข้อมูลถูกบันทึกเรียบร้อยแล้ว',
-            icon: 'success',
-            showConfirmButton: false,
-            timer: 2000,
-            timerProgressBar: true,
-            background: '#ffffff',
-            customClass: {
-              popup: 'swal2-rounded swal2-shadow',
-              title: 'swal2-title-kanit',
-              content: 'swal2-content-kanit'
-            },
-            showClass: {
-              popup: 'animate__animated animate__fadeInDown'
-            },
-            hideClass: {
-              popup: 'animate__animated animate__fadeOutUp'
-            }
-          });
+    });
+  } catch (error) {
+    console.error("Error saving document: ", error);
+    Swal.fire({
+      icon: 'error',
+      title: 'เกิดข้อผิดพลาด',
+      text: "ไม่สามารถบันทึกข้อมูลได้: " + error.message,
+      confirmButtonText: 'ตกลง'
+    });
+  }
 
-      } catch (error) {
-        console.error("Error adding document: ", error);
-        alert("เกิดข้อผิดพลาดในการเพิ่มรายการ: " + error.message);
-      }
-    }
+  resetForm();
+}, [newEntry, isEditing, editEntryId, loggedInUser, resetForm]);
 
-    // Reset form and editing state
-    resetForm();
-  }, [newEntry, isEditing, editEntryId, currentUserId, resetForm]);
+
 
   const handleEditClick = useCallback((entryToEdit) => {
     setOriginalNewEntryState({ ...newEntry }); // Save current form state before populating with edit data
@@ -627,54 +645,60 @@ const ExpenseManager = () => {
                                 gradientEndColor={TICKET_COLORS[entry.type]?.gradientEnd}
                                 ticketId={`ticket-${entry.id}`} // Unique ID for gradient
                                 onEdit={handleEditClick}
-                              onDelete={async (id) => {
-                                  const result = await Swal.fire({
-                                    title: '❗ ยืนยันการลบ',
-                                    text: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?',
-                                    icon: 'warning',
-                                    showCancelButton: true,
-                                    confirmButtonText: 'ลบเลย',
-                                    cancelButtonText: 'ยกเลิก',
-                                    confirmButtonColor: '#e74c3c',
-                                    cancelButtonColor: '#95a5a6',
-                                    background: '#fff',
-                                    customClass: {
-                                      popup: 'swal2-rounded swal2-shadow',
-                                      title: 'swal2-title-kanit',
-                                      content: 'swal2-content-kanit'
-                                    }
-                                  });
+                                  onDelete={async (id, dateString) => {
+                                    const result = await Swal.fire({
+                                      title: '❗ ยืนยันการลบ',
+                                      text: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?',
+                                      icon: 'warning',
+                                      showCancelButton: true,
+                                      confirmButtonText: 'ลบเลย',
+                                      cancelButtonText: 'ยกเลิก',
+                                      confirmButtonColor: '#e74c3c',
+                                      cancelButtonColor: '#95a5a6',
+                                      background: '#fff',
+                                      customClass: {
+                                        popup: 'swal2-rounded swal2-shadow',
+                                        title: 'swal2-title-kanit',
+                                        content: 'swal2-content-kanit'
+                                      }
+                                    });
 
-                                  if (result.isConfirmed) {
-                                    try {
-                                      await deleteDoc(doc(db, `users/${currentUserId}/financial_entries`, id));
-                                      setEntries(prev => prev.filter(e => e.id !== id));
+                                    if (result.isConfirmed) {
+                                      try {
+                                        const userId = loggedInUser?.uid;
+                                        if (!userId) throw new Error("ไม่พบผู้ใช้");
 
-                                      await Swal.fire({
-                                        icon: 'success',
-                                        title: '🗑️ ลบสำเร็จ',
-                                        text: 'รายการถูกลบเรียบร้อยแล้ว',
-                                        showConfirmButton: false,
-                                        timer: 2000,
-                                        timerProgressBar: true,
-                                        background: '#f9f9f9',
-                                        customClass: {
-                                          popup: 'swal2-rounded swal2-shadow',
-                                          title: 'swal2-title-kanit',
-                                          content: 'swal2-content-kanit'
-                                        }
-                                      });
-                                    } catch (error) {
-                                      console.error("Error removing document: ", error);
-                                      Swal.fire({
-                                        icon: 'error',
-                                        title: 'เกิดข้อผิดพลาด',
-                                        text: "ไม่สามารถลบรายการได้: " + error.message,
-                                        confirmButtonText: 'ตกลง',
-                                      });
+                                        const docRef = doc(db, `users/${userId}/financial_entries/${id}`);
+                                        await deleteDoc(docRef);
+
+                                        setEntries(prev => prev.filter(e => e.id !== id));
+
+                                        await Swal.fire({
+                                          icon: 'success',
+                                          title: 'ลบสำเร็จ',
+                                          text: 'รายการถูกลบเรียบร้อยแล้ว',
+                                          showConfirmButton: false,
+                                          timer: 2000,
+                                          timerProgressBar: true,
+                                          background: '#f9f9f9',
+                                          customClass: {
+                                            popup: 'swal2-rounded swal2-shadow',
+                                            title: 'swal2-title-kanit',
+                                            content: 'swal2-content-kanit'
+                                          }
+                                        });
+                                      } catch (error) {
+                                        console.error("Error removing document: ", error);
+                                        Swal.fire({
+                                          icon: 'error',
+                                          title: 'เกิดข้อผิดพลาด',
+                                          text: "ไม่สามารถลบรายการได้: " + error.message,
+                                          confirmButtonText: 'ตกลง'
+                                        });
+                                      }
                                     }
-                                  }
-                                }}
+                                  }}
+
 
                               />
                             ))
