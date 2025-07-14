@@ -1,26 +1,17 @@
 // Home.js
-import React, { useState, useEffect, useCallback, useMemo } from "react"; // Added useMemo
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Swal from "sweetalert2";
-import { db } from "../lib/firebaseConfig";
+// --- 1. แก้ไข Imports ---
+import { db, storage } from "../lib/firebaseConfig"; // เพิ่ม storage
 import {
-  collection,
-  getDocs,
-  setDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  writeBatch,
-  limit, // Import limit
-  orderBy, // Import orderBy
-  startAfter, // Import startAfter
-  endBefore, // Import endBefore
+  collection, getDocs, setDoc, doc, updateDoc, deleteDoc,
+  query, where, writeBatch, limit, orderBy, startAfter, endBefore
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // เพิ่ม imports ของ storage
 import * as XLSX from "xlsx";
-// Import ChevronUp, ChevronDown for active sorting, and ArrowUpDown for default sortable state
-import { ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'; 
-import Head from 'next/head'; // <--- เพิ่มบรรทัดนี้
+import { ChevronUp, ChevronDown, ArrowUpDown, Camera, Loader } from 'lucide-react'; // เพิ่มไอคอน
+import Head from 'next/head';
+import imageCompression from 'browser-image-compression'; // เพิ่ม import สำหรับบีบอัดรูป
 
 // Modal Component - Integrated within Home.js
 const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
@@ -193,6 +184,83 @@ const Modal = ({ show, onClose, onGenerateTemplate, onFileUpload }) => {
 };
 // End Modal Component
 
+// --- ✨ NEW ✨ Image Preview Modal Component ---
+const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
+  if (!show) {
+    return null;
+  }
+
+  // Closes the modal if the overlay (background) is clicked
+  const handleOverlayClick = (e) => {
+    if (e.target.id === 'image-modal-overlay') {
+      onClose();
+    }
+  };
+
+  return (
+    <div id="image-modal-overlay" className="image-modal-overlay" onClick={handleOverlayClick}>
+      <div className="image-modal-content">
+        <img src={imageUrl} alt="Member Preview" className="image-modal-image" />
+        <button className="image-modal-close-button" onClick={onClose}>
+          &times;
+        </button>
+      </div>
+      <style jsx>{`
+        .image-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.75);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 2000; /* Ensure it's on top of everything */
+          cursor: pointer;
+        }
+        .image-modal-content {
+          position: relative;
+          cursor: default;
+          width: 400px;
+          height: 400px;
+        }
+        .image-modal-image {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%; /* Make the image container circular */
+          object-fit: cover; /* Ensure the image covers the circle without distortion */
+          border: 3px solid white;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .image-modal-close-button {
+          position: absolute;
+          top: -10px;
+          right: -10px;
+          background: white;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #333;
+          border-radius: 50%;
+          width: 35px;
+          height: 35px;
+          line-height: 35px;
+          text-align: center;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        @media (max-width: 600px) {
+          .image-modal-content {
+            width: 80vw;
+            height: 80vw;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+// End Image Preview Modal
+
 const Home = () => {
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
@@ -219,6 +287,8 @@ const Home = () => {
   const [firstVisible, setFirstVisible] = useState(null);
   const [hasMoreNext, setHasMoreNext] = useState(false);
   const [hasMorePrev, setHasMorePrev] = useState(false);
+  const [totalCame, setTotalCame] = useState(0);
+  const [totalNotCame, setTotalNotCame] = useState(0);
 
 
   // State for sorting
@@ -226,6 +296,14 @@ const Home = () => {
 
   // State for region selection
   const [selectedRegion, setSelectedRegion] = useState('northeast'); // 'northeast' or 'central'
+
+  const memberFileInputRef = useRef(null); // Ref สำหรับ input file ที่ซ่อนไว้
+  const [uploadTargetMemberId, setUploadTargetMemberId] = useState(null); // ID ของสมาชิกที่กำลังจะอัปโหลดรูป
+  const [isMemberUploading, setIsMemberUploading] = useState(null); // เก็บ ID สมาชิกที่กำลังอัปโหลดเพื่อแสดง spinner
+
+  // --- ✨ NEW ✨ State for Image Preview Modal ---
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImageUrl, setModalImageUrl] = useState('');
 
   // Custom order for levels based on selected region
   const levelOrder = useMemo(() => {
@@ -574,7 +652,7 @@ const Home = () => {
                 if (sortConfig.direction === 'ascending') {
                     return (aIndex === -1 ? Infinity : aIndex) - (bIndex === -1 ? Infinity : bIndex);
                 } else {
-                    return (bIndex === -1 ? Infinity : bIndex) - (aIndex === -1 ? Infinity : aIndex);
+                    return (bIndex === -1 ? Infinity : bBndex) - (aIndex === -1 ? Infinity : aIndex);
                 }
             });
         } else if (sortConfig.key === 'birthDate') {
@@ -591,6 +669,11 @@ const Home = () => {
         }
 
         setMembers(fetchedMembers);
+
+        const came = fetchedMembers.filter((m) => m.status === "มา").length;
+        const notCame = fetchedMembers.filter((m) => m.status === "ไม่มา").length;
+        setTotalCame(came);
+        setTotalNotCame(notCame);
 
         if (fetchedMembers.length > 0) {
             setFirstVisible(documentSnapshots.docs[0]);
@@ -914,6 +997,84 @@ useEffect(() => {
     }
   };
 
+  // --- ✨ FIXED & RE-IMPLEMENTED ✨ ---
+  // Function to handle clicking the avatar: shows modal or triggers upload if no image.
+  const handleAvatarClick = (user) => {
+    if (user.profileImageUrl) {
+      // If image exists, show the preview modal.
+      setModalImageUrl(user.profileImageUrl);
+      setShowImageModal(true);
+    } else {
+      // If no image, clicking the main area triggers an upload.
+      setUploadTargetMemberId(user.memberId);
+      if (memberFileInputRef.current) {
+        memberFileInputRef.current.click();
+      }
+    }
+  };
+
+  // Function to trigger image upload, typically from an overlay button.
+  const handleUploadTrigger = (event, user) => {
+    event.stopPropagation(); // Prevents the modal from opening when clicking the upload icon.
+    setUploadTargetMemberId(user.memberId);
+    if (memberFileInputRef.current) {
+      memberFileInputRef.current.click();
+    }
+  };
+
+  // This function runs when a user selects an image file
+  const handleMemberImageUpload = async (event) => {
+    const imageFile = event.target.files[0];
+    if (!imageFile || !uploadTargetMemberId || !currentUserId) {
+      return;
+    }
+
+    const options = {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 800,
+      useWebWorker: true,
+    };
+
+    try {
+      setIsMemberUploading(uploadTargetMemberId); // Show spinner on the member's row
+
+      const compressedFile = await imageCompression(imageFile, options);
+
+      // Create a storage path for the member's image, organized by admin (currentUserId) and memberId
+      const storagePath = `member_profiles/${currentUserId}/${uploadTargetMemberId}`;
+      const storageRef = ref(storage, storagePath);
+
+      await uploadBytes(storageRef, compressedFile);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Update the image URL in the member's Firestore document
+      const memberDocRef = doc(db, `users/${currentUserId}/Members/${uploadTargetMemberId}`);
+      await updateDoc(memberDocRef, {
+        profileImageUrl: downloadURL,
+      });
+
+      // Update the 'members' state directly to show the new image immediately without a full reload
+      setMembers(prevMembers =>
+        prevMembers.map(member =>
+          member.memberId === uploadTargetMemberId
+            ? { ...member, profileImageUrl: downloadURL }
+            : member
+        )
+      );
+
+    } catch (error) {
+      console.error("Error uploading member image:", error);
+      Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถอัปโหลดรูปภาพได้", "error");
+    } finally {
+      setIsMemberUploading(null); // Stop showing the spinner
+      // Reset the file input so the same file can be chosen again if needed
+      if (memberFileInputRef.current) {
+        memberFileInputRef.current.value = "";
+      }
+      setUploadTargetMemberId(null); // Clear the upload target
+    }
+  };
+
 
   return (
     <div className="overall-layout">
@@ -924,6 +1085,21 @@ useEffect(() => {
       <main className="main-content">
         <h2>สมาชิก</h2>
         <hr className="title-separator" /> {/* Changed hr to use common class for consistency */}
+
+        {/* --- ✨ NEW ✨ Add the Image Preview Modal here --- */}
+        <ImagePreviewModal
+          show={showImageModal}
+          imageUrl={modalImageUrl}
+          onClose={() => setShowImageModal(false)}
+        />
+
+        <input
+            type="file"
+            ref={memberFileInputRef}
+            onChange={handleMemberImageUpload}
+            style={{ display: "none" }}
+            accept="image/png, image/jpeg, image/gif"
+        />
 
         <div className="action-buttons-top"> {/* New container for action buttons */}
           <button
@@ -1119,47 +1295,54 @@ useEffect(() => {
           />
         </div>
 
-        <div className="total-members-display">
-          <span>จำนวนสมาชิกในหน้านี้: {members.length}</span> {/* Display count of members on current page */}
-        </div>
-
-        {/* <<< *** MODIFIED UI: Swapped pagination and per-page controls *** >>> */}
+        {/* Updated Table Controls Container */}
         <div className="table-controls-container">
-          <div className="pagination-controls">
-            <button
-              onClick={goToPrevPage}
-              className="pagination-button"
-              disabled={!hasMorePrev}
-            >
-              ย้อนกลับ
-            </button>
-            <span className="current-page-display">หน้า {currentPage}</span>
-            <button
-              onClick={goToNextPage}
-              className="pagination-button"
-              disabled={!hasMoreNext}
-            >
-              ถัดไป
-            </button>
-          </div>
-          <div className="per-page-selector">
-            <label htmlFor="members-per-page">แสดง:</label>
-            <select
-              id="members-per-page"
-              className="modern-input"
-              value={membersPerPage}
-              onChange={(e) => {
-                const newSize = Number(e.target.value);
-                setMembersPerPage(newSize);
-                setCurrentPage(1); // กลับไปหน้า 1 เสมอเมื่อเปลี่ยนจำนวนแสดงผล
-              }}
-            >
-              <option value="10">10 รายชื่อ</option>
-              <option value="20">20 รายชื่อ</option>
-              <option value="30">30 รายชื่อ</option>
-              <option value="50">50 รายชื่อ</option>
-            </select>
-          </div>
+            <div className="left-controls-wrapper">
+                <div className="status-summary">
+                    <span style={{ color: "#4caf50" }}>มาแล้ว: {totalCame} คน</span>
+                    <span style={{ color: "#f44336" }}>ยังไม่มา: {totalNotCame} คน</span>
+                </div>
+                <div className="pagination-controls">
+                    <button
+                        onClick={goToPrevPage}
+                        className="pagination-button"
+                        disabled={!hasMorePrev}
+                    >
+                        ย้อนกลับ
+                    </button>
+                    <span className="current-page-display">หน้า {currentPage}</span>
+                    <button
+                        onClick={goToNextPage}
+                        className="pagination-button"
+                        disabled={!hasMoreNext}
+                    >
+                        ถัดไป
+                    </button>
+                </div>
+            </div>
+            <div className="right-controls-wrapper">
+                <div className="total-members-on-page-display">
+                    จำนวนสมาชิกในหน้านี้: {members.length}
+                </div>
+                <div className="per-page-selector">
+                    <label htmlFor="members-per-page">แสดง:</label>
+                    <select
+                        id="members-per-page"
+                        className="modern-input"
+                        value={membersPerPage}
+                        onChange={(e) => {
+                            const newSize = Number(e.target.value);
+                            setMembersPerPage(newSize);
+                            setCurrentPage(1); // กลับไปหน้า 1 เสมอเมื่อเปลี่ยนจำนวนแสดงผล
+                        }}
+                    >
+                        <option value="10">10 รายชื่อ</option>
+                        <option value="20">20 รายชื่อ</option>
+                        <option value="30">30 รายชื่อ</option>
+                        <option value="50">50 รายชื่อ</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
 
@@ -1168,6 +1351,7 @@ useEffect(() => {
             <thead>
               <tr>
                 <th>เลือก</th>
+                <th className="avatar-column-header">รูป</th>
                 <th>ชื่อ</th>
                 <th onClick={() => requestSort('level')} className="sortable-header"> {/* Clickable header for sorting */}
                     ระดับ {getSortIcon('level')}
@@ -1185,14 +1369,14 @@ useEffect(() => {
             <tbody>
               {members.length === 0 && !search && (
                 <tr>
-                  <td colSpan="9" className="no-data-message">
+                  <td colSpan="10" className="no-data-message">
                     ไม่พบข้อมูลสมาชิก กรุณาเพิ่มสมาชิกใหม่
                   </td>
                 </tr>
               )}
               {members.length === 0 && search && (
                 <tr>
-                  <td colSpan="9" className="no-data-message">
+                  <td colSpan="10" className="no-data-message">
                     ไม่พบข้อมูลสมาชิกที่ค้นหา
                   </td>
                 </tr>
@@ -1212,6 +1396,23 @@ useEffect(() => {
                       checked={selectedUser?.memberId === user.memberId}
                       onChange={() => handleSelectUser(user)}
                     />
+                  </td>
+                  <td data-label="รูป">
+                    {/* --- ✨ FIXED & RE-IMPLEMENTED as per user request --- */}
+                    <div className="member-avatar-cell" onClick={() => handleAvatarClick(user)}>
+                      {isMemberUploading === user.memberId ? (
+                        <Loader size={24} className="avatar-spinner" />
+                      ) : user.profileImageUrl ? (
+                        <>
+                          <img src={user.profileImageUrl} alt={user.name} className="member-avatar-image" />
+                          <div className="edit-avatar-overlay" onClick={(e) => handleUploadTrigger(e, user)}>
+                            <Camera size={14} />
+                          </div>
+                        </>
+                      ) : (
+                        <Camera size={20} className="avatar-placeholder-icon" />
+                      )}
+                    </div>
                   </td>
                   <td data-label="ชื่อ">{user.name}</td>
                   <td data-label="ระดับ">{user.level}</td>
@@ -1535,22 +1736,42 @@ useEffect(() => {
           box-shadow: 0 0 0 3px rgba(231, 231, 231, 0.2);
         }
 
-        /* Total Members Display */
-        .total-members-display {
-          text-align: right;
-          margin-bottom: 15px;
-          font-size: 12px; /* Adjusted font size */
-          color: var(--text-color, #555); /* Use theme variable */
-        }
-
-        /* <<< *** NEW CSS *** >>> */
+        /* --- Updated CSS for Table Controls Container --- */
         .table-controls-container {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            justify-content: space-between; /* Pushes children to ends */
+            align-items: flex-start; /* Aligns items to the top of the container */
             margin-bottom: 20px;
-            flex-wrap: wrap; 
-            gap: 15px;
+            flex-wrap: wrap; /* Allows wrapping on smaller screens */
+            gap: 15px 20px; /* Vertical and horizontal gap */
+        }
+
+        .left-controls-wrapper,
+        .right-controls-wrapper {
+            display: flex;
+            flex-direction: column; /* Stacks children vertically */
+            gap: 10px; /* Space between rows (status/pagination, total/per-page) */
+        }
+
+        .left-controls-wrapper {
+            align-items: flex-start; /* Align left group to the start (left) */
+        }
+
+        .right-controls-wrapper {
+            align-items: flex-end; /* Align right group to the end (right) */
+            text-align: right; /* Ensure text within this wrapper aligns right */
+        }
+
+        .status-summary {
+            display: flex;
+            gap: 20px; /* Space between 'มาแล้ว' and 'ยังไม่มา' */
+            font-size: 12px;
+            color: var(--text-color, #555);
+        }
+
+        .total-members-on-page-display {
+            font-size: 12px;
+            color: var(--text-color, #555);
         }
 
         .per-page-selector {
@@ -1570,7 +1791,7 @@ useEffect(() => {
             min-width: 120px;
         }
 
-        /* Pagination Controls */
+        /* Pagination Controls - Existing styles, may need minor tweaks for new parent */
         .pagination-controls {
           display: flex;
           justify-content: flex-start;
@@ -1737,6 +1958,77 @@ useEffect(() => {
           font-size: 12px; /* Adjusted font size */
         }
 
+        .avatar-column-header {
+            width: 100px; /* กำหนดความกว้างคอลัมน์รูปภาพ */
+        }
+
+        .member-avatar-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #f0f0f0;
+            margin: 0 auto;
+            cursor: pointer;
+            /* overflow: hidden; --- REMOVED this line to fix clipping issue --- */
+            border: 1px solid #ddd;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative; 
+        }
+
+        .member-avatar-cell:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .member-avatar-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%; /* Ensure image itself is circular */
+        }
+
+        .avatar-placeholder-icon {
+            color: #888;
+        }
+
+        /* --- ✨ UPDATED CSS for Edit Overlay ✨ --- */
+        .edit-avatar-overlay {
+            position: absolute;
+            bottom: 0px;  /* ADJUSTED position */
+            left: 35px;   /* ADJUSTED position */
+            background-color: rgba(40, 40, 40, 0.7);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 2px solid white;
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+            opacity: 0; /* Hide by default */
+            transform: scale(0.8);
+            z-index: 1; /* Ensure it's on top */
+        }
+
+        .member-avatar-cell:hover .edit-avatar-overlay {
+            opacity: 1; /* Show on hover */
+            transform: scale(1);
+        }
+        /* -------------------------------------- */
+
+        @keyframes spinner-anim {
+          to { transform: rotate(360deg); }
+        }
+        .avatar-spinner {
+            animation: spinner-anim 1s linear infinite;
+        }
+
+
         /* Responsive Table */
         @media (max-width: 768px) {
           .form-grid-container {
@@ -1775,7 +2067,13 @@ useEffect(() => {
             text-align: right;
             border-bottom: 1px solid var(--border-color, #f0f0f0); /* Use theme variable */
           }
-
+          .user-table td[data-label="รูป"] {
+            padding-left: 55%;
+          }
+          .user-table td[data-label="รูป"] .member-avatar-cell {
+              margin: 0; /* ไม่ต้องจัดกลางใน mobile */
+              margin-left: auto; /* จัดชิดขวา */
+          }
           /* Specific adjustments for 'ระดับ' and 'อายุ' columns */
           .user-table td[data-label="ระดับ"]:before,
           .user-table td[data-label="อายุ"]:before {
@@ -1810,6 +2108,27 @@ useEffect(() => {
 
           .form-buttons-container {
             justify-content: center;
+          }
+
+          /* Mobile adjustments for new table controls */
+          .table-controls-container {
+              flex-direction: column; /* Stack them vertically on small screens */
+              align-items: center; /* Center horizontally */
+              gap: 20px; /* More space between stacked blocks */
+          }
+
+          .left-controls-wrapper,
+          .right-controls-wrapper {
+              width: 100%; /* Take full width */
+              align-items: center; /* Center content within their own blocks */
+          }
+
+          /* For mobile, ensure elements within wrappers are also centered if needed */
+          .pagination-controls,
+          .status-summary,
+          .per-page-selector,
+          .total-members-on-page-display {
+              justify-content: center; /* Center elements in their rows */
           }
         }
 
