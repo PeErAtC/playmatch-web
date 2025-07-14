@@ -678,7 +678,9 @@ useEffect(() => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!name || !level) {
+    const trimmedName = name.trim();
+
+    if (!trimmedName || !level) {
       Swal.fire("กรุณากรอกข้อมูล 'ชื่อ' และ 'ระดับ' ให้ครบถ้วน", "", "warning");
       return;
     }
@@ -692,28 +694,56 @@ useEffect(() => {
         return;
     }
 
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(birthDate)) {
-      Swal.fire("รูปแบบวันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)", "warning");
-      return;
-    }
-    const parsedDate = new Date(birthDate);
-    if (isNaN(parsedDate.getTime())) {
-      Swal.fire("วันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง", "warning");
-      return;
-    }
-
-    const newUser = {
-      name, level, lineId: lineId || "", handed: handed || "Right", phone: phone || "",
-      birthDate: birthDate || new Date().toISOString().split('T')[0],
-      experience: experience || "", status: status || "ไม่มา", createBy: loggedInUsername,
-    };
-
+    // --- เริ่มส่วนที่เพิ่มเข้ามาเพื่อตรวจสอบชื่อซ้ำ ---
     try {
       if (!currentUserId) {
         Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
         return;
       }
+
+      const membersRef = collection(db, `users/${currentUserId}/Members`);
+      const q = query(membersRef, where("name", "==", trimmedName));
+      const querySnapshot = await getDocs(q);
+
+      let isDuplicate = false;
+      if (!querySnapshot.empty) {
+        if (isEditing && selectedUser) {
+          // ถ้ากำลังแก้ไข, เช็คว่าชื่อที่ซ้ำไม่ใช่ของ user คนปัจจุบัน
+          isDuplicate = querySnapshot.docs.some(doc => doc.id !== selectedUser.memberId);
+        } else if (!isEditing) {
+          // ถ้ากำลังเพิ่มใหม่, แค่เจอชื่อซ้ำก็คือซ้ำเลย
+          isDuplicate = true;
+        }
+      }
+
+      if (isDuplicate) {
+        Swal.fire("ชื่อซ้ำ", "มีชื่อสมาชิกนี้อยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น", "error");
+        return;
+      }
+    // --- สิ้นสุดส่วนที่เพิ่มเข้ามา ---
+
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(birthDate)) {
+        Swal.fire("รูปแบบวันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดในรูปแบบ YYYY-MM-DD (เช่น 1990-01-01)", "warning");
+        return;
+      }
+      const parsedDate = new Date(birthDate);
+      if (isNaN(parsedDate.getTime())) {
+        Swal.fire("วันเดือนปีเกิดไม่ถูกต้อง", "กรุณาเลือกวันเดือนปีเกิดที่ถูกต้อง", "warning");
+        return;
+      }
+
+      const newUser = {
+        name: trimmedName, // ใช้ trimmedName ที่ตัดช่องว่างแล้ว
+        level,
+        lineId: lineId || "",
+        handed: handed || "Right",
+        phone: phone || "",
+        birthDate: birthDate || new Date().toISOString().split('T')[0],
+        experience: experience || "",
+        status: status || "ไม่มา",
+        createBy: loggedInUsername,
+      };
 
       if (isEditing && selectedUser) {
         const memberRef = doc(db, `users/${currentUserId}/Members/${selectedUser.memberId}`);
