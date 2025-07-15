@@ -45,21 +45,7 @@ const FA_ICONS_MAP = {
   'faRedo': faRedo,
 };
 
-const ITEM_ICON_COLORS = {
-  'faShoppingBag': '#ffc107',
-  'faHome': '#28a745',
-  'faTools': '#6a6ee6',
-  'faMoneyBillWave': '#dc3545',
-  'faPiggyBank': '#17a2b8',
-  'faFileAlt': '#fd7e14',
-  'faDonate': '#20c997',
-  'faTruck': '#007bff',
 
-  'รายรับ': '#28a745',
-  'รายจ่าย': '#dc3545',
-  'เงินทุน': '#6a6ee6',
-  'default': '#6c757d',
-};
 
 const CATEGORIES = {
   'รายรับ': [
@@ -191,15 +177,15 @@ const FinancialEntryTicket = ({ entry, gradientStartColor, gradientEndColor, tic
 const TICKET_COLORS = {
     'รายรับ': {
         gradientStart: '#ffffff', // Light green
-        gradientEnd: '#fafffa', // Lighter green
+        gradientEnd: '#ffffff', // Lighter green
     },
     'รายจ่าย': {
         gradientStart: '#ffffff', // Light orange/peach
-        gradientEnd: '#fff4e6', // Lighter orange/peach
+        gradientEnd: '#ffffff', // Lighter orange/peach
     },
     'เงินทุน': {
         gradientStart: '#ffffff', // Light purple
-        gradientEnd: '#e6e6ff', // Lighter purple
+        gradientEnd: '#ffffff', // Lighter purple
     },
 };
 
@@ -314,9 +300,9 @@ const ExpenseManager = () => {
 
   const getSeparatorBarColor = useCallback((type) => {
     switch (type) {
-      case 'รายรับ': return '#28a745';
-      case 'รายจ่าย': return '#ffc107';
-      case 'เงินทุน': return '#6a6ee6';
+      case 'รายรับ': return '#ffffff';
+      case 'รายจ่าย': return '#ffffff';
+      case 'เงินทุน': return '#ffffff';
       default: return '#ccc';
     }
   }, []);
@@ -913,7 +899,7 @@ const handleSaveOrAdd = useCallback(async () => {
 
         .add-entry-button {
             padding: 12px 25px;
-            background-color: #6a6ee6;
+            background-color: #5a5a62;
             color: white;
             border: none;
             border-radius: 8px;
@@ -928,7 +914,7 @@ const handleSaveOrAdd = useCallback(async () => {
         }
 
         .add-entry-button:hover {
-            background-color: #5a5edb;
+            background-color: #242323;
             transform: translateY(-1px);
         }
 
@@ -1017,19 +1003,26 @@ const handleSaveOrAdd = useCallback(async () => {
         }
 
         .income-column-background {
-            background: linear-gradient(135deg, #e9fce9, #d0f0d0);
-            border: 1px solid rgba(160, 255, 160, 0.3);
+          background: linear-gradient(135deg, #e0e0e0, #f5f5f5); /* เทาสว่าง */
+          border: 1px solid rgba(200, 200, 200, 0.5);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+          backdrop-filter: blur(6px);
         }
 
         .expense-column-background {
-            background: linear-gradient(135deg, #fff4e6, #ffe2c7);
-            border: 1px solid rgba(255, 210, 160, 0.3);
+          background: linear-gradient(135deg, #d6d6d6, #e9e9e9); /* เทากลาง */
+          border: 1px solid rgba(180, 180, 180, 0.5);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+          backdrop-filter: blur(6px);
         }
 
         .fund-column-background {
-            background: linear-gradient(135deg, #e6e6ff, #d2d2ff);
-            border: 1px solid rgba(160, 160, 255, 0.3);
+          background: linear-gradient(135deg, #cfcfcf, #e0e0e0); /* เทาเข้มขึ้น */
+          border: 1px solid rgba(160, 160, 160, 0.5);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+          backdrop-filter: blur(6px);
         }
+
 
         .column-header {
             text-align: center;
