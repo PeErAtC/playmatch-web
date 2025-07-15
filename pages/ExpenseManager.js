@@ -198,16 +198,26 @@ const ExpenseManager = () => {
   const [error, setError] = useState(null);
   const [loggedInUser, setLoggedInUser] = useState(null);
           useEffect(() => {
-            const unsubscribe = onAuthStateChanged(auth, (user) => {
-              if (user) {
-                setLoggedInUser(user);
-              } else {
-                setLoggedInUser(null);
-              }
-          });
+                      const unsubscribe = onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                          setLoggedInUser(user);
+                        } else {
+                          setLoggedInUser(null);
+                        }
+                    });
 
-  return () => unsubscribe();
-}, []);
+            return () => unsubscribe();
+          }, []);
+  const [filterType, setFilterType] = useState('month'); // 'month' | 'all' | 'custom'
+  const [startDate, setStartDate] = useState(() => {
+  const d = new Date();
+    d.setDate(1); // วันที่ 1 ของเดือนนี้
+    return d.toISOString().substring(0, 10);
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().substring(0, 10); // วันนี้
+  });
 
   const [newEntry, setNewEntry] = useState({
     name: '',
@@ -255,6 +265,52 @@ const ExpenseManager = () => {
     };
     fetchUserId();
   }, [loggedInEmail]);
+  useEffect(() => {
+  const loadEntries = async () => {
+      if (!currentUserId) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const entriesRef = collection(db, `users/${currentUserId}/financial_entries`);
+        const snapshot = await getDocs(entriesRef);
+
+        let data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          date: doc.data().date?.toDate?.() || new Date(doc.data().date)
+        }));
+
+        // 🔍 Filter data based on filterType
+        if (filterType === 'month') {
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          data = data.filter(entry => {
+            const d = new Date(entry.date);
+            return d >= startOfMonth && d <= endOfMonth;
+          });
+        } else if (filterType === 'custom' && startDate && endDate) {
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          data = data.filter(entry => {
+            const d = new Date(entry.date);
+            return d >= start && d <= end;
+          });
+        }
+
+        setEntries(data);
+      } catch (err) {
+        console.error("Error loading entries:", err);
+        setError("เกิดข้อผิดพลาดในการโหลดรายการทางการเงิน.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEntries();
+  }, [currentUserId, filterType, startDate, endDate]);
 
   useEffect(() => {
     const loadEntries = async () => {
@@ -602,104 +658,138 @@ const handleSaveOrAdd = useCallback(async () => {
               )}
             </div>
           </div>
+
           <div className="financial-analysis-section">
+
+            {/* ✅ แถบตัวกรอง */}
+            <div className="filter-bar" style={{ marginBottom: '1rem', display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                <option value="month">เดือนนี้</option>
+                <option value="all">ทั้งหมด</option>
+                <option value="custom">กำหนดวันที่เอง</option>
+              </select>
+
+              {filterType === 'custom' && (
+                <>
+                  <label>
+                    วันที่เริ่มต้น: 
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    วันที่สิ้นสุด: 
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+
+
             <div className="charts-section">
               {/* กราฟวงกลม + กราฟวิเคราะห์ */}
             </div>
-              <div className="summary-columns-horizontal-wrapper">
-                <div className="horizontal-columns-row">
-                  {['รายรับ', 'รายจ่าย', 'เงินทุน'].map(type => (
-                    <div key={type} className="horizontal-column-box">
-                      <div className={`column-card ${type === 'รายรับ' ? 'income-column-background' : type === 'รายจ่าย' ? 'expense-column-background' : 'fund-column-background'}`}>
-                        <div className="column-header" style={{ borderBottomColor: getColumnHeaderColor(type) }}>
-                          <div className="header-flex">
-                            <h3 className="block-title">{type}</h3>
-                            <span className="small-text">
-                              {calculateColumnTotal(type).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} THB /{' '}
-                              {groupedEntries[type]?.length || 0} รายการ
-                            </span>
-                          </div>
-                        </div>
 
-                        <div className="column-content">
-                          {groupedEntries[type] && groupedEntries[type].length > 0 ? (
-                            groupedEntries[type].map((entry) => (
-                              <FinancialEntryTicket
-                                key={entry.id}
-                                entry={entry}
-                                gradientStartColor={TICKET_COLORS[entry.type]?.gradientStart}
-                                gradientEndColor={TICKET_COLORS[entry.type]?.gradientEnd}
-                                ticketId={`ticket-${entry.id}`} // Unique ID for gradient
-                                onEdit={handleEditClick}
-                                  onDelete={async (id, dateString) => {
-                                    const result = await Swal.fire({
-                                      title: '❗ ยืนยันการลบ',
-                                      text: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?',
-                                      icon: 'warning',
-                                      showCancelButton: true,
-                                      confirmButtonText: 'ลบเลย',
-                                      cancelButtonText: 'ยกเลิก',
-                                      confirmButtonColor: '#e74c3c',
-                                      cancelButtonColor: '#95a5a6',
-                                      background: '#fff',
+            <div className="summary-columns-horizontal-wrapper">
+              <div className="horizontal-columns-row">
+                {['รายรับ', 'รายจ่าย', 'เงินทุน'].map(type => (
+                  <div key={type} className="horizontal-column-box">
+                    <div className={`column-card ${type === 'รายรับ' ? 'income-column-background' : type === 'รายจ่าย' ? 'expense-column-background' : 'fund-column-background'}`}>
+                      <div className="column-header" style={{ borderBottomColor: getColumnHeaderColor(type) }}>
+                        <div className="header-flex">
+                          <h3 className="block-title">{type}</h3>
+                          <span className="small-text">
+                            {calculateColumnTotal(type).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} THB /{' '}
+                            {groupedEntries[type]?.length || 0} รายการ
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="column-content">
+                        {groupedEntries[type] && groupedEntries[type].length > 0 ? (
+                          groupedEntries[type].map((entry) => (
+                            <FinancialEntryTicket
+                              key={entry.id}
+                              entry={entry}
+                              gradientStartColor={TICKET_COLORS[entry.type]?.gradientStart}
+                              gradientEndColor={TICKET_COLORS[entry.type]?.gradientEnd}
+                              ticketId={`ticket-${entry.id}`}
+                              onEdit={handleEditClick}
+                              onDelete={async (id, dateString) => {
+                                const result = await Swal.fire({
+                                  title: '❗ ยืนยันการลบ',
+                                  text: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?',
+                                  icon: 'warning',
+                                  showCancelButton: true,
+                                  confirmButtonText: 'ลบเลย',
+                                  cancelButtonText: 'ยกเลิก',
+                                  confirmButtonColor: '#e74c3c',
+                                  cancelButtonColor: '#95a5a6',
+                                  background: '#fff',
+                                  customClass: {
+                                    popup: 'swal2-rounded swal2-shadow',
+                                    title: 'swal2-title-kanit',
+                                    content: 'swal2-content-kanit'
+                                  }
+                                });
+
+                                if (result.isConfirmed) {
+                                  try {
+                                    const userId = loggedInUser?.uid;
+                                    if (!userId) throw new Error("ไม่พบผู้ใช้");
+
+                                    const docRef = doc(db, `users/${userId}/financial_entries/${id}`);
+                                    await deleteDoc(docRef);
+
+                                    setEntries(prev => prev.filter(e => e.id !== id));
+
+                                    await Swal.fire({
+                                      icon: 'success',
+                                      title: 'ลบสำเร็จ',
+                                      text: 'รายการถูกลบเรียบร้อยแล้ว',
+                                      showConfirmButton: false,
+                                      timer: 2000,
+                                      timerProgressBar: true,
+                                      background: '#f9f9f9',
                                       customClass: {
                                         popup: 'swal2-rounded swal2-shadow',
                                         title: 'swal2-title-kanit',
                                         content: 'swal2-content-kanit'
                                       }
                                     });
-
-                                    if (result.isConfirmed) {
-                                      try {
-                                        const userId = loggedInUser?.uid;
-                                        if (!userId) throw new Error("ไม่พบผู้ใช้");
-
-                                        const docRef = doc(db, `users/${userId}/financial_entries/${id}`);
-                                        await deleteDoc(docRef);
-
-                                        setEntries(prev => prev.filter(e => e.id !== id));
-
-                                        await Swal.fire({
-                                          icon: 'success',
-                                          title: 'ลบสำเร็จ',
-                                          text: 'รายการถูกลบเรียบร้อยแล้ว',
-                                          showConfirmButton: false,
-                                          timer: 2000,
-                                          timerProgressBar: true,
-                                          background: '#f9f9f9',
-                                          customClass: {
-                                            popup: 'swal2-rounded swal2-shadow',
-                                            title: 'swal2-title-kanit',
-                                            content: 'swal2-content-kanit'
-                                          }
-                                        });
-                                      } catch (error) {
-                                        console.error("Error removing document: ", error);
-                                        Swal.fire({
-                                          icon: 'error',
-                                          title: 'เกิดข้อผิดพลาด',
-                                          text: "ไม่สามารถลบรายการได้: " + error.message,
-                                          confirmButtonText: 'ตกลง'
-                                        });
-                                      }
-                                    }
-                                  }}
-
-
-                              />
-                            ))
-                          ) : (
-                            <p className="no-entries-message">ไม่มีรายการในหมวดหมู่นี้</p>
-                          )}
-                        </div>
+                                  } catch (error) {
+                                    console.error("Error removing document: ", error);
+                                    Swal.fire({
+                                      icon: 'error',
+                                      title: 'เกิดข้อผิดพลาด',
+                                      text: "ไม่สามารถลบรายการได้: " + error.message,
+                                      confirmButtonText: 'ตกลง'
+                                    });
+                                  }
+                                }
+                              }}
+                            />
+                          ))
+                        ) : (
+                          <p className="no-entries-message">ไม่มีรายการในหมวดหมู่นี้</p>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
+            </div>
           </div>
         </>
       )}
+
 
       {/* Styled JSX for component-scoped styles, with global for the foreignObject content */}
       <style jsx global>{`
@@ -737,6 +827,20 @@ const handleSaveOrAdd = useCallback(async () => {
           font-weight: 400;
           color: #555;
         }
+        .filter-bar select,
+        .filter-bar input[type="date"] {
+          padding: 6px 10px;
+          font-family: 'Kanit', sans-serif;
+          font-size: 14px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+        }
+
+        .filter-bar {
+          margin-top: 12px;
+          margin-bottom: 20px;
+        }
+
 
         .green-amount {
           color: #28a745;
