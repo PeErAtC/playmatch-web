@@ -50,25 +50,12 @@ const FA_ICONS_MAP = {
 const CATEGORIES = {
   'รายรับ': [
     { name: 'ทั่วไป', icon: 'faCircle' },
-    { name: 'ค่าคอร์ต (จากสมาชิก)', icon: 'faMoneyBillWave' },
-    { name: 'ค่าลูกแบด (คืนจากสมาชิก)', icon: 'faDonate' },
-    { name: 'ค่าสมาชิกรายปี/เดือน', icon: 'faPiggyBank' },
-    { name: 'รายรับอื่นๆ', icon: 'faFileAlt' },
   ],
   'รายจ่าย': [
     { name: 'ทั่วไป', icon: 'faCircle' },
-    { name: 'ค่าคอร์ต (เช่า)', icon: 'faHome' },
-    { name: 'ค่าลูกแบด', icon: 'faShoppingBag' },
-    { name: 'ค่าน้ำดื่ม/ของว่าง', icon: 'faShop' },
-    { name: 'ค่าโค้ช', icon: 'faTools' },
-    { name: 'ค่าอุปกรณ์ส่วนกลาง', icon: 'faTools' },
-    { name: 'ค่าเดินทาง (ก๊วน)', icon: 'faTruck' },
   ],
   'เงินทุน': [
     { name: 'ทั่วไป', icon: 'faCircle' },
-    { name: 'ฝากธนาคารก๊วน', icon: 'faPiggyBank' },
-    { name: 'เงินกู้ (สำหรับก๊วน)', icon: 'faMoneyBillWave' },
-    { name: 'เงินจากผู้สนับสนุน', icon: 'faDonate' },
   ],
 };
 
@@ -197,6 +184,8 @@ const ExpenseManager = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loggedInUser, setLoggedInUser] = useState(null);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+
           useEffect(() => {
                       const unsubscribe = onAuthStateChanged(auth, (user) => {
                         if (user) {
@@ -219,6 +208,14 @@ const ExpenseManager = () => {
     return d.toISOString().substring(0, 10); // วันนี้
   });
 
+  const [customCategories, setCustomCategories] = useState({
+    'รายรับ': [],
+    'รายจ่าย': [],
+    'เงินทุน': []
+  });
+
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryType, setNewCategoryType] = useState('รายรับ');
   const [newEntry, setNewEntry] = useState({
     name: '',
     amount: '',
@@ -265,6 +262,30 @@ const ExpenseManager = () => {
     };
     fetchUserId();
   }, [loggedInEmail]);
+  useEffect(() => {
+    const loadCustomCategories = async () => {
+      if (!currentUserId) return;
+      try {
+        const snapshot = await getDocs(collection(db, `users/${currentUserId}/categories`));
+        const cats = {
+          'รายรับ': [],
+          'รายจ่าย': [],
+          'เงินทุน': [],
+        };
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (cats[data.type]) {
+            cats[data.type].push(data.name);
+          }
+        });
+        setCustomCategories(cats);
+      } catch (error) {
+        console.error("โหลดหมวดหมู่ล้มเหลว", error);
+      }
+    };
+    loadCustomCategories();
+  }, [currentUserId]);
+
   useEffect(() => {
   const loadEntries = async () => {
       if (!currentUserId) return;
@@ -340,6 +361,56 @@ const ExpenseManager = () => {
     };
     loadEntries();
   }, [currentUserId]);
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim() || !loggedInUser) return;
+
+    // ตรวจสอบว่าหมวดหมู่ซ้ำหรือไม่
+    if (
+      customCategories[newCategoryType] &&
+      customCategories[newCategoryType].some(
+        (catName) => catName.toLowerCase() === newCategoryName.trim().toLowerCase()
+      )
+    ) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'ชื่อหมวดหมู่นี้มีอยู่แล้ว',
+        timer: 2000,
+        showConfirmButton: false,
+      });
+      return;
+    }
+
+    try {
+      const docRef = doc(db, `users/${loggedInUser.uid}/categories/${newCategoryType}-${newCategoryName.trim()}`);
+      await setDoc(docRef, {
+        name: newCategoryName.trim(),
+        type: newCategoryType,
+      });
+
+      setCustomCategories(prev => ({
+        ...prev,
+        [newCategoryType]: [...prev[newCategoryType], newCategoryName.trim()],
+      }));
+
+      setNewCategoryName('');
+      setShowCategoryPopup(false);  // ปิด popup หลังเพิ่มสำเร็จ
+
+      Swal.fire({
+        icon: 'success',
+        title: 'เพิ่มหมวดหมู่เรียบร้อย',
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      console.error("เพิ่มหมวดหมู่ล้มเหลว", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: error.message,
+      });
+    }
+  };
+
 
   const getFaIcon = useCallback((iconName) => {
     return FA_ICONS_MAP[iconName] || faCircle;
@@ -582,83 +653,136 @@ const handleSaveOrAdd = useCallback(async () => {
         <>
           <div className="form-bar-container">
             <div className="form-bar">
-              <input
-                type="text"
-                placeholder="ชื่อรายการ (เช่น ค่าคอร์ต, ค่าลูกแบด)"
-                className="form-input"
-                value={newEntry.name}
-                onChange={(e) => setNewEntry({ ...newEntry, name: e.target.value })}
-              />
-              <input
-                type="number"
-                placeholder="จำนวนเงิน"
-                className="form-input"
-                value={newEntry.amount}
-                onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })}
-              />
-              <select
-                className="form-select"
-                value={newEntry.type}
-                onChange={(e) => {
-                  const selectedType = e.target.value;
-                  const defaultCategory = CATEGORIES[selectedType]?.[0]?.name || 'ทั่วไป';
-                  const defaultCategoryIcon = CATEGORIES[selectedType]?.[0]?.icon || 'faCircle';
-                  setNewEntry({
-                    ...newEntry,
-                    type: selectedType,
-                    category: defaultCategory,
-                    categoryIcon: defaultCategoryIcon,
-                  });
-                }}
-              >
-                <option value="รายรับ">รายรับ</option>
-                <option value="รายจ่าย">รายจ่าย</option>
-                <option value="เงินทุน">เงินทุน</option>
-              </select>
-              <select
-                className="form-select"
-                value={newEntry.category}
-                onChange={(e) => {
-                  const selectedCategoryName = e.target.value;
-                  const selectedCategory = CATEGORIES[newEntry.type].find(
-                    (cat) => cat.name === selectedCategoryName
-                  );
-                  setNewEntry({
-                    ...newEntry,
-                    category: selectedCategoryName,
-                    categoryIcon: selectedCategory?.icon || 'faCircle',
-                  });
-                }}
-              >
-                {CATEGORIES[newEntry.type]?.map((cat) => (
-                  <option key={cat.name} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="date"
-                className="form-input"
-                value={newEntry.date}
-                onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })}
-              />
-              {isEditing ? (
-                <>
-                  <button className="add-entry-button save-edit-button" onClick={handleSaveOrAdd}>
-                    <FontAwesomeIcon icon={faEdit} className="icon-tiny" /> บันทึกการแก้ไข
-                  </button>
-                  <button className="add-entry-button cancel-button" onClick={handleCancelEdit}>
-                    <FontAwesomeIcon icon={faRedo} className="icon-tiny" /> ยกเลิก
-                  </button>
-                </>
-              ) : (
-                <button className="add-entry-button" onClick={handleSaveOrAdd}>
-                  <FontAwesomeIcon icon={faPlus} className="icon-tiny" /> เพิ่มรายการ
-                </button>
-              )}
-            </div>
+  {showCategoryForm ? (
+    <>
+      {/* 🔁 แบบฟอร์มเพิ่มหมวดหมู่ */}
+      <select
+        className="form-select"
+        value={newCategoryType}
+        onChange={(e) => setNewCategoryType(e.target.value)}
+      >
+        <option value="รายรับ">รายรับ</option>
+        <option value="รายจ่าย">รายจ่าย</option>
+        <option value="เงินทุน">เงินทุน</option>
+      </select>
+
+      <input
+        type="text"
+        className="form-input"
+        placeholder="ชื่อหมวดหมู่ใหม่"
+        value={newCategoryName}
+        onChange={(e) => setNewCategoryName(e.target.value)}
+      />
+    </>
+  ) : (
+    <>
+      {/* ✅ แบบฟอร์มเพิ่มรายการ */}
+      <input
+        type="text"
+        placeholder="ชื่อรายการ (เช่น ค่าคอร์ต, ค่าลูกแบด)"
+        className="form-input"
+        value={newEntry.name}
+        onChange={(e) => setNewEntry({ ...newEntry, name: e.target.value })}
+      />
+      <input
+        type="number"
+        placeholder="จำนวนเงิน"
+        className="form-input"
+        value={newEntry.amount}
+        onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })}
+      />
+      <select
+        className="form-select"
+        value={newEntry.type}
+        onChange={(e) => {
+          const selectedType = e.target.value;
+          const builtInCategories = CATEGORIES[selectedType]?.map(c => c.name) || [];
+          const userCategories = customCategories[selectedType] || [];
+          const allCategories = [...builtInCategories, ...userCategories];
+          const defaultCategory = allCategories[0] || 'ทั่วไป';
+
+          setNewEntry({
+            ...newEntry,
+            type: selectedType,
+            category: defaultCategory,
+            categoryIcon: 'faCircle',
+          });
+        }}
+      >
+        <option value="รายรับ">รายรับ</option>
+        <option value="รายจ่าย">รายจ่าย</option>
+        <option value="เงินทุน">เงินทุน</option>
+      </select>
+
+      <select
+        className="form-select"
+        value={newEntry.category}
+        onChange={(e) => {
+          const selectedCategoryName = e.target.value;
+          setNewEntry({
+            ...newEntry,
+            category: selectedCategoryName,
+            categoryIcon: 'faCircle',
+          });
+        }}
+      >
+        {[
+          ...(CATEGORIES[newEntry.type] || []).map(cat => cat.name),
+          ...(customCategories[newEntry.type] || []),
+        ].map(name => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+
+      <input
+        type="date"
+        className="form-input"
+        value={newEntry.date}
+        onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })}
+      />
+    </>
+  )}
+
+  {/* 🔘 ปุ่มขวาสุด (responsive + toggle) */}
+  <div className="entry-button-group">
+    {isEditing ? (
+      <>
+        <button className="add-entry-button save-edit-button" onClick={handleSaveOrAdd}>
+          <FontAwesomeIcon icon={faEdit} className="icon-tiny" /> บันทึกการแก้ไข
+        </button>
+        <button className="add-entry-button cancel-button" onClick={handleCancelEdit}>
+          <FontAwesomeIcon icon={faRedo} className="icon-tiny" /> ยกเลิก
+        </button>
+      </>
+    ) : showCategoryForm ? (
+      <>
+        <button className="add-entry-button" onClick={handleAddCategory}>
+          <FontAwesomeIcon icon={faPlus} className="icon-tiny" /> บันทึกหมวดหมู่
+        </button>
+        <button className="add-entry-button cancel-button" onClick={() => setShowCategoryForm(false)}>
+          <FontAwesomeIcon icon={faRedo} className="icon-tiny" /> ยกเลิก
+        </button>
+      </>
+    ) : (
+      <>
+        <button className="add-entry-button" onClick={handleSaveOrAdd}>
+          <FontAwesomeIcon icon={faPlus} className="icon-tiny" /> เพิ่มรายการ
+        </button>
+        <button className="add-entry-button" onClick={() => setShowCategoryForm(true)}>
+          <FontAwesomeIcon icon={faPlus} className="icon-tiny" /> เพิ่มหมวดหมู่
+        </button>
+      </>
+    )}
+  </div>
+</div>
+
           </div>
 
+     
+
+              
           <div className="financial-analysis-section">
 
             {/* ✅ แถบตัวกรอง */}
@@ -876,6 +1000,13 @@ const handleSaveOrAdd = useCallback(async () => {
           flex-direction: column;
           gap: 20px;
         }
+          
+        .entry-button-group {
+          margin-left: auto;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
 
         .summary-columns-section {
           flex: 1;
@@ -978,8 +1109,8 @@ const handleSaveOrAdd = useCallback(async () => {
         .form-bar {
             display: flex;
             flex-wrap: wrap;
-            gap: 15px;
-            justify-content: center;
+            gap: 10px;
+            justify-content: flex-start;
             align-items: center;
         }
 
