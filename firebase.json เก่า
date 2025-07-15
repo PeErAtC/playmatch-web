@@ -1,0 +1,39 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-southeast1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "out",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [ 
+      {
+        "source": "/_next/**",
+        "destination": "/_next/**"
+      },
+      {
+        "source": "/static/**",
+        "destination": "/static/**"
+      },
+      {
+        "source": "/images/**",
+        "destination": "/images/**"
+      },
+      {
+        "source": "/(.*)",
+        "destination": "/$1.html"
+      },
+      {
+        "source": "/",
+        "destination": "/index.html"
+      }
+    ], 
+    "cleanUrls": true
+  }
+}
