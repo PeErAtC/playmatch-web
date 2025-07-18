@@ -412,7 +412,7 @@ const Match = () => {
   const handleRandomMatch = () => {
     const busyPlayers = new Set(
       matches
-        .filter(m => m.status !== "จบการแข่งขัน") // --- CHANGE: Check all non-finished matches
+        .filter(m => m.status !== "จบการแข่งขัน")
         .flatMap(m => [m.A1, m.A2, m.B1, m.B2])
         .filter(Boolean)
     );
@@ -435,7 +435,7 @@ const Match = () => {
       B1: selectedPlayers[2].name, B1Level: selectedPlayers[2].level,
       B2: selectedPlayers[3].name, B2Level: selectedPlayers[3].level,
       balls: "", result: "", score: "",
-      status: "เตรียมพร้อม", // --- CHANGE: Set default status
+      status: "เตรียมพร้อม",
     };
 
     setMatches(prev => {
@@ -454,39 +454,27 @@ const Match = () => {
     }, 100);
   };
 
-  // --- UPDATED FUNCTION ---
   const getAvailableMembers = (currentMatch, currentField) => {
-    // 1. Get players selected in OTHER fields of the SAME match.
     const selectedPlayersInCurrentMatch = new Set(
       Object.entries(currentMatch)
         .filter(([key, value]) => ["A1", "A2", "B1", "B2"].includes(key) && key !== currentField && value)
         .map(([, value]) => value)
     );
-
-    // 2. Get players from ALL OTHER active matches (not finished).
     const playersInOtherActiveMatches = new Set();
     matches.forEach((match) => {
-      // If it's a different match AND it's not finished...
       if (match.matchId !== currentMatch.matchId && match.status !== "จบการแข่งขัน") {
-        // ...add all its players to the set.
         [match.A1, match.A2, match.B1, match.B2].filter(Boolean).forEach((playerName) => {
           playersInOtherActiveMatches.add(playerName);
         });
       }
     });
-
-    // 3. Filter the main members list.
     return members.filter((mem) => {
       const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
       const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
       const isPlayingInAnotherActiveMatch = playersInOtherActiveMatches.has(mem.name);
-
-      // A player is available if they are the one currently selected in this specific field,
-      // OR if they are not selected anywhere else (in this match or another active one).
       return isCurrentlySelectedInThisField || (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherActiveMatch);
     });
   };
-  // --- END UPDATED FUNCTION ---
 
   const getAvailableCourts = (currentMatch) => {
     const courtsInPlayingMatches = new Set();
@@ -518,16 +506,42 @@ const Match = () => {
     });
   };
 
+  // --- UPDATED FUNCTION ---
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
         const updated = [...prev];
         const matchBeingUpdated = { ...updated[idx] };
 
+        // Standard field updates
+        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
+            matchBeingUpdated[field] = value;
+            const member = members.find(m => m.name === value);
+            matchBeingUpdated[`${field}Level`] = member ? member.level : ''; 
+        } else {
+            matchBeingUpdated[field] = value;
+        }
+
+        // --- NEW LOGIC: Auto-set status when 4 players are selected ---
+        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
+            const { A1, A2, B1, B2 } = matchBeingUpdated;
+            if (A1 && A2 && B1 && B2) {
+                if(matchBeingUpdated.status === '') {
+                   matchBeingUpdated.status = "เตรียมพร้อม";
+                }
+            } else {
+                if(matchBeingUpdated.status === 'เตรียมพร้อม') {
+                   matchBeingUpdated.status = "";
+                }
+            }
+        }
+        // --- END NEW LOGIC ---
+
+        // Validation for status change
         if (field === "status" && value === "กำลังแข่งขัน") {
             const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
             if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
                 showIncompleteForPlayingToast();
-                return prev;
+                return prev; // Revert change by returning previous state
             }
         }
         if (field === "status" && value === "จบการแข่งขัน") {
@@ -537,32 +551,33 @@ const Match = () => {
                 return prev;
             }
         }
-        if (field === "result" && value) {
-            const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
-            if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
-                showIncompleteForFinishingToast();
-                return prev;
-            }
-        }
-        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
-            matchBeingUpdated[field] = value;
-            const member = members.find(m => m.name === value);
-            matchBeingUpdated[`${field}Level`] = member ? member.level : ''; 
-        } else {
-            matchBeingUpdated[field] = value;
-        }
+
+        // Logic for result change
         if (field === "result") {
-            matchBeingUpdated.score = getScoreByResult(value);
-            if (value && matchBeingUpdated.status !== "จบการแข่งขัน") {
-                matchBeingUpdated.status = "จบการแข่งขัน";
-            } else if (!value && matchBeingUpdated.status === "จบการแข่งขัน") {
-                matchBeingUpdated.status = "";
+            if (value) { // If a result is selected
+                const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
+                if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
+                    showIncompleteForFinishingToast();
+                    return prev; 
+                }
+                matchBeingUpdated.score = getScoreByResult(value);
+                if (matchBeingUpdated.status !== "จบการแข่งขัน") {
+                    matchBeingUpdated.status = "จบการแข่งขัน";
+                }
+            } else { // If result is cleared
+                 matchBeingUpdated.score = "";
+                 if (matchBeingUpdated.status === "จบการแข่งขัน") {
+                    matchBeingUpdated.status = ""; // Revert status if it was "Finished"
+                }
             }
         }
-        if (field === "status" && value !== "จบการแข่งขัน" && matchBeingUpdated.status === "จบการแข่งขัน") {
+
+        // If status is manually changed away from "Finished", clear the result
+        if (field === "status" && value !== "จบการแข่งขัน" && updated[idx].status === "จบการแข่งขัน") {
             matchBeingUpdated.result = "";
             matchBeingUpdated.score = "";
         }
+
         updated[idx] = matchBeingUpdated;
 
         if (isBrowser && loggedInEmail) {
@@ -571,6 +586,7 @@ const Match = () => {
         return updated;
     });
   };
+  // --- END UPDATED FUNCTION ---
 
   const renderMemberOptions = (currentMatch, fieldName) =>
     getAvailableMembers(currentMatch, fieldName).map((mem) => (
@@ -986,7 +1002,7 @@ const Match = () => {
                       </>
                     )}
 
-                    <td data-label="สถานะ"><select value={match.status} onChange={(e) => handleChangeMatch((currentPage - 1) * ITEMS_PER_PAGE + idx, "status", e.target.value)} className="status-select" style={{ backgroundColor: STATUS_COLORS[match.status] || "#fff", color: match.status === "จบการแข่งขัน" ? "#fff" : "#333" }}>{Object.keys(STATUS_COLORS).map((status) => (<option key={status} value={status}>{status}</option>))}</select></td>
+                    <td data-label="สถานะ"><select value={match.status} onChange={(e) => handleChangeMatch((currentPage - 1) * ITEMS_PER_PAGE + idx, "status", e.target.value)} className="status-select" style={{ backgroundColor: STATUS_COLORS[match.status] || "#fff", color: match.status === "จบการแข่งขัน" ? "#fff" : "#333" }}><option value="">เลือกสถานะ</option>{Object.keys(STATUS_COLORS).map((status) => (<option key={status} value={status}>{status}</option>))}</select></td>
                     <td data-label="Action"><div className="action-menu"><button className="action-menu-button" onClick={() => setShowMenuId(showMenuId === match.matchId ? null : match.matchId)}>&#x22EF;</button>{showMenuId === match.matchId && (<div className="action-menu-dropdown"><button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)}>ลบ</button></div>)}</div></td>
                   </tr>
                 ))}
