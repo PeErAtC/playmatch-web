@@ -1034,7 +1034,7 @@ const Match = () => {
         .early-exit-section { margin-top: 20px; padding: 15px; border: 1px solid #d0d0d0; border-radius: 5px; background-color: #e9f7ef; }
         .early-exit-heading { font-size: 16px; margin-bottom: 10px; color: #28a745; }
         .early-exit-select { width: 15%; padding: 10px 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; min-width: 200px; background-color: #fff; cursor: pointer; }
-        .action-button.calculate-button { background-color: #28a745; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); }
+        .action-button.calculate-button { background-color: #4bf196; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); }
         .action-button.clear-button { background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); }
         .action-button.clear-settings-button { background-color: #dc3545; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); width: fit-content; }
         .action-button.clear-settings-button:hover { background-color: #c82333; }
@@ -1085,9 +1085,9 @@ const Match = () => {
             margin-top: 25px;
         }
         .add-match-button { display: block; width: fit-content; margin: 0; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
-        .add-match-button.random-match-button { background-color: #28a745; }
+        .add-match-button.random-match-button { background-color: #4bf196; }
         .add-match-button:hover:not(:disabled) { background-color: #0056b3; }
-        .add-match-button.random-match-button:hover:not(:disabled) { background-color: #218838; }
+        .add-match-button.random-match-button:hover:not(:disabled) { background-color: #3fc57b; }
         .add-match-button:disabled { background-color: #cccccc; cursor: not-allowed; }
 
         .save-indicator {
