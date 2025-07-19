@@ -81,7 +81,6 @@ const Match = () => {
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
   const sessionStateRef = useRef();
 
-  // -----! KEY CHANGE: ฟังก์ชันสร้างคีย์สำหรับ localStorage ให้เฉพาะตัวต่อผู้ใช้ !-----
   const getUserKey = (baseKey) => loggedInEmail ? `${loggedInEmail}_${baseKey}` : null;
 
   const currentLevelOrder = selectedRegion === "ภาคกลาง" ? LEVEL_ORDER_CENTRAL : LEVEL_ORDER_NORTHEAST;
@@ -101,9 +100,6 @@ const Match = () => {
   useEffect(() => {
     const email = localStorage.getItem("loggedInEmail") || "";
     setLoggedInEmail(email);
-
-    // -----! KEY CHANGE: ย้ายการโหลดค่าเริ่มต้นจาก localStorage มาที่นี่ !-----
-    // เพื่อให้แน่ใจว่ามี loggedInEmail ก่อน ถึงจะอ่านค่าที่ถูกต้องได้
     if (isBrowser && email) {
       setTopic(localStorage.getItem(`${email}_topic`) || "");
       setBallPrice(parseFloat(localStorage.getItem(`${email}_ballPrice`)) || 0);
@@ -240,7 +236,6 @@ const Match = () => {
     }
   }, [matches, members]);
 
-  // -----! KEY CHANGE: บันทึกค่าต่างๆ ลง localStorage โดยใช้คีย์เฉพาะตัว !-----
   useEffect(() => {
     if (isBrowser && loggedInEmail) {
       localStorage.setItem(getUserKey("ballPrice"), ballPrice.toString());
@@ -278,7 +273,6 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
 
-    // -----! KEY CHANGE: ลบข้อมูล session ของ user คนปัจจุบันเท่านั้น !-----
     if (isBrowser && loggedInEmail) {
       localStorage.removeItem(getUserKey("isOpen"));
       localStorage.removeItem(getUserKey("matches"));
@@ -302,12 +296,10 @@ const Match = () => {
     }
   };
 
-  // -----! KEY CHANGE: แก้ไขฟังก์ชัน loadSession ทั้งหมด !-----
   useEffect(() => {
     if (!isBrowser || !loggedInEmail) return;
 
     const loadSession = async () => {
-        // 1. อ่านจาก localStorage โดยใช้คีย์เฉพาะตัว
         const savedIsOpen = localStorage.getItem(getUserKey("isOpen")) === "true";
         const savedMatchesRaw = localStorage.getItem(getUserKey("matches"));
 
@@ -316,8 +308,6 @@ const Match = () => {
                 const savedMatches = JSON.parse(savedMatchesRaw);
                 setMatches(savedMatches); 
                 setMatchCount(savedMatches.length);
-
-                // อ่านค่าอื่นๆ จาก localStorage ด้วย
                 setActivityTime(parseInt(localStorage.getItem(getUserKey("activityTime"))) || 0);
                 setTopic(localStorage.getItem(getUserKey("topic")) || "");
                 setBallPrice(parseFloat(localStorage.getItem(getUserKey("ballPrice"))) || 0);
@@ -326,7 +316,6 @@ const Match = () => {
                 setFixedCourtFeePerPerson(parseFloat(localStorage.getItem(getUserKey("fixedCourtFeePerPerson"))) || 0);
                 setOrganizeFee(parseFloat(localStorage.getItem(getUserKey("organizeFee"))) || 0);
                 setSelectedRegion(localStorage.getItem(getUserKey("selectedRegion")) || "ภาคอีสาน");
-
                 setIsOpen(true);
                 console.log("Session restored from user-specific localStorage.");
                 return; 
@@ -336,7 +325,6 @@ const Match = () => {
             }
         }
 
-        // 2. ถ้า localStorage ไม่มี, เช็ค Firebase (ส่วนนี้ถูกต้องอยู่แล้ว)
         console.log("localStorage is empty or corrupt, checking Firebase for backup...");
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("email", "==", loggedInEmail));
@@ -350,7 +338,6 @@ const Match = () => {
             if (backupSnap.exists()) {
                 console.log("Firebase backup found. Restoring session...");
                 const data = backupSnap.data();
-
                 setMatches(data.matches || []); 
                 setTopic(data.topic || "");
                 setMatchDate(data.matchDate || new Date().toISOString().slice(0, 10));
@@ -363,8 +350,6 @@ const Match = () => {
                 setSelectedRegion(data.selectedRegion || "ภาคอีสาน");
                 setIsOpen(true);
                 setMatchCount((data.matches || []).length);
-
-                // 3. เมื่อกู้จาก Firebase, บันทึกกลับลง localStorage ด้วยคีย์เฉพาะตัว
                 localStorage.setItem(getUserKey("isOpen"), "true");
                 localStorage.setItem(getUserKey("matches"), JSON.stringify(data.matches || []));
                 localStorage.setItem(getUserKey("activityTime"), (data.activityTime || 0).toString());
@@ -375,7 +360,6 @@ const Match = () => {
                 localStorage.setItem(getUserKey("fixedCourtFeePerPerson"), (data.fixedCourtFeePerPerson || 0).toString());
                 localStorage.setItem(getUserKey("organizeFee"), (data.organizeFee || 0).toString());
                 localStorage.setItem(getUserKey("selectedRegion"), data.selectedRegion || "ภาคอีสาน");
-
                 Swal.fire('กู้ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดถูกกู้คืนจากระบบสำรองข้อมูลแล้ว', 'success');
             } else {
                 console.log("No active session backup found in Firebase.");
@@ -389,8 +373,6 @@ const Match = () => {
     loadSession();
   }, [isBrowser, loggedInEmail]);
 
-
-  // -----! KEY CHANGE: บันทึกเวลาโดยใช้คีย์เฉพาะตัว !-----
   useEffect(() => {
     if (!isBrowser) return;
     clearInterval(timerRef.current);
@@ -406,7 +388,6 @@ const Match = () => {
     return () => clearInterval(timerRef.current);
   }, [isOpen, isBrowser, loggedInEmail]);
 
-  // -----! KEY CHANGE: บันทึก match โดยใช้คีย์เฉพาะตัว !-----
   const handleAddMatch = () => {
     setMatches((prev) => {
       const newMatches = [
@@ -428,25 +409,70 @@ const Match = () => {
     }, 100);
   };
 
+  const handleRandomMatch = () => {
+    const busyPlayers = new Set(
+      matches
+        .filter(m => m.status !== "จบการแข่งขัน")
+        .flatMap(m => [m.A1, m.A2, m.B1, m.B2])
+        .filter(Boolean)
+    );
+
+    const availableMembers = members.filter(mem => !busyPlayers.has(mem.name));
+
+    if (availableMembers.length < 4) {
+      Swal.fire('ผู้เล่นไม่เพียงพอ', 'มีผู้เล่นที่ว่างไม่พอสำหรับการสุ่มสร้างแมตช์ (ต้องการอย่างน้อย 4 คน)', 'warning');
+      return;
+    }
+
+    const shuffled = [...availableMembers].sort(() => 0.5 - Math.random());
+    const selectedPlayers = shuffled.slice(0, 4);
+
+    const newMatch = {
+      matchId: padId(matches.length + 1, 4),
+      court: "",
+      A1: selectedPlayers[0].name, A1Level: selectedPlayers[0].level,
+      A2: selectedPlayers[1].name, A2Level: selectedPlayers[1].level,
+      B1: selectedPlayers[2].name, B1Level: selectedPlayers[2].level,
+      B2: selectedPlayers[3].name, B2Level: selectedPlayers[3].level,
+      balls: "", result: "", score: "",
+      status: "เตรียมพร้อม",
+    };
+
+    setMatches(prev => {
+        const newMatches = [...prev, newMatch];
+        if (isBrowser && loggedInEmail) {
+            localStorage.setItem(getUserKey("matches"), JSON.stringify(newMatches));
+        }
+        setMatchCount(newMatches.length);
+        return newMatches;
+    });
+
+    setShowMenuId(null);
+    setTimeout(() => {
+        const newTotal = matches.length + 1;
+        setCurrentPage(Math.ceil(newTotal / ITEMS_PER_PAGE));
+    }, 100);
+  };
+
   const getAvailableMembers = (currentMatch, currentField) => {
     const selectedPlayersInCurrentMatch = new Set(
       Object.entries(currentMatch)
         .filter(([key, value]) => ["A1", "A2", "B1", "B2"].includes(key) && key !== currentField && value)
         .map(([, value]) => value)
     );
-    const playersInPlayingMatches = new Set();
+    const playersInOtherActiveMatches = new Set();
     matches.forEach((match) => {
-      if (match.matchId !== currentMatch.matchId && match.status === "กำลังแข่งขัน") {
+      if (match.matchId !== currentMatch.matchId && match.status !== "จบการแข่งขัน") {
         [match.A1, match.A2, match.B1, match.B2].filter(Boolean).forEach((playerName) => {
-          playersInPlayingMatches.add(playerName);
+          playersInOtherActiveMatches.add(playerName);
         });
       }
     });
     return members.filter((mem) => {
       const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
       const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
-      const isPlayingInAnotherMatch = playersInPlayingMatches.has(mem.name);
-      return isCurrentlySelectedInThisField || (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherMatch);
+      const isPlayingInAnotherActiveMatch = playersInOtherActiveMatches.has(mem.name);
+      return isCurrentlySelectedInThisField || (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherActiveMatch);
     });
   };
 
@@ -480,17 +506,42 @@ const Match = () => {
     });
   };
 
-  // -----! KEY CHANGE: บันทึก match โดยใช้คีย์เฉพาะตัว !-----
+  // --- UPDATED FUNCTION ---
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
         const updated = [...prev];
         const matchBeingUpdated = { ...updated[idx] };
 
+        // Standard field updates
+        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
+            matchBeingUpdated[field] = value;
+            const member = members.find(m => m.name === value);
+            matchBeingUpdated[`${field}Level`] = member ? member.level : ''; 
+        } else {
+            matchBeingUpdated[field] = value;
+        }
+
+        // --- NEW LOGIC: Auto-set status when 4 players are selected ---
+        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
+            const { A1, A2, B1, B2 } = matchBeingUpdated;
+            if (A1 && A2 && B1 && B2) {
+                if(matchBeingUpdated.status === '') {
+                   matchBeingUpdated.status = "เตรียมพร้อม";
+                }
+            } else {
+                if(matchBeingUpdated.status === 'เตรียมพร้อม') {
+                   matchBeingUpdated.status = "";
+                }
+            }
+        }
+        // --- END NEW LOGIC ---
+
+        // Validation for status change
         if (field === "status" && value === "กำลังแข่งขัน") {
             const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
             if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
                 showIncompleteForPlayingToast();
-                return prev;
+                return prev; // Revert change by returning previous state
             }
         }
         if (field === "status" && value === "จบการแข่งขัน") {
@@ -500,32 +551,33 @@ const Match = () => {
                 return prev;
             }
         }
-        if (field === "result" && value) {
-            const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
-            if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
-                showIncompleteForFinishingToast();
-                return prev;
-            }
-        }
-        if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
-            matchBeingUpdated[field] = value;
-            const member = members.find(m => m.name === value);
-            matchBeingUpdated[`${field}Level`] = member ? member.level : ''; 
-        } else {
-            matchBeingUpdated[field] = value;
-        }
+
+        // Logic for result change
         if (field === "result") {
-            matchBeingUpdated.score = getScoreByResult(value);
-            if (value && matchBeingUpdated.status !== "จบการแข่งขัน") {
-                matchBeingUpdated.status = "จบการแข่งขัน";
-            } else if (!value && matchBeingUpdated.status === "จบการแข่งขัน") {
-                matchBeingUpdated.status = "";
+            if (value) { // If a result is selected
+                const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
+                if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
+                    showIncompleteForFinishingToast();
+                    return prev; 
+                }
+                matchBeingUpdated.score = getScoreByResult(value);
+                if (matchBeingUpdated.status !== "จบการแข่งขัน") {
+                    matchBeingUpdated.status = "จบการแข่งขัน";
+                }
+            } else { // If result is cleared
+                 matchBeingUpdated.score = "";
+                 if (matchBeingUpdated.status === "จบการแข่งขัน") {
+                    matchBeingUpdated.status = ""; // Revert status if it was "Finished"
+                }
             }
         }
-        if (field === "status" && value !== "จบการแข่งขัน" && matchBeingUpdated.status === "จบการแข่งขัน") {
+
+        // If status is manually changed away from "Finished", clear the result
+        if (field === "status" && value !== "จบการแข่งขัน" && updated[idx].status === "จบการแข่งขัน") {
             matchBeingUpdated.result = "";
             matchBeingUpdated.score = "";
         }
+
         updated[idx] = matchBeingUpdated;
 
         if (isBrowser && loggedInEmail) {
@@ -534,6 +586,7 @@ const Match = () => {
         return updated;
     });
   };
+  // --- END UPDATED FUNCTION ---
 
   const renderMemberOptions = (currentMatch, fieldName) =>
     getAvailableMembers(currentMatch, fieldName).map((mem) => (
@@ -542,7 +595,6 @@ const Match = () => {
       </option>
     ));
 
-  // -----! KEY CHANGE: เริ่ม session โดยใช้คีย์เฉพาะตัว !-----
   const handleStartGroup = async () => {
     if (!topic) {
       Swal.fire({ title: "กรุณาระบุหัวเรื่อง", text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History", icon: "warning" });
@@ -552,7 +604,7 @@ const Match = () => {
       localStorage.setItem(getUserKey("isOpen"), "true");
       localStorage.setItem(getUserKey("matches"), JSON.stringify([]));
       localStorage.setItem(getUserKey("activityTime"), "0");
-      localStorage.setItem(getUserKey("topic"), topic); // บันทึก topic ตอนเริ่ม
+      localStorage.setItem(getUserKey("topic"), topic);
     }
     setIsOpen(true);
     setActivityTime(0);
@@ -674,7 +726,6 @@ const Match = () => {
     });
   };
 
-  // -----! KEY CHANGE: ลบ match โดยใช้คีย์เฉพาะตัว !-----
   const handleDeleteMatch = (idxToDelete) => {
     Swal.fire({
       title: "คุณแน่ใจหรือไม่?", text: "คุณต้องการลบ Match นี้ใช่หรือไม่?", icon: "warning",
@@ -951,7 +1002,7 @@ const Match = () => {
                       </>
                     )}
 
-                    <td data-label="สถานะ"><select value={match.status} onChange={(e) => handleChangeMatch((currentPage - 1) * ITEMS_PER_PAGE + idx, "status", e.target.value)} className="status-select" style={{ backgroundColor: STATUS_COLORS[match.status] || "#fff", color: match.status === "จบการแข่งขัน" ? "#fff" : "#333" }}>{Object.keys(STATUS_COLORS).map((status) => (<option key={status} value={status}>{status}</option>))}</select></td>
+                    <td data-label="สถานะ"><select value={match.status} onChange={(e) => handleChangeMatch((currentPage - 1) * ITEMS_PER_PAGE + idx, "status", e.target.value)} className="status-select" style={{ backgroundColor: STATUS_COLORS[match.status] || "#fff", color: match.status === "จบการแข่งขัน" ? "#fff" : "#333" }}><option value="">เลือกสถานะ</option>{Object.keys(STATUS_COLORS).map((status) => (<option key={status} value={status}>{status}</option>))}</select></td>
                     <td data-label="Action"><div className="action-menu"><button className="action-menu-button" onClick={() => setShowMenuId(showMenuId === match.matchId ? null : match.matchId)}>&#x22EF;</button>{showMenuId === match.matchId && (<div className="action-menu-dropdown"><button onClick={() => handleDeleteMatch((currentPage - 1) * ITEMS_PER_PAGE + idx)}>ลบ</button></div>)}</div></td>
                   </tr>
                 ))}
@@ -964,7 +1015,12 @@ const Match = () => {
           <span>หน้า {currentPage} จาก {totalPages}</span>
           <button onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>ถัดไป</button>
         </div>
-        <button onClick={handleAddMatch} className="add-match-button" disabled={!isOpen}>+ Add New Match</button>
+
+        <div className="add-match-controls">
+            <button onClick={handleAddMatch} className="add-match-button" disabled={!isOpen}>+ Add New Match</button>
+            <button onClick={handleRandomMatch} className="add-match-button random-match-button" disabled={!isOpen}>+ Random New Match</button>
+        </div>
+
       </div>
       <style jsx>{`
         /* --- Existing styles --- */
@@ -978,7 +1034,7 @@ const Match = () => {
         .early-exit-section { margin-top: 20px; padding: 15px; border: 1px solid #d0d0d0; border-radius: 5px; background-color: #e9f7ef; }
         .early-exit-heading { font-size: 16px; margin-bottom: 10px; color: #28a745; }
         .early-exit-select { width: 15%; padding: 10px 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; min-width: 200px; background-color: #fff; cursor: pointer; }
-        .action-button.calculate-button { background-color: #28a745; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); }
+        .action-button.calculate-button { background-color: #4bf196; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); }
         .action-button.clear-button { background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); }
         .action-button.clear-settings-button { background-color: #dc3545; color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; font-size: 15px; opacity: var(--button-opacity, 1); pointer-events: var(--button-pointer-events, auto); width: fit-content; }
         .action-button.clear-settings-button:hover { background-color: #c82333; }
@@ -1020,10 +1076,20 @@ const Match = () => {
         .pagination-controls button { background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 12px; transition: background-color 0.3s ease; }
         .pagination-controls button:hover:not(:disabled) { background-color: #0056b3; }
         .pagination-controls button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        .pagination-controls span { font-size: 15px; color: #333; font-weight: 500; }
-        .add-match-button { display: block; width: fit-content; margin: 25px auto 0 auto; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
+
+        .add-match-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 25px;
+        }
+        .add-match-button { display: block; width: fit-content; margin: 0; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
+        .add-match-button.random-match-button { background-color: #4bf196; }
         .add-match-button:hover:not(:disabled) { background-color: #0056b3; }
+        .add-match-button.random-match-button:hover:not(:disabled) { background-color: #3fc57b; }
         .add-match-button:disabled { background-color: #cccccc; cursor: not-allowed; }
+
         .save-indicator {
           position: absolute;
           bottom: -50px; 
@@ -1087,6 +1153,8 @@ const Match = () => {
           .cost-input-group { min-width: unset; width: 100%; }
           .cost-input { width: 100%; }
           .early-exit-select { width: 100%; min-width: unset; }
+          .add-match-controls { flex-direction: column; gap: 15px; } /* Stack buttons on mobile */
+          .add-match-button { width: 100%; }
         }
         @media (max-width: 480px) {
           .match-table td { padding-left: 45%; }
