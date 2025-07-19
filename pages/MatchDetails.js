@@ -128,7 +128,15 @@ const MatchDetails = () => {
         id: doc.id,
         ...doc.data()
       }));
-      setAvailableCoupons(couponsData);
+
+      // <<< FIXED: เพิ่มการกรองคูปองที่ยังไม่หมดอายุ >>>
+      const now = new Date();
+      const validCoupons = couponsData.filter(coupon => 
+          coupon.expiresAt && coupon.expiresAt.toDate() > now
+      );
+
+      setAvailableCoupons(validCoupons);
+
     } catch (err) {
       console.error("Error fetching coupons:", err);
       setAvailableCoupons([]);
@@ -409,7 +417,7 @@ const MatchDetails = () => {
     } finally {
       setLoading(false);
     }
-  }, [matchId, loggedInEmail, calculateMemberStats]); // Removed availableCoupons from dependencies here, as fetchCoupons handles its own data.
+  }, [matchId, loggedInEmail, calculateMemberStats]);
 
   useEffect(() => {
     fetchMatchAndMemberDetails();
@@ -1178,7 +1186,7 @@ const MatchDetails = () => {
           )}
         </div>
       </div>
-      
+
       <div style={{ marginBottom: "30px" }}>
         <div ref={gameDetailsTableRef} style={{ overflowX: "auto", border: "1px solid #e0e0e0", borderRadius: "8px", backgroundColor: "#fff", padding: '12px' }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
