@@ -189,7 +189,13 @@ export default function Sidebar({
               <div key={item.label} className="menu-with-submenu">
                 <div
                   className={`sidebar-menu-item submenu-toggle ${isDisabled ? "disabled" : ""}`}
-                  onClick={() => !isDisabled && handleSubMenuToggle(item.label)}
+                  onClick={() => {
+                    if (isDisabled) return;
+                    if (!isSidebarOpen) {
+                      toggleSidebar();
+                    }
+                    handleSubMenuToggle(item.label);
+                  }}
                 >
                   <span className="menu-icon">{item.icon}</span>
                   {isSidebarOpen && (
