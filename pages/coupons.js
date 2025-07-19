@@ -443,7 +443,7 @@ const CouponsPage = () => {
                             <th>รหัส</th>
                             <th>สถานะ</th>
                             {activeTab === 'active' && <th>วันหมดอายุ</th>}
-                            {activeTab === 'used' && <th>วันที่ใช้</th>}
+                            {activeTab === 'used' && <th>ใช้โดย / วันที่</th>}
                             {activeTab === 'expired' && <th>วันที่หมดอายุ</th>}
                             <th>จัดการ</th>
                         </tr>
@@ -463,7 +463,18 @@ const CouponsPage = () => {
                                 <td data-label="รหัส">{coupon.code}</td>
                                 <td data-label="สถานะ">{getStatusComponent(getActualStatus(coupon))}</td>
                                 {activeTab === 'active' && <td data-label="วันหมดอายุ">{formatDate(coupon.expiresAt)}</td>}
-                                {activeTab === 'used' && <td data-label="วันที่ใช้">{formatDate(coupon.redeemedAt)}</td>}
+                                {activeTab === 'used' && <td data-label="ใช้โดย / วันที่">
+                                    <div>
+                                        <strong>
+                                            {(coupon.redeemedForMembers && coupon.redeemedForMembers.length > 0)
+                                                ? coupon.redeemedForMembers.join(', ')
+                                                : (coupon.redeemedBy || 'N/A')}
+                                        </strong>
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: '#666' }}>
+                                        {coupon.redeemedAt?.toDate().toLocaleDateString('th-TH')}
+                                    </div>
+                                </td>}
                                 {activeTab === 'expired' && <td data-label="วันที่หมดอายุ">{formatDate(coupon.expiresAt)}</td>}
                                 <td data-label="จัดการ">
                                     <div className="action-buttons">
