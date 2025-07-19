@@ -2,953 +2,588 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from '../lib/firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { QRCodeCanvas } from 'qrcode.react';
+import Barcode from 'react-barcode';
 import Swal from 'sweetalert2';
-import { FiEye, FiRotateCcw, FiTrash2 } from "react-icons/fi"; // import ไอคอนที่ใช้
+import Head from 'next/head';
+import html2canvas from 'html2canvas';
+import { saveAs } from 'file-saver';
+import { FiDownload } from "react-icons/fi";
 
-// --- Reusable Coupon Ticket Component (No changes needed here) ---
-const CouponTicket = ({ coupon }) => {
-    if (!coupon) return null;
-
-    const formatDate = (date) => {
-        const d = date?.toDate ? date.toDate() : new Date(date);
-        return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
-
-    const mainText = coupon.reason ? coupon.reason.toUpperCase() : `${coupon.amount} BAHT`;
-
-    // This component's style is self-contained and doesn't need to match the main page UI.
-    // Keeping the existing cool ticket design.
-    return (
-        <div className="ticket-svg-container">
-            <svg width="100%" height="100%" viewBox="0 0 500 180">
-                <defs>
-                    <linearGradient id="ticketGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style={{stopColor: '#fff200', stopOpacity: 1}} />
-                        <stop offset="100%" style={{stopColor: '#f9c509', stopOpacity: 1}} />
-                    </linearGradient>
-                </defs>
-                <path d="M30 0 L470 0 C486 0 500 14 500 30 L500 150 C500 166 486 180 470 180 L30 180 C14 180 0 166 0 150 L0 30 C0 14 14 0 30 0 Z" fill="url(#ticketGradient)" stroke="#3D2075" strokeWidth="0.5"/>
-                <circle cx="0" cy="25" r="8" fill="#f8f9fa" />
-                <circle cx="0" cy="55" r="8" fill="#f8f9fa" />
-                <circle cx="0" cy="85" r="8" fill="#f8f9fa" />
-                <circle cx="0" cy="115" r="8" fill="#f8f9fa" />
-                <circle cx="0" cy="145" r="8" fill="#f8f9fa" />
-                <line x1="160" y1="15" x2="160" y2="165" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeDasharray="5,5" />
-                <foreignObject x="25" y="35" width="120" height="110">
-                    <div xmlns="http://www.w3.org/1999/xhtml" className="qr-code-wrapper">
-                        <QRCodeCanvas value={coupon.code || 'error'} size={110} bgColor="#ffffff" fgColor="#000000" />
-                    </div>
-                </foreignObject>
-                <foreignObject x="175" y="25" width="300" height="130">
-                    <div xmlns="http://www.w3.org/1999/xhtml" className="info-wrapper">
-                        <div className="info-header">DISCOUNT COUPON</div>
-                        <div className="info-main">{mainText}</div>
-                        <div className="info-footer">
-                            <span>VALID UNTIL: {formatDate(coupon.expiresAt)}</span>
-                        </div>
-                    </div>
-                </foreignObject>
-            </svg>
-        </div>
-    );
+// Helper function to format date
+const formatDate = (date) => {
+    if (!date) return 'N/A';
+    const d = date?.toDate ? date.toDate() : new Date(date);
+    return d.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+    });
 };
 
+// <<< DESIGN FIX: ย้ายสไตล์เข้ามาอยู่ในคอมโพเนนต์นี้โดยตรงเพื่อแก้ปัญหาการแสดงผล >>>
+const StyledCouponTicket = React.forwardRef(({ coupon }, ref) => {
+    if (!coupon) return null;
 
-// --- Main Page Component ---
-const CouponsPage = () => {
-  const [amount, setAmount] = useState('');
-  const [reason, setReason] = useState('');
-  const [expiresAt, setExpiresAt] = useState(() => {
-    const today = new Date();
-    today.setDate(today.getDate() + 30);
-    return today.toISOString().split('T')[0];
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [allCoupons, setAllCoupons] = useState([]);
-  const [activeTab, setActiveTab] = useState('all');
-  const [viewingCoupon, setViewingCoupon] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isFormExpanded, setIsFormExpanded] = useState(true);
-  const [editingCoupon, setEditingCoupon] = useState(null);
-  const [newlyCreatedCouponId, setNewlyCreatedCouponId] = useState(null);
-  const [menuOpenId, setMenuOpenId] = useState(null);
-  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-      } else {
-        setUserId(null);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (newlyCreatedCouponId) {
-      const timer = setTimeout(() => setNewlyCreatedCouponId(null), 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [newlyCreatedCouponId]);
-
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.fixed-dropdown') && !e.target.closest('.action-menu-trigger')) {
-        setMenuOpenId(null);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
-
-
-  const fetchCoupons = async () => {
-    if (!userId) {
-        setAllCoupons([]);
-        return;
-    }
-    const couponsRef = collection(db, `users/${userId}/Coupons`);
-    const q = query(couponsRef, orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-    const couponsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setAllCoupons(couponsList);
-  };
-
-  useEffect(() => {
-    fetchCoupons();
-  }, [userId]);
-
-  const resetForm = () => {
-    setAmount('');
-    setReason('');
-    const today = new Date();
-    today.setDate(today.getDate() + 30);
-    setExpiresAt(today.toISOString().split('T')[0]);
-    setEditingCoupon(null);
-  };
-
-  const handleCreateOrUpdateCoupon = async (e) => {
-    e.preventDefault();
-    if (!userId) return Swal.fire('ไม่พบผู้ใช้', 'กรุณาล็อกอินก่อนดำเนินการ', 'error');
-    if (!amount || !expiresAt) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกมูลค่าส่วนลดและวันหมดอายุ', 'warning');
-
-    setIsLoading(true);
-    const expiryDate = new Date(expiresAt);
-    expiryDate.setHours(23, 59, 59, 999);
-    const finalReason = reason || `${amount} BAHT DISCOUNT`;
-
-    try {
-      if (editingCoupon) {
-        const couponDocRef = doc(db, `users/${userId}/Coupons`, editingCoupon.id);
-        await updateDoc(couponDocRef, {
-          amount: Number(amount),
-          reason: finalReason,
-          expiresAt: expiryDate,
-        });
-        Swal.fire({ icon: 'success', title: 'แก้ไขคูปองสำเร็จ!', showConfirmButton: false, timer: 1500 });
-      } else {
-        const newCode = 'PROMO-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-        const couponsRef = collection(db, `users/${userId}/Coupons`);
-        await addDoc(couponsRef, {
-          code: newCode,
-          amount: Number(amount),
-          reason: finalReason,
-          status: 'ACTIVE',
-          createdAt: serverTimestamp(),
-          expiresAt: expiryDate,
-          redeemedBy: null,
-          redeemedAt: null,
-          redeemedForMembers: [], // Initialize as empty array for new coupons
-        });
-        setNewlyCreatedCouponId(newCode);
-        Swal.fire({ icon: 'success', title: 'สร้างคูปองสำเร็จ!', showConfirmButton: false, timer: 1500 });
-      }
-      resetForm();
-      await fetchCoupons();
-      setIsFormExpanded(false);
-    } catch (error) {
-      console.error("Error saving coupon:", error);
-      Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกคูปองได้', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeleteCoupon = async (couponId) => {
-    Swal.fire({
-      title: 'คุณแน่ใจหรือไม่?',
-      text: "คุณจะไม่สามารถย้อนกลับได้!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#3085d6',
-      confirmButtonText: 'ใช่, ลบเลย!',
-      cancelButtonText: 'ยกเลิก'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        if (!userId) return Swal.fire('ไม่พบผู้ใช้', 'กรุณาล็อกอินก่อนดำเนินการ', 'error');
-        try {
-          await deleteDoc(doc(db, `users/${userId}/Coupons`, couponId));
-          Swal.fire('ลบแล้ว!', 'คูปองของคุณถูกลบเรียบร้อยแล้ว', 'success');
-          fetchCoupons();
-        } catch (error) {
-          console.error("Error deleting coupon:", error);
-          Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถลบคูปองได้', 'error');
-        }
-      }
-    });
-  };
-
-  const handleRestoreCoupon = async (couponId) => { // ฟังก์ชันสำหรับกู้คืนคูปอง
-    Swal.fire({
-      title: 'ต้องการกู้คืนคูปองนี้หรือไม่?',
-      text: "สถานะคูปองจะถูกเปลี่ยนเป็น 'ใช้งานได้'",
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'ใช่, กู้คืน!',
-      cancelButtonText: 'ยกเลิก'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        if (!userId) return Swal.fire('ไม่พบผู้ใช้', 'กรุณาล็อกอินก่อนดำเนินการ', 'error');
-        try {
-          const couponDocRef = doc(db, `users/${userId}/Coupons`, couponId);
-          await updateDoc(couponDocRef, {
-            status: 'ACTIVE',
-            redeemedBy: null,
-            redeemedAt: null, // ล้างข้อมูลการใช้งาน
-            redeemedForMembers: [], // Clear redeemed members upon restore
-          });
-          Swal.fire('กู้คืนแล้ว!', 'คูปองถูกกู้คืนเรียบร้อยแล้ว', 'success');
-          fetchCoupons(); // ดึงข้อมูลคูปองใหม่เพื่ออัปเดต UI
-        } catch (error) {
-          console.error("Error restoring coupon:", error);
-          Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถกู้คืนคูปองได้', 'error');
-        }
-      }
-    });
-  };
-
-  const handleEditSelect = (coupon) => {
-    if (editingCoupon && editingCoupon.id === coupon.id) {
-      // If the same coupon is clicked again, deselect it
-      resetForm();
-    } else {
-      // Otherwise, select this coupon for editing
-      setEditingCoupon(coupon);
-      setAmount(coupon.amount.toString());
-      setReason(coupon.reason || '');
-      const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
-      setExpiresAt(expiryDate.toISOString().split('T')[0]);
-      setIsFormExpanded(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const getStatusComponent = (coupon) => {
-    const now = new Date();
-    const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
-    let status = coupon.status;
-    if (status === 'ACTIVE' && expiryDate < now) status = 'EXPIRED';
-
-    const statusClasses = { ACTIVE: 'status-active', USED: 'status-used', EXPIRED: 'status-expired' };
-    const statusTexts = { ACTIVE: 'ใช้งานได้', USED: 'ใช้แล้ว', EXPIRED: 'หมดอายุ' };
-    return <span className={`status-badge ${statusClasses[status] || ''}`}>{statusTexts[status] || status}</span>;
-  };
-  
-  const getActualStatus = (coupon) => {
-    if (!coupon || !coupon.expiresAt) return 'UNKNOWN'; // ป้องกัน null
-
-    const now = new Date();
-    const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
-    return (coupon.status === 'ACTIVE' && expiryDate >= now)
-      ? 'ACTIVE'
-      : (coupon.status === 'USED' ? 'USED' : 'EXPIRED');
-  };
-
-
-  const openCouponModal = (coupon) => setViewingCoupon(coupon);
-  const closeCouponModal = () => setViewingCoupon(null);
-  
-  // กรองคูปองตามสถานะจริงและแท็บที่เลือก
-  const allActiveCoupons = allCoupons.filter(c => getActualStatus(c) === 'ACTIVE');
-  const redeemedCoupons = allCoupons.filter(c => getActualStatus(c) === 'USED' || getActualStatus(c) === 'EXPIRED');
-
-  const couponsToDisplay = activeTab === 'all' ? allActiveCoupons : redeemedCoupons;
-
-  const filteredCouponsForDisplay = couponsToDisplay.filter(coupon =>
-    coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    String(coupon.amount).includes(searchQuery) ||
-    (coupon.reason && coupon.reason.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const handleCopyCode = (code) => {
-    navigator.clipboard.writeText(code);
-    Swal.fire({ icon: 'success', title: 'คัดลอกรหัสแล้ว!', showConfirmButton: false, timer: 1000, toast: true, position: 'top-end' });
-  };
-
-  const handleSetAmount = (value) => {
-    setAmount(value);
-    setReason(`${value} BAHT DISCOUNT`); // Set reason when preset amount is selected
-  };
-
-  const handleClearReason = () => { // ฟังก์ชันล้างข้อความบนคูปอง
-    setReason('');
-  };
-
-  const indexOfLastItem = currentPage * itemsPerPage; //
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage; //
-  const currentItems = filteredCouponsForDisplay.slice(indexOfFirstItem, indexOfLastItem); //
-  const totalPages = Math.ceil(filteredCouponsForDisplay.length / itemsPerPage); //
-  const selectedCoupon = currentItems.find(c => c.id === menuOpenId); // ← ย้ายมาตรงนี้ หลัง currentItems
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber); //
-
-  return (
-    <>
-      <div className="page-container">
-        <h1>จัดการคูปอง</h1>
-        
-        <div className="content-card">
-            <div className="card-header" onClick={() => setIsFormExpanded(!isFormExpanded)}>
-                <span>{editingCoupon ? 'แก้ไขคูปอง' : 'ออกคูปองใหม่'}</span>
-                <span className="collapse-icon">{isFormExpanded ? '−' : '+'}</span>
+    return (
+        <div className="coupon-render-wrapper" ref={ref}>
+            <div className="coupon-card">
+                <div className="coupon-stub">
+                    <div className="coupon-barcode">
+                        <Barcode
+                            value={coupon.code || 'NOCODE'}
+                            width={1.5}
+                            height={50}
+                            displayValue={false}
+                            background="#FFFFFF"
+                            lineColor="#000000"
+                            margin={0}
+                        />
+                    </div>
+                    <div className="coupon-code-text">{coupon.code}</div>
+                </div>
+                <div className="coupon-main-content">
+                    <div className="coupon-title-text">{coupon.name}</div>
+                    <div className="coupon-value-box">
+                        {coupon.amount || 0} BAHT
+                    </div>
+                    <div className="coupon-expiry-text">
+                        หมดอายุ: {formatDate(coupon.expiresAt)}
+                    </div>
+                </div>
             </div>
-            {isFormExpanded && (
-                <div className="card-body">
-                    <form onSubmit={handleCreateOrUpdateCoupon} className="coupon-form">
+            {/* <<< STYLES MOVED HERE to fix display issue >>> */}
+            <style jsx>{`
+                .coupon-render-wrapper {
+                    width: 100%;
+                    max-width: 480px;
+                    font-family: 'Inter', 'Kanit', sans-serif;
+                    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.2));
+                }
+                .coupon-card {
+                    display: flex;
+                    width: 100%;
+                    aspect-ratio: 16 / 7.5;
+                    position: relative;
+                }
+                .coupon-card::after { /* Perforated effect */
+                    content: '';
+                    position: absolute;
+                    left: 120px;
+                    top: 10px;
+                    bottom: 10px;
+                    width: 0;
+                    border-left: 2px dashed rgba(255,255,255,0.4);
+                }
+                .coupon-stub {
+                    flex: 0 0 120px;
+                    background: #fff;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 10px;
+                    border-top-left-radius: 12px;
+                    border-bottom-left-radius: 12px;
+                }
+                .coupon-barcode {
+                    flex-grow: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 100%;
+                }
+                .coupon-code-text {
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                    color: #333;
+                    margin-top: 5px;
+                }
+
+                .coupon-main-content {
+                    flex-grow: 1;
+                    background: #e53935;
+                    color: #fff;
+                    padding: 15px 25px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    text-align: center;
+                    border-top-right-radius: 12px;
+                    border-bottom-right-radius: 12px;
+                }
+                .coupon-title-text {
+                    font-size: 16px;
+                    font-weight: 500;
+                    margin-bottom: 5px;
+                    opacity: 0.9;
+                }
+                .coupon-value-box {
+                    background: #fff;
+                    color: #e53935;
+                    border-radius: 50px;
+                    padding: 8px 15px;
+                    margin: 8px auto;
+                    font-weight: 800;
+                    font-size: 36px;
+                    line-height: 1;
+                    display: inline-block;
+                }
+                .coupon-expiry-text {
+                    font-size: 12px;
+                    font-weight: 500;
+                    opacity: 0.8;
+                    margin-top: 8px;
+                }
+            `}</style>
+        </div>
+    );
+});
+StyledCouponTicket.displayName = 'StyledCouponTicket';
+
+
+// Main Page Component
+const CouponsPage = () => {
+    const [amount, setAmount] = useState('');
+    const [reason, setReason] = useState('');
+    const [expiresAt, setExpiresAt] = useState(() => {
+        const today = new Date();
+        today.setDate(today.getDate() + 30);
+        return today.toISOString().split('T')[0];
+    });
+    const [isLoading, setIsLoading] = useState(false);
+    const [allCoupons, setAllCoupons] = useState([]);
+    const [viewingCoupon, setViewingCoupon] = useState(null);
+    const [userId, setUserId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isFormExpanded, setIsFormExpanded] = useState(false);
+    const [editingCoupon, setEditingCoupon] = useState(null);
+    const [activeTab, setActiveTab] = useState('active');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    const couponTicketRef = useRef(null);
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                setUserId(user.uid);
+            } else {
+                setUserId(null);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const fetchCoupons = async () => {
+        if (!userId) {
+            setAllCoupons([]);
+            return;
+        }
+        const couponsRef = collection(db, `users/${userId}/Coupons`);
+        const q = query(couponsRef, orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const couponsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAllCoupons(couponsList);
+    };
+
+    useEffect(() => {
+        if (userId) {
+            fetchCoupons();
+        }
+    }, [userId]);
+
+    const resetForm = () => {
+        setAmount('');
+        setReason('');
+        const today = new Date();
+        today.setDate(today.getDate() + 30);
+        setExpiresAt(today.toISOString().split('T')[0]);
+        setEditingCoupon(null);
+        setIsFormExpanded(false);
+    };
+
+    const handleCreateOrUpdateCoupon = async (e) => {
+        e.preventDefault();
+        if (!userId) return Swal.fire('ไม่พบผู้ใช้', 'กรุณาล็อกอินก่อนดำเนินการ', 'error');
+        if (!amount || !expiresAt) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกมูลค่าส่วนลดและวันหมดอายุ', 'warning');
+
+        setIsLoading(true);
+        const expiryDate = new Date(expiresAt);
+        expiryDate.setHours(23, 59, 59, 999);
+
+        const couponData = {
+            name: reason || `ส่วนลด ${amount} บาท`,
+            discount: Number(amount),
+            amount: Number(amount),
+            expiresAt: expiryDate,
+        };
+
+        if (reason) couponData.reason = reason;
+
+        try {
+            if (editingCoupon) {
+                const couponDocRef = doc(db, `users/${userId}/Coupons`, editingCoupon.id);
+                await updateDoc(couponDocRef, couponData);
+                Swal.fire({ 
+                  icon: 'success', 
+                  title: 'แก้ไขคูปองสำเร็จ!', 
+                  text: `รหัสคูปอง: ${editingCoupon.code}`,
+                  showConfirmButton: false, 
+                  timer: 2000 });
+            } else {
+                const newCode = 'PROMO-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+                const couponsRef = collection(db, `users/${userId}/Coupons`);
+                await addDoc(couponsRef, {
+                    ...couponData,
+                    code: newCode,
+                    status: 'ACTIVE',
+                    createdAt: serverTimestamp(),
+                    redeemedBy: null,
+                    redeemedAt: null,
+                    redeemedForMembers: [],
+                });
+                Swal.fire({ 
+                  icon: 'success', 
+                  title: 'สร้างคูปองสำเร็จ!', 
+                  text: `รหัสคูปอง: ${newCode}`,
+                  showConfirmButton: false, 
+                  timer: 2500 });
+            }
+            resetForm();
+            await fetchCoupons();
+        } catch (error) {
+            console.error("Error saving coupon:", error);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกคูปองได้', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteCoupon = async (couponId) => {
+        Swal.fire({
+          title: 'คุณแน่ใจหรือไม่?',
+          text: "คุณจะไม่สามารถย้อนกลับการกระทำนี้ได้!",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#3085d6',
+          confirmButtonText: 'ใช่, ลบเลย!',
+          cancelButtonText: 'ยกเลิก'
+        }).then(async (result) => {
+          if (result.isConfirmed) {
+            if (!userId) return Swal.fire('ไม่พบผู้ใช้', 'กรุณาล็อกอินก่อนดำเนินการ', 'error');
+            try {
+              await deleteDoc(doc(db, `users/${userId}/Coupons`, couponId));
+              Swal.fire('ลบแล้ว!', 'คูปองของคุณถูกลบเรียบร้อยแล้ว', 'success');
+              fetchCoupons();
+            } catch (error) {
+              console.error("Error deleting coupon:", error);
+              Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถลบคูปองได้', 'error');
+            }
+          }
+        });
+    };
+
+    const handleDownloadCouponImage = async () => {
+        if (!couponTicketRef.current || !viewingCoupon) {
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่พบข้อมูลคูปองสำหรับดาวน์โหลด', 'error');
+            return;
+        }
+
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true });
+
+        try {
+            const canvas = await html2canvas(couponTicketRef.current, {
+                backgroundColor: null,
+                scale: 3,
+                useCORS: true
+            });
+            const fileName = `Coupon_${viewingCoupon.code}.png`;
+            saveAs(canvas.toDataURL('image/png'), fileName);
+            Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพสำเร็จ!' });
+
+        } catch (error) {
+            console.error("Error generating image:", error);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถสร้างไฟล์รูปภาพได้', 'error');
+        }
+    };
+
+    const handleEditSelect = (coupon) => {
+        if (editingCoupon && editingCoupon.id === coupon.id) {
+            resetForm();
+        } else {
+            setEditingCoupon(coupon);
+            setAmount(coupon.amount.toString());
+            setReason(coupon.name || '');
+            const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
+            setExpiresAt(expiryDate.toISOString().split('T')[0]);
+            setIsFormExpanded(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
+    const getActualStatus = (coupon) => {
+        if (!coupon || !coupon.expiresAt) return 'UNKNOWN';
+        const now = new Date();
+        const expiryDate = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
+        if (coupon.status === 'USED') return 'USED';
+        if (expiryDate < now) return 'EXPIRED';
+        return 'ACTIVE';
+    };
+
+    const getStatusComponent = (status) => {
+        const statusClasses = { ACTIVE: 'status-active', USED: 'status-used', EXPIRED: 'status-expired' };
+        const statusTexts = { ACTIVE: 'ใช้งานได้', USED: 'ใช้แล้ว', EXPIRED: 'หมดอายุ' };
+        return <span className={`status-badge ${statusClasses[status] || ''}`}>{statusTexts[status] || status}</span>;
+    };
+
+    const openCouponModal = (coupon) => setViewingCoupon(coupon);
+    const closeCouponModal = () => setViewingCoupon(null);
+
+    const activeCoupons = allCoupons.filter(c => getActualStatus(c) === 'ACTIVE');
+    const usedCoupons = allCoupons.filter(c => getActualStatus(c) === 'USED');
+    const expiredCoupons = allCoupons.filter(c => getActualStatus(c) === 'EXPIRED');
+
+    let couponsToDisplay;
+    if (activeTab === 'active') couponsToDisplay = activeCoupons;
+    else if (activeTab === 'used') couponsToDisplay = usedCoupons;
+    else couponsToDisplay = expiredCoupons;
+
+    const filteredCoupons = couponsToDisplay.filter(coupon =>
+        (coupon.name && coupon.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (coupon.code && coupon.code.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = filteredCoupons.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredCoupons.length / itemsPerPage);
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+    return (
+        <div className="main-content">
+            <Head>
+                <title>จัดการคูปอง - PlayMatch</title>
+            </Head>
+
+            <h2>จัดการคูปอง</h2>
+            <hr className="title-separator" />
+
+            {/* --- FORM SECTION --- */}
+            <div className="form-section">
+                <div className="form-header" onClick={() => setIsFormExpanded(!isFormExpanded)}>
+                    <h3>{editingCoupon ? 'แก้ไขคูปอง' : 'สร้างคูปองใหม่'}</h3>
+                    <button className="toggle-form-button">{isFormExpanded ? '−' : '+'}</button>
+                </div>
+                <div className={`form-content ${isFormExpanded ? 'expanded' : 'collapsed'}`}>
+                    <form onSubmit={handleCreateOrUpdateCoupon} noValidate>
                         <div className="form-grid">
-                            <div className="form-group">
-                                <label>มูลค่าส่วนลด (บาท) *</label>
-                                <input type="number" value={amount} onChange={(e) => handleSetAmount(e.target.value)} placeholder="50" required />
-                                <div className="preset-amounts">
-                                    <button type="button" onClick={() => handleSetAmount('50')}>฿50</button>
-                                    <button type="button" onClick={() => handleSetAmount('100')}>฿100</button>
-                                    <button type="button" onClick={() => handleSetAmount('200')}>฿200</button>
-                                </div>
+                            <div>
+                                <label className="form-label">มูลค่าส่วนลด (บาท) *</label>
+                                <input type="number" className="modern-input" value={amount} onChange={(e) => setAmount(e.target.value)} required />
                             </div>
-                            <div className="form-group">
-                                <label>วันหมดอายุ *</label>
-                                <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} required />
+                            <div>
+                                <label className="form-label">วันหมดอายุ *</label>
+                                <input type="date" className="modern-input" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} required />
                             </div>
-                            {/* ไม่ใส่ full-width แล้วเพื่อให้มันจัดเรียงใน grid ได้เลย */}
-                            <div className="form-group">
-                                <label>ข้อความบนคูปอง (ถ้ามี)</label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น ส่วนลดพิเศษสำหรับลูกค้าใหม่" className="reason-input" />
-                                    <button type="button" className="btn-clear-reason" onClick={handleClearReason}>
-                                        ✕
-                                    </button>
-                                </div>
+                            <div className="full-width">
+                                <label className="form-label">ชื่อ / เหตุผลในการให้คูปอง</label>
+                                <input type="text" className="modern-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น ส่วนลดพิเศษสำหรับลูกค้าใหม่"/>
                             </div>
                         </div>
                         <div className="form-actions">
-                             <button type="submit" className="btn btn-submit" disabled={isLoading || !userId}>
+                             <button type="submit" className="submit-btn" disabled={isLoading || !userId}>
                                 {isLoading ? 'กำลังบันทึก...' : (editingCoupon ? 'บันทึกการแก้ไข' : 'สร้างคูปอง')}
                             </button>
                             {editingCoupon && (
-                                <button type="button" className="btn btn-cancel" onClick={resetForm} disabled={isLoading}>
+                                <button type="button" className="cancel-btn" onClick={resetForm} disabled={isLoading}>
                                     ยกเลิก
                                 </button>
                             )}
                         </div>
                     </form>
                 </div>
-            )}
-        </div>
+            </div>
 
-        <div className="content-card">
-           <div className="table-toolbar">
+            <hr className="divider-line" />
+
+            {/* --- TABLE TOOLBAR --- */}
+            <div className="table-toolbar">
                 <div className="tabs">
-                    <button className={activeTab === 'all' ? 'active' : ''} onClick={() => setActiveTab('all')}>
-                        คูปองที่ใช้งานได้ ({allActiveCoupons.length})
+                    <button className={activeTab === 'active' ? 'active' : ''} onClick={() => { setActiveTab('active'); setCurrentPage(1); }}>
+                        ใช้งานได้ ({activeCoupons.length})
                     </button>
-                    <button className={activeTab === 'used' ? 'active' : ''} onClick={() => setActiveTab('used')}>
-                        ประวัติ ({redeemedCoupons.length})
+                    <button className={activeTab === 'used' ? 'active' : ''} onClick={() => { setActiveTab('used'); setCurrentPage(1); }}>
+                        ใช้แล้ว ({usedCoupons.length})
+                    </button>
+                    <button className={activeTab === 'expired' ? 'active' : ''} onClick={() => { setActiveTab('expired'); setCurrentPage(1); }}>
+                        หมดอายุ ({expiredCoupons.length})
                     </button>
                 </div>
                 <div className="search-container">
-                    <input 
-                        type="text" 
-                        placeholder="ค้นหา..." 
-                        value={searchQuery} 
-                        onChange={(e) => setSearchQuery(e.target.value)} 
+                    <input
+                        type="text"
+                        placeholder="ค้นหาชื่อ, รหัส..."
+                        value={searchQuery}
+                        onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
+                        className="modern-input search-input"
                     />
                 </div>
-           </div>
+            </div>
 
-            <div className="table-responsive">
+            {/* --- TABLE SECTION --- */}
+            <div className="table-responsive-container">
                 <table className="data-table">
                     <thead>
                         <tr>
-                            <th></th>
+                            <th>เลือก</th>
+                            <th>ชื่อคูปอง</th>
+                            <th>ส่วนลด</th>
                             <th>รหัส</th>
-                            <th>มูลค่า</th>
-                            <th>ข้อความหลัก</th>
                             <th>สถานะ</th>
-                            <th>วันหมดอายุ</th>
-                            {activeTab !== 'all' && ( // แสดงเฉพาะเมื่อไม่ใช่แท็บ "คูปองที่ใช้งานได้"
-                                <>
-                                    <th>เวลาที่ถูกใช้งาน</th>
-                                    <th>สมาชิก ที่ใช้</th> {/* Added new table header */}
-                                </>
-                            )}
+                            {activeTab === 'active' && <th>วันหมดอายุ</th>}
+                            {activeTab === 'used' && <th>วันที่ใช้</th>}
+                            {activeTab === 'expired' && <th>วันที่หมดอายุ</th>}
                             <th>จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
                         {currentItems.length > 0 ? currentItems.map(coupon => (
-                            <tr key={coupon.id}>
-                                <td>
-                                    <input 
-                                        type="checkbox" 
-                                        className="row-checkbox"
+                            <tr key={coupon.id} className={editingCoupon?.id === coupon.id ? "selected-row" : ""}>
+                                <td data-label="เลือก">
+                                    <input
+                                        type="checkbox"
                                         checked={editingCoupon?.id === coupon.id}
                                         onChange={() => handleEditSelect(coupon)}
                                     />
                                 </td>
-                                <td data-label="รหัส">{coupon.code} {newlyCreatedCouponId === coupon.code && <span className="new-tag">ใหม่</span>}</td>
-                                <td data-label="มูลค่า">{coupon.amount} บาท</td>
-                                <td data-label="ข้อความหลัก">{coupon.reason || '-'}</td>
-                                <td data-label="สถานะ">{getStatusComponent(coupon)}</td>
-                                <td data-label="วันหมดอายุ">{coupon.expiresAt?.toDate().toLocaleDateString('th-TH')}</td>
-                                {activeTab !== 'all' && ( // แสดงเฉพาะเมื่อไม่ใช่แท็บ "คูปองที่ใช้งานได้"
-                                    <>
-                                        <td data-label="เวลาใช้งาน/หมดอายุ"> {/* แสดงข้อมูลเวลา */}
-                                            {getActualStatus(coupon) === 'USED' && coupon.redeemedAt?.toDate ?
-                                                `${coupon.redeemedAt.toDate().toLocaleDateString('th-TH')} ${coupon.redeemedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
-                                                : (getActualStatus(coupon) === 'EXPIRED' ?
-                                                    `${coupon.expiresAt?.toDate().toLocaleDateString('th-TH')} ${coupon.expiresAt?.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
-                                                    : '-'
-                                                )
-                                            }
-                                        </td>
-                                        <td data-label="Member ที่ใช้"> {/* Added new table data cell */}
-                                            {coupon.redeemedForMembers && coupon.redeemedForMembers.length > 0
-                                                ? coupon.redeemedForMembers.join(', ')
-                                                : '-'}
-                                        </td>
-                                    </>
-                                )}
-                                <td data-label="จัดการ" className="actions-cell">
-                                  <div className="action-menu-container">
-                                    <button
-                                      className="action-menu-trigger"
-                                      onClick={(e) => {
-                                        const rect = e.currentTarget.getBoundingClientRect();
-
-                                        setMenuOpenId((prevId) => {
-                                          // ถ้าคลิกซ้ำเมนูเดิม → ปิด
-                                          if (prevId === coupon.id) {
-                                            return null;
-                                          } else {
-                                            // คลิกเมนูใหม่ → เปิดเมนูใหม่
-                                            setMenuPosition({
-                                              top: rect.bottom + window.scrollY + 4,
-                                              left: rect.right + window.scrollX - 150,
-                                            });
-                                            return coupon.id;
-                                          }
-                                        });
-                                      }}
-                                    >
-                                      ⋯
-                                    </button>
-                                    {selectedCoupon && (
-                                      <div
-                                        className="fixed-dropdown"
-                                        style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px`, position: 'fixed' }}
-                                      >
-                                        <button className="dropdown-btn view" onClick={() => { openCouponModal(selectedCoupon); setMenuOpenId(null); }}>
-                                          <FiEye /> ดูคูปอง
+                                <td data-label="ชื่อคูปอง">{coupon.name || '-'}</td>
+                                <td data-label="ส่วนลด">{coupon.discount || coupon.amount} บาท</td>
+                                <td data-label="รหัส">{coupon.code}</td>
+                                <td data-label="สถานะ">{getStatusComponent(getActualStatus(coupon))}</td>
+                                {activeTab === 'active' && <td data-label="วันหมดอายุ">{formatDate(coupon.expiresAt)}</td>}
+                                {activeTab === 'used' && <td data-label="วันที่ใช้">{formatDate(coupon.redeemedAt)}</td>}
+                                {activeTab === 'expired' && <td data-label="วันที่หมดอายุ">{formatDate(coupon.expiresAt)}</td>}
+                                <td data-label="จัดการ">
+                                    <div className="action-buttons">
+                                        <button className="action-btn view-btn" onClick={() => openCouponModal(coupon)}>
+                                            ดูคูปอง
                                         </button>
-                                        {getActualStatus(selectedCoupon) !== 'ACTIVE' && (
-                                          <button className="dropdown-btn restore" onClick={() => { handleRestoreCoupon(selectedCoupon.id); setMenuOpenId(null); }}>
-                                            <FiRotateCcw /> กู้คืน
-                                          </button>
-                                        )}
-                                        <button className="dropdown-btn delete" onClick={() => { handleDeleteCoupon(selectedCoupon.id); setMenuOpenId(null); }}>
-                                          <FiTrash2 /> ลบ
+                                        <button className="action-btn delete-btn" onClick={() => handleDeleteCoupon(coupon.id)}>
+                                            ลบ
                                         </button>
-                                      </div>
-                                    )}
-
-                                  </div>
+                                    </div>
                                 </td>
-
                             </tr>
                         )) : (
-                            <tr><td colSpan={activeTab !== 'all' ? 9 : 7} className="no-data">ไม่พบข้อมูล</td></tr>
+                            <tr><td colSpan="7" className="no-data-message">ไม่พบข้อมูลคูปอง</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
-            {totalPages > 1 && ( // แสดง pagination เมื่อมีมากกว่า 1 หน้า
-                <div className="pagination">
+
+            {/* --- PAGINATION --- */}
+            {totalPages > 1 && (
+                <div className="pagination-controls">
                   {Array.from({ length: totalPages }, (_, i) => (
-                    <button key={i + 1} onClick={() => paginate(i + 1)} className={currentPage === i + 1 ? 'active' : ''}>
+                    <button key={i + 1} onClick={() => paginate(i + 1)} className={`pagination-button ${currentPage === i + 1 ? 'active' : ''}`}>
                       {i + 1}
                     </button>
                   ))}
                 </div>
             )}
-        </div>
-      </div>
 
-      {viewingCoupon && (
-        <div className="modal-backdrop" onClick={closeCouponModal}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <button className="modal-close-button" onClick={closeCouponModal}>&times;</button>
-                <CouponTicket coupon={viewingCoupon} />
-                <div className="modal-actions">
-                    <button className="copy-code-button" onClick={() => handleCopyCode(viewingCoupon.code)}>
-                        คัดลอกรหัส "{viewingCoupon.code}"
-                    </button>
+            {/* --- MODAL --- */}
+            {viewingCoupon && (
+                <div className="modal-backdrop" onClick={closeCouponModal}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="modal-close-button" onClick={closeCouponModal}>&times;</button>
+
+                        <StyledCouponTicket coupon={viewingCoupon} ref={couponTicketRef} />
+
+                        <button className="download-coupon-btn" onClick={handleDownloadCouponImage}>
+                            <FiDownload /> ดาวน์โหลดคูปองนี้
+                        </button>
+                    </div>
                 </div>
-            </div>
+             )}
+
+            <style jsx>{`
+                /* Global, Form, Table, Toolbar, Pagination Styles */
+                .main-content { padding: 20px; background-color: #f7f7f7; font-family: 'Kanit', sans-serif; }
+                h2 { font-size: 18px; margin-bottom: 10px; color: #333; }
+                .title-separator { border: 0; border-top: 1px solid #aebdc9; margin-bottom: 25px; }
+                .divider-line { margin: 30px 0; border-top: 1px solid #aebdc9; }
+                .form-section { background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); border: 1px solid #e9e9e9; margin-bottom: 20px; }
+                .form-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background-color: #e9e9e9; border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom: 1px solid #ddd; cursor: pointer; user-select: none; }
+                .form-header h3 { margin: 0; font-size: 14px; color: #333; }
+                .toggle-form-button { background: none; border: none; font-size: 20px; font-weight: bold; cursor: pointer; color: #555; }
+                .form-content { overflow: hidden; transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding 0.5s ease-out; max-height: 0px; opacity: 0; padding: 0 15px; }
+                .form-content.expanded { max-height: 500px; opacity: 1; padding: 20px 15px; }
+                .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+                .form-grid .full-width { grid-column: 1 / -1; }
+                .form-label { font-size: 12px; color: #333; display: block; margin-bottom: 4px; }
+                .modern-input { outline: none; border: 1px solid #ccc; padding: 8px 12px; font-size: 14px; width: 100%; border-radius: 5px; transition: border-color 0.2s, box-shadow 0.2s; }
+                .modern-input:focus { border-color: #333; box-shadow: 0 0 0 3px rgba(226, 226, 226, 0.2); }
+                .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #f0f0f0; }
+                .submit-btn, .cancel-btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; transition: background-color 0.2s; font-weight: 600; }
+                .submit-btn { background-color: #57e497; color: white; }
+                .submit-btn:hover { background-color: #3fc57b; }
+                .cancel-btn { background-color: #9e9e9e; color: white; }
+                .cancel-btn:hover { background-color: #757575; }
+                .submit-btn:disabled, .cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+                .tabs { display: flex; gap: 5px; background-color: #e0e0e0; border-radius: 8px; padding: 4px; }
+                .tabs button { padding: 6px 16px; border: none; background: none; cursor: pointer; font-size: 13px; color: #555; border-radius: 6px; transition: all 0.3s; }
+                .tabs button.active { background-color: #ffffff; color: #000; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                .search-container { width: 250px; }
+                .table-responsive-container { overflow-x: auto; }
+                .data-table { width: 100%; border-collapse: collapse; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+                .data-table th, .data-table td { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; text-align: center; font-size: 12px; vertical-align: middle; }
+                .data-table th:last-child, .data-table td:last-child { border-right: none; }
+                .data-table th { background-color: #323943; color: white; font-weight: 600; }
+                .data-table tbody tr.selected-row { background-color: #e8f5e9 !important; }
+                .data-table tbody tr:hover { background-color: #f5f5f5; }
+                .no-data-message { text-align: center; font-style: italic; color: #888; padding: 30px; }
+                .status-badge { padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+                .status-badge.status-active { background-color: #e6f7ff; color: #1890ff; }
+                .status-badge.status-used { background-color: #f6f6f6; color: #595959; }
+                .status-badge.status-expired { background-color: #fff1f0; color: #f5222d; }
+                .pagination-controls { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 20px; }
+                .pagination-button { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; background-color: #f0f0f0; cursor: pointer; font-size: 12px; }
+                .pagination-button:hover { background-color: #e0e0e0; }
+                .pagination-button.active { background-color: #6c757d; color: white; border-color: #6c757d; }
+
+                /* Action Button & Modal Styles */
+                .action-buttons { display: flex; gap: 8px; justify-content: center; }
+                .action-btn { padding: 6px 12px; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; transition: all 0.2s; font-weight: 600; }
+                .view-btn { background-color: #57e497; color: white; }
+                .view-btn:hover { background-color: #3fc57b; }
+                .delete-btn { background-color: #f44336; color: white; }
+                .delete-btn:hover { background-color: #c62828; }
+                .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 20px; backdrop-filter: blur(5px); }
+                .modal-content { position: relative; width: 100%; max-width: 500px; background: transparent; box-shadow: none; display: flex; flex-direction: column; align-items: center; gap: 20px;}
+                .modal-close-button { position: absolute; top: 0px; right: 0px; background: #fff; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 24px; cursor: pointer; color: #333; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 10; display: flex; align-items: center; justify-content: center; transform: translate(40%, -40%); }
+                .download-coupon-btn { display: inline-flex; align-items: center; gap: 10px; background-color: #fff; color: #333; border: 1px solid #ddd; padding: 10px 20px; font-size: 14px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                .download-coupon-btn:hover { background-color: #f0f0f0; box-shadow: 0 4px 8px rgba(0,0,0,0.15); transform: translateY(-2px); }
+                .download-coupon-btn svg { font-size: 16px; }
+
+                /* Responsive Styles */
+                @media (max-width: 768px) {
+                    .form-grid { grid-template-columns: 1fr; }
+                    .table-toolbar { flex-direction: column; align-items: stretch; }
+                    .search-container { width: 100%; }
+                    .data-table thead { display: none; }
+                    .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
+                    .data-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 5px; }
+                    .data-table td { text-align: right; padding-left: 50%; position: relative; border-right: none; border-bottom: 1px solid #eee; }
+                    .data-table tr td:last-child { border-bottom: none; }
+                    .data-table td::before { content: attr(data-label); position: absolute; left: 15px; width: 45%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: bold; }
+                }
+            `}</style>
         </div>
-      )}
-
-      <style jsx>{`
-        /* --- Global & Page Layout --- */
-        .page-container {
-          background-color: #f0f2f5;
-          padding: 16px; /* Reduced from 24px */
-          font-family: 'Kanit', sans-serif;
-        }
-        h1 {
-          font-size: 24px;
-          font-weight: 600;
-          color: #333;
-          margin-bottom: 20px; /* Adjusted from 24px */
-        }
-        .content-card {
-          background-color: #ffffff;
-          border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-          margin-bottom: 20px; /* Adjusted from 24px */
-          overflow: hidden;
-        }
-        .card-header {
-          background-color: #f7f7f7;
-          padding: 10px 20px; /* Reduced from 12px 24px */
-          border-bottom: 1px solid #e8e8e8;
-          cursor: pointer;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-weight: 500;
-        }
-        .collapse-icon {
-          font-size: 20px;
-        }
-        .card-body {
-          padding: 20px; /* Reduced from 24px */
-        }
-        .action-menu-container {
-          position: relative;
-          display: inline-block;
-        }
-        .action-menu-trigger {
-          background: none;
-          border: none;
-          font-size: 20px;
-          cursor: pointer;
-          padding: 4px 8px;
-        }
-        .action-dropdown {
-          position: absolute;
-          right: 0;
-          top: 28px;
-          display: none;
-          flex-direction: column;
-          background-color: #fff;
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-          z-index: 999;
-          min-width: 120px;
-        }
-        .action-dropdown button {
-          background: none;
-          border: none;
-          padding: 10px 12px;
-          font-size: 14px;
-          text-align: left;
-          cursor: pointer;
-          color: #333;
-        }
-        .action-dropdown button:hover {
-          background-color: #f0f0f0;
-        }
-        .action-dropdown .danger {
-          color: #f5222d;
-        }
-
-        /* --- Form Styles --- */
-        .form-grid {
-          display: grid;
-          /* Adjusted grid to allow 3 columns on larger screens, flexible on smaller */
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Adjusted minmax for smaller items */
-          gap: 20px; /* Reduced from 24px */
-        }
-        /* No longer needed: .form-group.full-width { grid-column: 1 / -1; } */
-        .form-group label {
-          display: block;
-          margin-bottom: 6px; /* Adjusted from 8px */
-          font-size: 14px;
-          color: #555;
-          font-weight: 500;
-        }
-        .fixed-dropdown {
-          background: #fff;
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-          z-index: 9999;
-          display: flex;
-          flex-direction: column;
-          min-width: 140px;
-        }
-        .fixed-dropdown .dropdown-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 12px;
-          border: none;
-          background: none;
-          font-size: 14px;
-          cursor: pointer;
-        }
-        .fixed-dropdown .dropdown-btn:hover {
-          background-color: #f0f0f0;
-        }
-        .fixed-dropdown .view {
-          color: #1677ff;
-        }
-        .fixed-dropdown .restore {
-          color: #28a745;
-        }
-        .fixed-dropdown .delete {
-          color: #f5222d;
-        }
-
-        .form-group input {
-          width: 100%; /* Make input fill its grid column */
-          padding: 8px 10px; /* Reduced from 10px 12px */
-          border: 1px solid #d9d9d9;
-          border-radius: 4px;
-          font-size: 14px;
-          transition: border-color 0.3s;
-        }
-        .form-group input:focus {
-          border-color: #1677ff;
-          outline: none;
-        }
-        /* No specific width for .reason-input needed now as it's handled by grid */
-        .preset-amounts {
-          margin-top: 6px; /* Adjusted from 8px */
-          display: flex;
-          gap: 6px; /* Adjusted from 8px */
-        }
-        .preset-amounts button {
-          padding: 5px 10px; /* Adjusted from 6px 12px */
-          border: 1px solid #d9d9d9;
-          background-color: #fafafa;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        .preset-amounts button:hover {
-          border-color: #1677ff;
-          color: #1677ff;
-        }
-        .form-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px; /* Adjusted from 12px */
-          margin-top: 20px; /* Adjusted from 24px */
-          padding-top: 20px; /* Adjusted from 24px */
-          border-top: 1px solid #f0f0f0;
-        }
-        .btn {
-          padding: 7px 14px; /* Adjusted from 8px 16px */
-          border-radius: 4px;
-          border: none;
-          font-size: 14px;
-          cursor: pointer;
-          transition: background-color 0.3s;
-        }
-        .btn-submit {
-          background-color: #28a745; /* Green color like the reference */
-          color: white;
-        }
-        .btn-submit:hover {
-          background-color: #218838;
-        }
-        .btn-cancel {
-          background-color: #6c757d; /* Grey color */
-          color: white;
-        }
-        .btn-cancel:hover {
-          background-color: #5a6268;
-        }
-        .btn:disabled {
-          background-color: #f5f5f5;
-          color: #d9d9d9;
-          cursor: not-allowed;
-        }
-        .btn-clear-reason {
-            padding: 5px 9px; /* Adjusted padding for icon */
-            border: 1px solid #1890ff; /* Blue border */
-            background-color: #e6f7ff; /* Light blue background */
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-            color: #1890ff; /* Blue text/icon color */
-        }
-        .btn-clear-reason:hover {
-            background-color: #bae7ff; /* Lighter blue on hover */
-            color: #0c84ff;
-        }
-
-
-        .action-dropdown .dropdown-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: none;
-          border: none;
-          padding: 10px 12px;
-          font-size: 14px;
-          text-align: left;
-          cursor: pointer;
-          transition: background-color 0.2s;
-          color: #333;
-        }
-        .action-dropdown .dropdown-btn:hover {
-          background-color: #f0f0f0;
-        }
-        .action-dropdown .dropdown-btn svg {
-          font-size: 16px;
-        }
-        .action-dropdown .dropdown-btn.view {
-          color: #1677ff;
-        }
-        .action-dropdown .dropdown-btn.restore {
-          color: #28a745;
-        }
-        .action-dropdown .dropdown-btn.delete {
-          color: #f5222d;
-        }
-
-
-        /* --- Table Toolbar (Tabs & Search) --- */
-        .table-toolbar {
-          padding: 14px 20px; /* Reduced from 16px 24px */
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 14px; /* Adjusted from 16px */
-        }
-        .tabs {
-          display: flex;
-          gap: 7px; /* Adjusted from 8px */
-        }
-        .tabs button {
-          padding: 7px 14px; /* Adjusted from 8px 16px */
-          border: 1px solid transparent;
-          border-bottom: 2px solid transparent;
-          background: none;
-          cursor: pointer;
-          font-size: 14px;
-          color: #555;
-          transition: all 0.3s;
-        }
-        .tabs button:hover {
-          color: #1677ff;
-        }
-        .tabs button.active {
-          color: #1677ff;
-          font-weight: 500;
-          border-bottom: 2px solid #1677ff;
-        }
-        .search-container input {
-          padding: 7px 10px; /* Adjusted from 8px 12px */
-          border: 1px solid #d9d9d9;
-          border-radius: 6px;
-          width: 220px; /* Slightly reduced width */
-        }
-
-        /* --- Table Styles --- */
-        .table-responsive {
-          width: 100%;
-          overflow-x: auto;
-        }
-        .data-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .data-table th, .data-table td {
-          padding: 14px; /* Reduced from 16px */
-          text-align: left;
-          font-size: 14px;
-        }
-        .data-table thead {
-          background-color: #262626; /* Dark header like reference */
-          color: #fff;
-        }
-        .data-table thead th {
-          font-weight: 500;
-        }
-        .data-table tbody tr {
-          border-bottom: 1px solid #f0f0f0;
-          transition: background-color 0.2s;
-        }
-        .data-table tbody tr:hover {
-          background-color: #fafafa;
-        }
-        .row-checkbox {
-            cursor: pointer;
-        }
-        .status-badge {
-          padding: 3px 10px; /* Adjusted from 4px 12px */
-          border-radius: 10px; /* Adjusted from 12px */
-          font-size: 11px; /* Slightly reduced font size */
-          font-weight: 500;
-          text-transform: capitalize;
-        }
-        .status-badge.status-active {
-          background-color: #e6f7ff;
-          color: #1890ff;
-        }
-        .status-badge.status-used {
-          background-color: #f6f6f6;
-          color: #595959;
-        }
-        .status-badge.status-expired {
-          background-color: #fff1f0;
-          color: #f5222d;
-        }
-        .actions-cell {
-            display: flex;
-            gap: 10px; /* Adjusted from 12px */
-        }
-        .action-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: #1677ff;
-            font-size: 14px;
-        }
-        .action-btn.delete-btn {
-            color: #ff4d4f;
-        }
-        .action-btn.restore-btn { /* Style for the new restore button */
-            color: #28a745; /* Green color */
-        }
-        .no-data {
-            text-align: center;
-            padding: 40px; /* Adjusted from 48px */
-            color: #888;
-        }
-        .new-tag {
-            background-color: #e6f7ff;
-            color: #1890ff;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            margin-left: 4px;
-        }
-        /* Pagination */
-        .pagination {
-            padding: 14px 20px; /* Reduced from 16px 24px */
-            text-align: right;
-        }
-        .pagination button {
-            margin: 0 3px; /* Adjusted from 4px */
-            padding: 5px 10px; /* Adjusted from 6px 12px */
-            border: 1px solid #d9d9d9;
-            background-color: #fff;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .pagination button:hover {
-            border-color: #1677ff;
-            color: #1677ff;
-        }
-        .pagination button.active {
-            background-color: #1677ff;
-            border-color: #1677ff;
-            color: #fff;
-        }
-        
-        /* Modal Styles */
-        .modal-backdrop { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background-color: rgba(0,0,0,0.6);
-            display: flex; justify-content: center; 
-            align-items: center; z-index: 1000; padding: 15px; 
-            backdrop-filter: blur(3px);
-        }
-        .modal-content { 
-            position: relative; width: 100%; max-width: 550px;
-            background-color: transparent; box-shadow: none;
-            z-index: 1001;
-            animation: fadeInScale 0.3s ease-out;
-        }
-        @keyframes fadeInScale {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .modal-close-button { 
-            position: absolute; top: -15px; right: -15px;
-            background: #fff; border: none;
-            border-radius: 50%; width: 36px; height: 36px;
-            font-size: 24px; cursor: pointer; color: #333;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            z-index: 10;
-            transition: all 0.2s ease;
-        }
-        .modal-close-button:hover {
-            transform: rotate(90deg);
-        }
-        .modal-actions {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .copy-code-button {
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: white; border: none; border-radius: 6px;
-            cursor: pointer; font-size: 16px; font-weight: 500;
-            transition: background-color 0.2s ease;
-        }
-        .copy-code-button:hover {
-            background-color: #218838;
-        }
-
-        /* --- Ticket Styles (Self-contained) --- */
-        .ticket-svg-container { max-width: 500px; margin: 0 auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); }
-        .qr-code-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: white; border-radius: 8px; padding: 5px; }
-        .info-wrapper { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 10px; color: #333; font-weight: bold; text-align: center; }
-        .info-header { font-size: 0.8rem; font-weight: 600; letter-spacing: 1px; color: rgba(0,0,0,0.7); }
-        .info-main { font-size: 2.5rem; font-weight: 800; line-height: 1.1; padding: 5px; text-transform: uppercase; }
-        .info-footer { font-size: 0.8rem; font-weight: 500; color: rgba(0,0,0,0.6); }
-
-      `}</style>
-    </>
-  );
+    );
 };
 
 export default CouponsPage;
