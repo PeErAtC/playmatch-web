@@ -1031,14 +1031,78 @@ const MatchDetails = () => {
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "15px" }}>
-          <button onClick={handleCalculateClick} style={{ backgroundColor: "#007bff", color: "#fff", padding: "10px 20px", borderRadius: "5px", border: "none", cursor: "pointer", fontSize: "15px" }}>คำนวณค่าใช้จ่าย</button>
+          <button onClick={handleCalculateClick} style={{ backgroundColor: "#17a2b8", color: "#fff", padding: "10px 20px", borderRadius: "5px", border: "none", cursor: "pointer", fontSize: "15px" }}>คำนวณค่าใช้จ่าย</button>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #eee" }}>
-          {isDataCalculated && (<button onClick={handleExportToExcel} style={{ backgroundColor: "#4bf196", color: "#fff", padding: "10px 20px", borderRadius: "5px", border: "none", cursor: "pointer", fontSize: "15px" }}>ดาวน์โหลด Excel</button>)}
-          {isDataCalculated && (<button onClick={handleSaveToRanking} disabled={isSavingRanking} style={{ backgroundColor: "#d33", color: "#fff", padding: "10px 20px", borderRadius: "5px", border: "none", cursor: "pointer", fontSize: "15px", opacity: isSavingRanking ? 0.7 : 1 }}>{isSavingRanking ? (<><span className="spinner"></span> กำลังบันทึก...</>) : ("บันทึกข้อมูล Ranking")}</button>)}
-          {isDataCalculated && (<button onClick={handleSavePaymentHistory} style={{ backgroundColor: "#28a745", color: "#fff", padding: "10px 20px", borderRadius: "5px", border: "none", cursor: "pointer", fontSize: "15px" }}>บันทึกประวัติการชำระ</button>)}
+        {/********** START: CORRECTED CODE **********/}
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "10px", 
+          marginTop: "15px", 
+          paddingTop: "15px", 
+          borderTop: "1px solid #eee" 
+        }}>
+          {/* ปุ่มด้านซ้าย */}
+          <div>
+            {isDataCalculated && (
+              <button 
+                onClick={handleExportToExcel} 
+                style={{ 
+                  backgroundColor: "#4bf196",
+                  color: "#fff", 
+                  padding: "10px 20px", 
+                  borderRadius: "5px", 
+                  border: "none", 
+                  cursor: "pointer", 
+                  fontSize: "15px" 
+                }}
+              >
+                ดาวน์โหลด Excel
+              </button>
+            )}
+          </div>
+
+          {/* กลุ่มปุ่มด้านขวา */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            {isDataCalculated && (
+              <button 
+                onClick={handleSaveToRanking} 
+                disabled={isSavingRanking} 
+                style={{ 
+                  backgroundColor: "#d33", 
+                  color: "#fff", 
+                  padding: "10px 20px", 
+                  borderRadius: "5px", 
+                  border: "none", 
+                  cursor: "pointer", 
+                  fontSize: "15px", 
+                  opacity: isSavingRanking ? 0.7 : 1 
+                }}
+              >
+                {isSavingRanking ? (<><span className="spinner"></span> กำลังบันทึก...</>) : ("บันทึกข้อมูล Ranking")}
+              </button>
+            )}
+            {isDataCalculated && (
+              <button 
+                onClick={handleSavePaymentHistory} 
+                style={{ 
+                  backgroundColor: "#4bf196", 
+                  color: "#fff", 
+                  padding: "10px 20px", 
+                  borderRadius: "5px", 
+                  border: "none", 
+                  cursor: "pointer", 
+                  fontSize: "15px" 
+                }}
+              >
+                บันทึกประวัติการชำระ
+              </button>
+            )}
+          </div>
         </div>
+        {/********** END: CORRECTED CODE **********/}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
