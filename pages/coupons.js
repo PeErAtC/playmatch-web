@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db, auth } from '../lib/firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, doc, deleteDoc, updateDoc, limit, startAfter } from 'firebase/firestore';
 import Barcode from 'react-barcode';
 import Swal from 'sweetalert2';
 import Head from 'next/head';
@@ -20,7 +20,6 @@ const formatDate = (date) => {
     });
 };
 
-// <<< DESIGN FIX: ย้ายสไตล์เข้ามาอยู่ในคอมโพเนนต์นี้โดยตรงเพื่อแก้ปัญหาการแสดงผล >>>
 const StyledCouponTicket = React.forwardRef(({ coupon }, ref) => {
     if (!coupon) return null;
 
@@ -51,7 +50,6 @@ const StyledCouponTicket = React.forwardRef(({ coupon }, ref) => {
                     </div>
                 </div>
             </div>
-            {/* <<< STYLES MOVED HERE to fix display issue >>> */}
             <style jsx>{`
                 .coupon-render-wrapper {
                     width: 100%;
@@ -152,15 +150,19 @@ const CouponsPage = () => {
         return today.toISOString().split('T')[0];
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [allCoupons, setAllCoupons] = useState([]);
+    const [coupons, setCoupons] = useState([]);
     const [viewingCoupon, setViewingCoupon] = useState(null);
     const [userId, setUserId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [isFormExpanded, setIsFormExpanded] = useState(false);
     const [editingCoupon, setEditingCoupon] = useState(null);
     const [activeTab, setActiveTab] = useState('active');
+
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [lastVisible, setLastVisible] = useState(null);
+    const [pageHistory, setPageHistory] = useState([]);
+    const [hasNextPage, setHasNextPage] = useState(true);
 
     const couponTicketRef = useRef(null);
 
@@ -170,28 +172,70 @@ const CouponsPage = () => {
                 setUserId(user.uid);
             } else {
                 setUserId(null);
+                setCoupons([]);
             }
         });
         return () => unsubscribe();
     }, []);
 
-    const fetchCoupons = async () => {
+    const fetchCoupons = useCallback(async (direction = 'first') => {
         if (!userId) {
-            setAllCoupons([]);
+            setCoupons([]);
             return;
         }
+
+        setIsLoading(true);
         const couponsRef = collection(db, `users/${userId}/Coupons`);
-        const q = query(couponsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const couponsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAllCoupons(couponsList);
-    };
+        let q;
+
+        const baseQuery = query(couponsRef, orderBy('createdAt', 'desc'));
+
+        if (direction === 'next' && lastVisible) {
+            q = query(baseQuery, startAfter(lastVisible), limit(itemsPerPage));
+        } else if (direction === 'prev' && pageHistory.length > 0) {
+            const prevCursor = pageHistory[pageHistory.length - 1] || null;
+            q = query(baseQuery, startAfter(prevCursor), limit(itemsPerPage));
+        } else {
+            q = query(baseQuery, limit(itemsPerPage));
+        }
+
+        try {
+            const querySnapshot = await getDocs(q);
+            const couponsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            if (!querySnapshot.empty) {
+                const newLastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
+                setLastVisible(newLastVisible);
+
+                if (direction === 'next') {
+                    setPageHistory(prev => [...prev, lastVisible]);
+                    setCurrentPage(prev => prev + 1);
+                } else if (direction === 'prev') {
+                    setPageHistory(prev => prev.slice(0, -1));
+                    setCurrentPage(prev => Math.max(1, prev - 1));
+                } else {
+                    setCurrentPage(1);
+                    setPageHistory([]);
+                }
+            }
+
+            setCoupons(couponsList);
+            setHasNextPage(couponsList.length === itemsPerPage);
+
+        } catch (error) {
+            console.error("Error fetching coupons:", error);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลคูปองได้', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [userId, itemsPerPage, lastVisible, pageHistory]);
 
     useEffect(() => {
         if (userId) {
-            fetchCoupons();
+            setLastVisible(null);
+            fetchCoupons('first');
         }
-    }, [userId]);
+    }, [userId, itemsPerPage]);
 
     const resetForm = () => {
         setAmount('');
@@ -225,33 +269,15 @@ const CouponsPage = () => {
             if (editingCoupon) {
                 const couponDocRef = doc(db, `users/${userId}/Coupons`, editingCoupon.id);
                 await updateDoc(couponDocRef, couponData);
-                Swal.fire({ 
-                  icon: 'success', 
-                  title: 'แก้ไขคูปองสำเร็จ!', 
-                  text: `รหัสคูปอง: ${editingCoupon.code}`,
-                  showConfirmButton: false, 
-                  timer: 2000 });
+                Swal.fire({ icon: 'success', title: 'แก้ไขคูปองสำเร็จ!', text: `รหัสคูปอง: ${editingCoupon.code}`, showConfirmButton: false, timer: 2000 });
             } else {
                 const newCode = 'PROMO-' + Math.random().toString(36).substr(2, 8).toUpperCase();
                 const couponsRef = collection(db, `users/${userId}/Coupons`);
-                await addDoc(couponsRef, {
-                    ...couponData,
-                    code: newCode,
-                    status: 'ACTIVE',
-                    createdAt: serverTimestamp(),
-                    redeemedBy: null,
-                    redeemedAt: null,
-                    redeemedForMembers: [],
-                });
-                Swal.fire({ 
-                  icon: 'success', 
-                  title: 'สร้างคูปองสำเร็จ!', 
-                  text: `รหัสคูปอง: ${newCode}`,
-                  showConfirmButton: false, 
-                  timer: 2500 });
+                await addDoc(couponsRef, { ...couponData, code: newCode, status: 'ACTIVE', createdAt: serverTimestamp(), redeemedBy: null, redeemedAt: null, redeemedForMembers: [] });
+                Swal.fire({ icon: 'success', title: 'สร้างคูปองสำเร็จ!', text: `รหัสคูปอง: ${newCode}`, showConfirmButton: false, timer: 2500 });
             }
             resetForm();
-            await fetchCoupons();
+            await fetchCoupons('first');
         } catch (error) {
             console.error("Error saving coupon:", error);
             Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกคูปองได้', 'error');
@@ -276,7 +302,7 @@ const CouponsPage = () => {
             try {
               await deleteDoc(doc(db, `users/${userId}/Coupons`, couponId));
               Swal.fire('ลบแล้ว!', 'คูปองของคุณถูกลบเรียบร้อยแล้ว', 'success');
-              fetchCoupons();
+              fetchCoupons('first');
             } catch (error) {
               console.error("Error deleting coupon:", error);
               Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถลบคูปองได้', 'error');
@@ -294,15 +320,10 @@ const CouponsPage = () => {
         const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true });
 
         try {
-            const canvas = await html2canvas(couponTicketRef.current, {
-                backgroundColor: null,
-                scale: 3,
-                useCORS: true
-            });
+            const canvas = await html2canvas(couponTicketRef.current, { backgroundColor: null, scale: 3, useCORS: true });
             const fileName = `Coupon_${viewingCoupon.code}.png`;
             saveAs(canvas.toDataURL('image/png'), fileName);
             Toast.fire({ icon: 'success', title: 'ดาวน์โหลดรูปภาพสำเร็จ!' });
-
         } catch (error) {
             console.error("Error generating image:", error);
             Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถสร้างไฟล์รูปภาพได้', 'error');
@@ -341,25 +362,15 @@ const CouponsPage = () => {
     const openCouponModal = (coupon) => setViewingCoupon(coupon);
     const closeCouponModal = () => setViewingCoupon(null);
 
-    const activeCoupons = allCoupons.filter(c => getActualStatus(c) === 'ACTIVE');
-    const usedCoupons = allCoupons.filter(c => getActualStatus(c) === 'USED');
-    const expiredCoupons = allCoupons.filter(c => getActualStatus(c) === 'EXPIRED');
-
-    let couponsToDisplay;
-    if (activeTab === 'active') couponsToDisplay = activeCoupons;
-    else if (activeTab === 'used') couponsToDisplay = usedCoupons;
-    else couponsToDisplay = expiredCoupons;
-
-    const filteredCoupons = couponsToDisplay.filter(coupon =>
+    const couponsOnPage = coupons.filter(coupon =>
         (coupon.name && coupon.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (coupon.code && coupon.code.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredCoupons.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filteredCoupons.length / itemsPerPage);
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+    let currentItems;
+    if (activeTab === 'active') currentItems = couponsOnPage.filter(c => getActualStatus(c) === 'ACTIVE');
+    else if (activeTab === 'used') currentItems = couponsOnPage.filter(c => getActualStatus(c) === 'USED');
+    else currentItems = couponsOnPage.filter(c => getActualStatus(c) === 'EXPIRED');
 
     return (
         <div className="main-content">
@@ -367,7 +378,7 @@ const CouponsPage = () => {
                 <title>จัดการคูปอง - PlayMatch</title>
             </Head>
 
-            <h2>จัดการคูปอง</h2>
+            <h2>จัดการคูปองส่วนลด</h2>
             <hr className="title-separator" />
 
             {/* --- FORM SECTION --- */}
@@ -408,27 +419,69 @@ const CouponsPage = () => {
 
             <hr className="divider-line" />
 
-            {/* --- TABLE TOOLBAR --- */}
-            <div className="table-toolbar">
-                <div className="tabs">
-                    <button className={activeTab === 'active' ? 'active' : ''} onClick={() => { setActiveTab('active'); setCurrentPage(1); }}>
-                        ใช้งานได้ ({activeCoupons.length})
-                    </button>
-                    <button className={activeTab === 'used' ? 'active' : ''} onClick={() => { setActiveTab('used'); setCurrentPage(1); }}>
-                        ใช้แล้ว ({usedCoupons.length})
-                    </button>
-                    <button className={activeTab === 'expired' ? 'active' : ''} onClick={() => { setActiveTab('expired'); setCurrentPage(1); }}>
-                        หมดอายุ ({expiredCoupons.length})
-                    </button>
-                </div>
-                <div className="search-container">
+            {/* --- CONTROLS SECTION (LAYOUT UPDATED) --- */}
+            <div className="controls-section">
+                {/* Row 1: Search Bar */}
+                <div className="search-row">
                     <input
                         type="text"
-                        placeholder="ค้นหาชื่อ, รหัส..."
+                        placeholder="ค้นหาชื่อ, รหัสคูปอง..."
                         value={searchQuery}
-                        onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                         className="modern-input search-input"
                     />
+                </div>
+
+                {/* Row 2: Pagination Controls with Item Count */}
+                <div className="pagination-controls">
+                    <div className="pagination-buttons">
+                        <button
+                            onClick={() => fetchCoupons('prev')}
+                            disabled={currentPage === 1 || isLoading}
+                            className="pagination-button"
+                        >
+                            ย้อนกลับ
+                        </button>
+                        <span>หน้า {currentPage}</span>
+                        <button
+                            onClick={() => fetchCoupons('next')}
+                            disabled={!hasNextPage || isLoading}
+                            className="pagination-button"
+                        >
+                            ถัดไป
+                        </button>
+                    </div>
+                    <div className="pagination-count">
+                        <span>จำนวนคูปองในหน้านี้: {currentItems.length}</span>
+                    </div>
+                </div>
+
+                {/* Row 3: Tabs and Filter */}
+                <div className="table-toolbar">
+                    <div className="tabs">
+                        <button className={activeTab === 'active' ? 'active' : ''} onClick={() => setActiveTab('active')}>
+                            ใช้งานได้
+                        </button>
+                        <button className={activeTab === 'used' ? 'active' : ''} onClick={() => setActiveTab('used')}>
+                            ใช้แล้ว
+                        </button>
+                        <button className={activeTab === 'expired' ? 'active' : ''} onClick={() => setActiveTab('expired')}>
+                            หมดอายุ
+                        </button>
+                    </div>
+                    <div className="per-page-selector">
+                        <label htmlFor="itemsPerPage">แสดง:</label>
+                        <select
+                            id="itemsPerPage"
+                            value={itemsPerPage}
+                            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                            className="modern-input"
+                        >
+                            <option value={10}>10 รายการ</option>
+                            <option value={20}>20 รายการ</option>
+                            <option value={50}>50 รายการ</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -449,7 +502,9 @@ const CouponsPage = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {currentItems.length > 0 ? currentItems.map(coupon => (
+                        {isLoading && !currentItems.length ? (
+                            <tr><td colSpan="7" className="no-data-message">กำลังโหลด...</td></tr>
+                        ) : currentItems.length > 0 ? currentItems.map(coupon => (
                             <tr key={coupon.id} className={editingCoupon?.id === coupon.id ? "selected-row" : ""}>
                                 <td data-label="เลือก">
                                     <input
@@ -494,25 +549,12 @@ const CouponsPage = () => {
                 </table>
             </div>
 
-            {/* --- PAGINATION --- */}
-            {totalPages > 1 && (
-                <div className="pagination-controls">
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button key={i + 1} onClick={() => paginate(i + 1)} className={`pagination-button ${currentPage === i + 1 ? 'active' : ''}`}>
-                      {i + 1}
-                    </button>
-                  ))}
-                </div>
-            )}
-
             {/* --- MODAL --- */}
             {viewingCoupon && (
                 <div className="modal-backdrop" onClick={closeCouponModal}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <button className="modal-close-button" onClick={closeCouponModal}>&times;</button>
-
                         <StyledCouponTicket coupon={viewingCoupon} ref={couponTicketRef} />
-
                         <button className="download-coupon-btn" onClick={handleDownloadCouponImage}>
                             <FiDownload /> ดาวน์โหลดคูปองนี้
                         </button>
@@ -521,7 +563,7 @@ const CouponsPage = () => {
              )}
 
             <style jsx>{`
-                /* Global, Form, Table, Toolbar, Pagination Styles */
+                /* Global, Form, Table, etc. Styles */
                 .main-content { padding: 20px; background-color: #f7f7f7; font-family: 'Kanit', sans-serif; }
                 h2 { font-size: 18px; margin-bottom: 10px; color: #333; }
                 .title-separator { border: 0; border-top: 1px solid #aebdc9; margin-bottom: 25px; }
@@ -544,12 +586,60 @@ const CouponsPage = () => {
                 .cancel-btn { background-color: #9e9e9e; color: white; }
                 .cancel-btn:hover { background-color: #757575; }
                 .submit-btn:disabled, .cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-                .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
-                .tabs { display: flex; gap: 5px; background-color: #e0e0e0; border-radius: 8px; padding: 4px; }
+
+                /* --- CSS LAYOUT UPDATED HERE --- */
+                .search-row {
+                    margin-bottom: 15px;
+                }
+                .pagination-controls { 
+                    display: flex; 
+                    justify-content: space-between; /* Pushes button group and count apart */
+                    align-items: center; 
+                    margin-bottom: 15px;
+                    font-size: 12px; 
+                    flex-wrap: wrap;
+                }
+                .pagination-buttons {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                .pagination-count {
+                    font-weight: 500;
+                    color: #555;
+                }
+                .pagination-button { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; background-color: #f0f0f0; cursor: pointer; font-size: 12px; }
+                .pagination-button:hover:not(:disabled) { background-color: #e0e0e0; }
+                .pagination-button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+                .table-toolbar { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                    flex-wrap: wrap;
+                    gap: 20px;
+                }
+                .tabs { 
+                    display: flex; 
+                    gap: 5px; 
+                    background-color: #e0e0e0; 
+                    border-radius: 8px; 
+                    padding: 4px; 
+                    flex-shrink: 0;
+                }
                 .tabs button { padding: 6px 16px; border: none; background: none; cursor: pointer; font-size: 13px; color: #555; border-radius: 6px; transition: all 0.3s; }
                 .tabs button.active { background-color: #ffffff; color: #000; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-                .search-container { width: 250px; }
-                .table-responsive-container { overflow-x: auto; }
+                .per-page-selector { 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 8px; 
+                    font-size: 12px;
+                    flex-shrink: 0;
+                }
+                .per-page-selector .modern-input { width: 110px; padding: 6px 8px; font-size: 12px; }
+
+                /* --- TABLE STYLES --- */
+                .table-responsive-container { overflow-x: auto; margin-top: 20px; }
                 .data-table { width: 100%; border-collapse: collapse; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
                 .data-table th, .data-table td { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0; text-align: center; font-size: 12px; vertical-align: middle; }
                 .data-table th:last-child, .data-table td:last-child { border-right: none; }
@@ -561,10 +651,6 @@ const CouponsPage = () => {
                 .status-badge.status-active { background-color: #e6f7ff; color: #1890ff; }
                 .status-badge.status-used { background-color: #f6f6f6; color: #595959; }
                 .status-badge.status-expired { background-color: #fff1f0; color: #f5222d; }
-                .pagination-controls { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 20px; }
-                .pagination-button { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; background-color: #f0f0f0; cursor: pointer; font-size: 12px; }
-                .pagination-button:hover { background-color: #e0e0e0; }
-                .pagination-button.active { background-color: #6c757d; color: white; border-color: #6c757d; }
 
                 /* Action Button & Modal Styles */
                 .action-buttons { display: flex; gap: 8px; justify-content: center; }
@@ -584,7 +670,7 @@ const CouponsPage = () => {
                 @media (max-width: 768px) {
                     .form-grid { grid-template-columns: 1fr; }
                     .table-toolbar { flex-direction: column; align-items: stretch; }
-                    .search-container { width: 100%; }
+                    .pagination-controls { flex-direction: column; align-items: flex-start; }
                     .data-table thead { display: none; }
                     .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
                     .data-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 5px; }
