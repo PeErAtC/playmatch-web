@@ -14,7 +14,7 @@ import {
   Settings,
   LogOut,
   Lock,
-  Wallet,
+  Ticket,
   Swords,
 } from "lucide-react";
 
@@ -54,6 +54,11 @@ const allMenuList = [
     path: "/ranking",
     icon: <Trophy size={20} strokeWidth={1.7} />,
     access: ["Pro", "Premium"],
+  },
+  {
+    label: "Coupons",
+    path: "/coupons",
+    icon: <Ticket size={20} strokeWidth={1.7} />,
   },
   {
     label: "BirthDay",
