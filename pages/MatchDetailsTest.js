@@ -613,7 +613,11 @@ const MatchDetails = () => {
       appliedCoupons,
       earlyPayersList // --- ADDED ---
     );
-    Swal.fire("Calculation Successful", "Expense data calculated", "success");
+    Swal.fire({
+      icon : "success",
+      title: "คำนวณค่าใช้จ่ายสำเร็จ", 
+      text: "โปรดตรวจสอบการคำนวณในตาราง", 
+      });
   };
 
   const handlePaidStatusChange = useCallback(async (memberName, isPaid) => {
@@ -681,7 +685,11 @@ const MatchDetails = () => {
       await setDoc(rankingDocRef, updatedRankingData, { merge: true });
       const matchDocRef = doc(db, `users/${userId}/Matches`, matchId);
       await updateDoc(matchDocRef, { hasRankingSaved: true, lastRankingSavedAt: serverTimestamp() });
-      Swal.fire("Save Successful", `Ranking data for ${monthYearId} saved successfully!`, "success");
+      Swal.fire({
+        icon: "success",
+        title:"บันทึกสถิติ Ranking สำเร็จ", 
+        text: `บันทึกสถิติ เดือนที่ ${monthYearId} สำเร็จ กรุณาอย่าบันทึกซ้ำ!!`,
+        });
       setIsRankingSaved(true);
     } catch (err) {
       console.error("Error saving ranking data:", err);
