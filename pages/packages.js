@@ -12,18 +12,20 @@ const packageData = [
     name: "ก๊วนเล็ก/Basic",
     description: "เหมาะสำหรับก๊วนเพื่อน, ก๊วนครอบครัว",
     features: [
-      "สมาชิกก๊วนสูงสุด 60 คน",
+      "สมาชิกก๊วนสูงสุด 40 คน",
+      "import สมาชิกจาก Excel",
       "จัด Match ได้ไม่เกิน 15 Match ต่อเดือน",
       "ระบบเช็คชื่อสมาชิก",
       "สร้าง Matches ประจำวัน",
       "บันทึกผลการแข่งขัน",
       "คำนวณค่าใช้จ่ายของสมาชิก",
+      "ระบบติดตามสถานะการชำระของสมาชิก",
+      "บันทึก Excel และรูปภาพ PNG",
       "สถิติและกราฟวิเคราะห์",
-      "เทรนการใช้งานโปรแกรม",
     ],
-    monthlyPrice: "139",
-    yearlyPrice: "1,390",
-    yearlyDiscountText: "ประหยัดกว่า 278 บาท/ปี",
+    monthlyPrice: "99",
+    yearlyPrice: "990",
+    yearlyDiscountText: "ประหยัดกว่า 198 บาท/ปี",
     buttonText: "เริ่มต้นเลย",
     isPopular: false,
     buttonVariant: "primary-outline",
@@ -35,21 +37,26 @@ const packageData = [
     name: "ก๊วนมาตรฐาน/Pro",
     description: "เหมาะสำหรับก๊วนประจำ, ชมรมขนาดกลาง",
     features: [
-      "สมาชิกก๊วนสูงสุด 200 คน",
-      "จัด Match ได้ไม่เกิน 40 Match ต่อเดือน",
+      "สมาชิกก๊วนสูงสุด 150 คน",
+      "import สมาชิกจาก Excel",
+      "จัด Match ได้ไม่เกิน 30 Match ต่อเดือน",
       "ระบบเช็คชื่อสมาชิก",
+      "จัดเก็บรูปภาพสมากชิกก๊วน",
       "สร้าง Matches ประจำวัน",
-      "บันทึกผลการแข่งขันขั้นสูง",
+      "บันทึกผลการแข่งขัน",
+      "ระบบคูปองส่วนลดสมาชิก",
       "คำนวณค่าใช้จ่ายของสมาชิกขั้นสูง",
+      "ระบบติดตามสถานะการชำระของสมาชิก",
+      "บันทึก Excel และรูปภาพ PNG",
       "สถิติและกราฟวิเคราะห์",
       "ระบบจัดอันดับสมาชิก (Ranking)",
       "เทรนการใช้งานโปรแกรม",
     ],
-    monthlyPrice: "199", // ราคาลดแล้ว
-    originalMonthlyPrice: "259", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
-    yearlyPrice: "1,990", // ราคาใหม่รายปีที่ลดแล้ว
-    originalYearlyPrice: "2,590", // ราคาเดิมรายปีสำหรับขีดฆ่า
-    yearlyDiscountText: "ประหยัดกว่า 518 บาท/ปี",
+    monthlyPrice: "149", // ราคาลดแล้ว
+    originalMonthlyPrice: "199", // ราคาเดิมรายเดือนสำหรับขีดฆ่า
+    yearlyPrice: "1,490", // ราคาใหม่รายปีที่ลดแล้ว
+    originalYearlyPrice: "1,990", // ราคาเดิมรายปีสำหรับขีดฆ่า
+    yearlyDiscountText: "ประหยัดกว่า 898 บาท/ปี",
     buttonText: "เลือกแพ็กเกจนี้!",
     isPopular: true,
     buttonVariant: "primary-filled",
@@ -73,9 +80,9 @@ const packageData = [
       "ทีมงาน Support พร้อมให้บริการ 24 ชั่วโมง",
 
     ],
-    monthlyPrice: "359",
-    yearlyPrice: "3,590",
-    yearlyDiscountText: "ประหยัดกว่า 718 บาท/ปี",
+    monthlyPrice: "219",
+    yearlyPrice: "2,190",
+    yearlyDiscountText: "ประหยัดกว่า 438 บาท/ปี",
     buttonText: "ติดต่อทีมงาน",
     isPopular: false,
     buttonVariant: "primary-outline",
