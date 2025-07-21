@@ -78,6 +78,9 @@ const Match = () => {
   const [selectedRegion, setSelectedRegion] = useState("ภาคอีสาน");
   const [showResultsColumn, setShowResultsColumn] = useState(true);
 
+  // --- ADDED: State for early payers ---
+  const [earlyPayers, setEarlyPayers] = useState([]);
+
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
   const sessionStateRef = useRef();
 
@@ -115,8 +118,16 @@ const Match = () => {
     sessionStateRef.current = {
         matches, topic, matchDate, activityTime, ballPrice, courtFee,
         courtFeePerGame, fixedCourtFeePerPerson, organizeFee, selectedRegion,
+        earlyPayers, // --- ADDED: for auto-save
     };
   });
+
+  // --- ADDED: Persist earlyPayers to localStorage ---
+  useEffect(() => {
+    if (isBrowser && loggedInEmail && isOpen) {
+      localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify(earlyPayers));
+    }
+  }, [earlyPayers, isBrowser, loggedInEmail, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !loggedInEmail || !isBrowser) {
@@ -155,7 +166,7 @@ const Match = () => {
     if (showSaveIndicator) {
       const timer = setTimeout(() => {
         setShowSaveIndicator(false);
-      }, 4000); 
+      }, 4000);
       return () => clearTimeout(timer);
     }
   }, [showSaveIndicator]);
@@ -178,9 +189,9 @@ const Match = () => {
           memberList.push({
             memberId: doc.id, name: data.name, level: data.level,
             score: data.score || 0, wins: data.wins || 0,
-            gamesPlayed: 0, 
-            ballsUsed: 0, 
-            totalGamesPlayed: data.totalGamesPlayed || 0, 
+            gamesPlayed: 0,
+            ballsUsed: 0,
+            totalGamesPlayed: data.totalGamesPlayed || 0,
             totalBallsUsed: data.totalBallsUsed || 0,
           });
         }
@@ -272,11 +283,13 @@ const Match = () => {
     setTotalBallsInSession(0);
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
+    setEarlyPayers([]); // --- ADDED ---
 
     if (isBrowser && loggedInEmail) {
       localStorage.removeItem(getUserKey("isOpen"));
       localStorage.removeItem(getUserKey("matches"));
       localStorage.removeItem(getUserKey("activityTime"));
+      localStorage.removeItem(getUserKey("earlyPayers")); // --- ADDED ---
     }
 
     if (loggedInEmail) {
@@ -306,7 +319,7 @@ const Match = () => {
         if (savedIsOpen && savedMatchesRaw) {
             try {
                 const savedMatches = JSON.parse(savedMatchesRaw);
-                setMatches(savedMatches); 
+                setMatches(savedMatches);
                 setMatchCount(savedMatches.length);
                 setActivityTime(parseInt(localStorage.getItem(getUserKey("activityTime"))) || 0);
                 setTopic(localStorage.getItem(getUserKey("topic")) || "");
@@ -316,9 +329,11 @@ const Match = () => {
                 setFixedCourtFeePerPerson(parseFloat(localStorage.getItem(getUserKey("fixedCourtFeePerPerson"))) || 0);
                 setOrganizeFee(parseFloat(localStorage.getItem(getUserKey("organizeFee"))) || 0);
                 setSelectedRegion(localStorage.getItem(getUserKey("selectedRegion")) || "ภาคอีสาน");
+                const savedEarlyPayers = JSON.parse(localStorage.getItem(getUserKey("earlyPayers"))) || []; // --- ADDED ---
+                setEarlyPayers(savedEarlyPayers); // --- ADDED ---
                 setIsOpen(true);
                 console.log("Session restored from user-specific localStorage.");
-                return; 
+                return;
             } catch (error) {
                 console.error("Error parsing matches from localStorage, will check Firebase backup.", error);
                 Swal.fire('ข้อมูลเสียหาย', 'ตรวจพบข้อมูลในเบราว์เซอร์เสียหาย กำลังพยายามกู้คืนจากระบบสำรองข้อมูลออนไลน์', 'warning');
@@ -338,7 +353,7 @@ const Match = () => {
             if (backupSnap.exists()) {
                 console.log("Firebase backup found. Restoring session...");
                 const data = backupSnap.data();
-                setMatches(data.matches || []); 
+                setMatches(data.matches || []);
                 setTopic(data.topic || "");
                 setMatchDate(data.matchDate || new Date().toISOString().slice(0, 10));
                 setActivityTime(data.activityTime || 0);
@@ -348,6 +363,7 @@ const Match = () => {
                 setFixedCourtFeePerPerson(data.fixedCourtFeePerPerson || 0);
                 setOrganizeFee(data.organizeFee || 0);
                 setSelectedRegion(data.selectedRegion || "ภาคอีสาน");
+                setEarlyPayers(data.earlyPayers || []); // --- ADDED ---
                 setIsOpen(true);
                 setMatchCount((data.matches || []).length);
                 localStorage.setItem(getUserKey("isOpen"), "true");
@@ -360,6 +376,8 @@ const Match = () => {
                 localStorage.setItem(getUserKey("fixedCourtFeePerPerson"), (data.fixedCourtFeePerPerson || 0).toString());
                 localStorage.setItem(getUserKey("organizeFee"), (data.organizeFee || 0).toString());
                 localStorage.setItem(getUserKey("selectedRegion"), data.selectedRegion || "ภาคอีสาน");
+                // --- ADDED: บันทึก earlyPayers กลับลง localStorage หลังกู้คืน ---
+                localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify(data.earlyPayers || []));
                 Swal.fire('กู้ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดถูกกู้คืนจากระบบสำรองข้อมูลแล้ว', 'success');
             } else {
                 console.log("No active session backup found in Firebase.");
@@ -417,7 +435,7 @@ const Match = () => {
         .filter(Boolean)
     );
 
-    const availableMembers = members.filter(mem => !busyPlayers.has(mem.name));
+    const availableMembers = members.filter(mem => !busyPlayers.has(mem.name) && !earlyPayers.includes(mem.name)); // --- MODIFIED ---
 
     if (availableMembers.length < 4) {
       Swal.fire('ผู้เล่นไม่เพียงพอ', 'มีผู้เล่นที่ว่างไม่พอสำหรับการสุ่มสร้างแมตช์ (ต้องการอย่างน้อย 4 คน)', 'warning');
@@ -454,6 +472,7 @@ const Match = () => {
     }, 100);
   };
 
+  // --- MODIFIED: เพิ่มการกรอง earlyPayers ---
   const getAvailableMembers = (currentMatch, currentField) => {
     const selectedPlayersInCurrentMatch = new Set(
       Object.entries(currentMatch)
@@ -468,11 +487,18 @@ const Match = () => {
         });
       }
     });
+
     return members.filter((mem) => {
       const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
       const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
       const isPlayingInAnotherActiveMatch = playersInOtherActiveMatches.has(mem.name);
-      return isCurrentlySelectedInThisField || (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherActiveMatch);
+      // --- NEW: ตรวจสอบว่าผู้เล่นจ่ายเงินกลับก่อนไปแล้วหรือไม่ ---
+      const hasAlreadyPaidAndLeft = earlyPayers.includes(mem.name);
+
+      return (
+        isCurrentlySelectedInThisField ||
+        (!isSelectedInOtherFieldInCurrentMatch && !isPlayingInAnotherActiveMatch && !hasAlreadyPaidAndLeft)
+      );
     });
   };
 
@@ -506,7 +532,6 @@ const Match = () => {
     });
   };
 
-  // --- UPDATED FUNCTION ---
   const handleChangeMatch = (idx, field, value) => {
     setMatches((prev) => {
         const updated = [...prev];
@@ -516,7 +541,7 @@ const Match = () => {
         if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
             matchBeingUpdated[field] = value;
             const member = members.find(m => m.name === value);
-            matchBeingUpdated[`${field}Level`] = member ? member.level : ''; 
+            matchBeingUpdated[`${field}Level`] = member ? member.level : '';
         } else {
             matchBeingUpdated[field] = value;
         }
@@ -558,7 +583,7 @@ const Match = () => {
                 const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
                 if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
                     showIncompleteForFinishingToast();
-                    return prev; 
+                    return prev;
                 }
                 matchBeingUpdated.score = getScoreByResult(value);
                 if (matchBeingUpdated.status !== "จบการแข่งขัน") {
@@ -586,7 +611,6 @@ const Match = () => {
         return updated;
     });
   };
-  // --- END UPDATED FUNCTION ---
 
   const renderMemberOptions = (currentMatch, fieldName) =>
     getAvailableMembers(currentMatch, fieldName).map((mem) => (
@@ -605,6 +629,7 @@ const Match = () => {
       localStorage.setItem(getUserKey("matches"), JSON.stringify([]));
       localStorage.setItem(getUserKey("activityTime"), "0");
       localStorage.setItem(getUserKey("topic"), topic);
+      localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify([])); // --- ADDED ---
     }
     setIsOpen(true);
     setActivityTime(0);
@@ -613,9 +638,11 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
     setMatchCount(0);
+    setEarlyPayers([]); // --- ADDED ---
     await fetchMembers();
   };
 
+  // --- MODIFIED: เพิ่มการส่ง earlyPayers ไปกับข้อมูล ---
   const handleEndGroup = async () => {
     if (matches.length === 0) {
       Swal.fire({
@@ -629,7 +656,7 @@ const Match = () => {
         cancelButtonText: "ยกเลิก",
       }).then((result) => {
         if (result.isConfirmed) {
-          resetSession(); 
+          resetSession();
           Swal.fire("รีเซ็ตสำเร็จ!", "ข้อมูลถูกล้างเพื่อเตรียมพร้อมสำหรับก๊วนใหม่", "success");
         }
       });
@@ -713,6 +740,7 @@ const Match = () => {
           await addDoc(matchesRef, {
             topic, matchDate, totalTime: activityTime, matches,
             ballPrice, courtFee, courtFeePerGame, fixedCourtFeePerPerson, organizeFee,
+            earlyPayers: earlyPayers, // --- ADDED ---
             savedAt: serverTimestamp(),
           });
           Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
@@ -756,6 +784,8 @@ const Match = () => {
   };
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
   const paginatedMatches = matches.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  // --- NEW: ปรับปรุงฟังก์ชันคำนวณให้มีการยืนยันการชำระเงิน ---
   const calculatePlayerSummary = () => {
     if (!selectedMemberForEarlyExit) {
       Swal.fire("กรุณาเลือกสมาชิกที่ต้องการคำนวณ", "", "warning");
@@ -784,7 +814,7 @@ const Match = () => {
     } else if (parsedCourtFeePerGame > 0) {
       courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
     } else if (parsedCourtFee > 0) {
-      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0).length;
+      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0 && !earlyPayers.includes(m.name)).length;
       courtCostPerPerson = totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
     const estimatedTotalCost = Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
@@ -793,7 +823,9 @@ const Match = () => {
       estimatedTotalCost: estimatedTotalCost, ballCost: Math.ceil(ballCost),
       courtCost: Math.ceil(courtCostPerPerson), organizeFee: Math.ceil(parsedOrganizeFee),
     };
-    setEarlyExitCalculationResult(result);
+
+    setEarlyExitCalculationResult(result); // ยังเก็บผลไว้เผื่อต้องใช้
+
     Swal.fire({
       title: `ยอดรวมสำหรับ ${result.name}`,
       html: `
@@ -808,7 +840,27 @@ const Match = () => {
           <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมโดยประมาณ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
         </div>
       `,
-      icon: "info", confirmButtonText: "รับทราบ",
+      icon: "info",
+      showCancelButton: true,
+      confirmButtonColor: "#57e497",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "ยืนยันการชำระเงิน",
+      cancelButtonText: "ปิดหน้าต่าง",
+    }).then((actionResult) => {
+      if (actionResult.isConfirmed) {
+        // --- เมื่อกดยืนยัน ให้เพิ่มชื่อผู้เล่นลง State ---
+        setEarlyPayers(prev => [...prev, player.name]);
+
+        // --- ล้างค่าที่เลือกไว้ ---
+        setSelectedMemberForEarlyExit("");
+        setEarlyExitCalculationResult(null);
+
+        Swal.fire(
+          "บันทึกสำเร็จ!",
+          `${player.name} ถูกบันทึกสถานะ 'จ่ายแล้ว' และจะถูกนำออกจากรายชื่อผู้เล่นที่ว่าง`,
+          "success"
+        );
+      }
     });
   };
   const handleClearEarlyExitSelection = () => {
@@ -926,10 +978,13 @@ const Match = () => {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <select value={selectedMemberForEarlyExit} onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)} className="early-exit-select">
               <option value="">เลือกสมาชิก</option>
-              {members.map((mem) => (
-                <option key={mem.memberId} value={mem.name}>
-                  {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
-                </option>
+              {/* --- MODIFIED: กรองคนที่จ่ายแล้วออกจากตัวเลือกนี้ด้วย --- */}
+              {members
+                .filter(mem => !earlyPayers.includes(mem.name))
+                .map((mem) => (
+                  <option key={mem.memberId} value={mem.name}>
+                    {mem.name} (เกม: {mem.gamesPlayed}, ลูก: {mem.ballsUsed})
+                  </option>
               ))}
             </select>
             <button onClick={calculatePlayerSummary} className="action-button calculate-button" disabled={!isOpen || !selectedMemberForEarlyExit}>คำนวณยอด</button>
@@ -1057,10 +1112,10 @@ const Match = () => {
         .action-button.end-group { background-color: #f44336; }
         .action-button.end-group:hover { background-color: #d32f2f; }
         .activity-time-display { background-color: #e3f2fd; padding: 10px 15px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
-        .action-time-group { 
-          display: flex; 
-          flex-wrap: wrap; 
-          gap: 20px; 
+        .action-time-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
           align-items: center;
           position: relative;
         }
@@ -1092,7 +1147,7 @@ const Match = () => {
 
         .save-indicator {
           position: absolute;
-          bottom: -50px; 
+          bottom: -50px;
           left: 50%;
           z-index: 10;
           display: flex;
