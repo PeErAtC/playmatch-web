@@ -21,7 +21,7 @@ const courts = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
 // --- ADDED: กำหนดลิมิตการสร้างก๊วนต่อเดือน ---
 const packageSessionLimits = {
   Basic: 15,
-  Pro: 40,
+  Pro: 30,
   Premium: Infinity,
 };
 
