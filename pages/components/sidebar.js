@@ -59,6 +59,7 @@ const allMenuList = [
     label: "Coupons",
     path: "/coupons",
     icon: <Ticket size={20} strokeWidth={1.7} />,
+    access: ["Pro", "Premium"],
   },
   {
     label: "BirthDay",
