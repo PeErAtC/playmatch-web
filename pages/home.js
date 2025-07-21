@@ -314,8 +314,8 @@ const Home = () => {
   const [showMemberImagesColumn, setShowMemberImagesColumn] = useState(true);
 
   const packageLimits = useMemo(() => ({
-    Basic: 60,
-    Pro: 200,
+    Basic: 40,
+    Pro: 150,
     Premium: Infinity
   }), []);
 
