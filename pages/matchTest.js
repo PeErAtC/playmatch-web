@@ -17,6 +17,14 @@ import {
 
 // --- (ส่วนอื่นๆ ของโค้ดที่ไม่เปลี่ยนแปลง) ---
 const courts = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+
+// --- ADDED: กำหนดลิมิตการสร้างก๊วนต่อเดือน ---
+const packageSessionLimits = {
+  Basic: 15,
+  Pro: 40,
+  Premium: Infinity,
+};
+
 const RESULT_OPTIONS = [
   { value: "", label: "เลือกผล" },
   { value: "A", label: "ทีม A ชนะ" },
@@ -77,6 +85,10 @@ const Match = () => {
   const contentRef = useRef(null);
   const [selectedRegion, setSelectedRegion] = useState("ภาคอีสาน");
   const [showResultsColumn, setShowResultsColumn] = useState(true);
+
+  // --- ADDED: State for user package and ID ---
+  const [userPackage, setUserPackage] = useState('Basic'); // กำหนดค่าเริ่มต้นเป็น Basic เพื่อความปลอดภัย
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   // --- ADDED: State for early payers ---
   const [earlyPayers, setEarlyPayers] = useState([]);
@@ -171,15 +183,27 @@ const Match = () => {
     }
   }, [showSaveIndicator]);
 
+  // --- MODIFIED: แก้ไขฟังก์ชัน fetchMembers เพื่อดึงข้อมูลแพ็คเกจ ---
   const fetchMembers = async () => {
     try {
       if (!loggedInEmail) return;
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("email", "==", loggedInEmail));
       const userSnap = await getDocs(q);
-      let userId = null;
-      userSnap.forEach((doc) => { userId = doc.id; });
-      if (!userId) return;
+
+      if (userSnap.empty) {
+        console.error("User not found for member fetching.");
+        return;
+      }
+
+      // --- MODIFIED: ดึง userId และ packageType มาเก็บใน State ---
+      const userDoc = userSnap.docs[0];
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+
+      setCurrentUserId(userId); // <-- บรรทัดที่เพิ่ม
+      setUserPackage(userData.packageType || 'Basic'); // <-- บรรทัดที่เพิ่ม
+
       const membersRef = collection(db, `users/${userId}/Members`);
       const memSnap = await getDocs(membersRef);
       let memberList = [];
@@ -619,7 +643,44 @@ const Match = () => {
       </option>
     ));
 
+  // --- MODIFIED: แก้ไขฟังก์ชัน handleStartGroup เพื่อตรวจสอบโควต้า ---
   const handleStartGroup = async () => {
+    // --- START: ส่วนตรวจสอบโควต้าที่เพิ่มเข้ามา ---
+    if (!currentUserId) {
+        Swal.fire("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ กรุณาลองอีกครั้ง", "error");
+        return;
+    }
+
+    // ถ้าเป็น Premium ให้เริ่มได้เลย ไม่ต้องเช็ค
+    if (userPackage === 'Premium') {
+        // ทำงานตามปกติ (โค้ดจะไปทำส่วนด้านล่างต่อ)
+    } else {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        // ค้นหาจำนวนก๊วนที่เคยบันทึกในเดือนนี้
+        const historyRef = collection(db, `users/${currentUserId}/Matches`);
+        const q = query(historyRef, where('savedAt', '>=', startOfMonth), where('savedAt', '<=', endOfMonth));
+
+        const querySnapshot = await getDocs(q);
+        const sessionsThisMonth = querySnapshot.size;
+        const limit = packageSessionLimits[userPackage] || 0;
+
+        if (sessionsThisMonth >= limit) {
+            Swal.fire({
+                icon: 'error',
+                title: 'โควต้าการจัดก๊วนเต็มแล้ว',
+                html: `คุณใช้โควต้าสำหรับแพ็คเกจ <b>${userPackage}</b><br/>ครบ <b>${sessionsThisMonth}/${limit}</b> ครั้งในเดือนนี้แล้ว`,
+                confirmButtonText: 'เข้าใจแล้ว'
+            });
+            return; // หยุดการทำงาน ไม่ให้สร้างก๊วนใหม่
+        }
+    }
+    // --- END: ส่วนตรวจสอบโควต้า ---
+
+
+    // โค้ดเดิมสำหรับเริ่มก๊วน (ทำงานเมื่อผ่านการตรวจสอบแล้ว)
     if (!topic) {
       Swal.fire({ title: "กรุณาระบุหัวเรื่อง", text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History", icon: "warning" });
       return;
@@ -629,7 +690,7 @@ const Match = () => {
       localStorage.setItem(getUserKey("matches"), JSON.stringify([]));
       localStorage.setItem(getUserKey("activityTime"), "0");
       localStorage.setItem(getUserKey("topic"), topic);
-      localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify([])); // --- ADDED ---
+      localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify([]));
     }
     setIsOpen(true);
     setActivityTime(0);
@@ -638,7 +699,7 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
     setMatchCount(0);
-    setEarlyPayers([]); // --- ADDED ---
+    setEarlyPayers([]);
     await fetchMembers();
   };
 
@@ -842,7 +903,7 @@ const Match = () => {
       `,
       icon: "info",
       showCancelButton: true,
-      confirmButtonColor: "#28a745",
+      confirmButtonColor: "#3fc57b",
       cancelButtonColor: "#6c757d",
       confirmButtonText: "ยืนยันการชำระเงิน",
       cancelButtonText: "ปิดหน้าต่าง",
