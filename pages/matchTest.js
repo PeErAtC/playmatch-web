@@ -875,7 +875,9 @@ const Match = () => {
     } else if (parsedCourtFeePerGame > 0) {
       courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
     } else if (parsedCourtFee > 0) {
-      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0 && !earlyPayers.includes(m.name)).length;
+      // แก้ไข: ให้หารค่าสนามด้วยจำนวนสมาชิกทั้งหมดที่อยู่ในเซสชัน (สถานะ "มา")
+      // ซึ่งก็คือจำนวนของ members ที่ถูก fetch มาแล้ว
+      const totalMembersInSession = members.length; // นี่คือการเปลี่ยนแปลง
       courtCostPerPerson = totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
     const estimatedTotalCost = Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
@@ -923,7 +925,7 @@ const Match = () => {
         );
       }
     });
-  };
+  }; 
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
