@@ -57,6 +57,9 @@ const MatchDetails = () => {
   const [isPaymentHistorySaved, setIsPaymentHistorySaved] = useState(false);
   const [showDateInDownloadImage, setShowDateInDownloadImage] = useState(false);
 
+  // --- ADDED: State for the list of early payers from Firebase ---
+  const [earlyPayersList, setEarlyPayersList] = useState([]);
+
 
   // New states for managing multiple coupons applied to multiple members
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -131,7 +134,7 @@ const MatchDetails = () => {
 
       // <<< FIXED: เพิ่มการกรองคูปองที่ยังไม่หมดอายุ >>>
       const now = new Date();
-      const validCoupons = couponsData.filter(coupon => 
+      const validCoupons = couponsData.filter(coupon =>
           coupon.expiresAt && coupon.expiresAt.toDate() > now
       );
 
@@ -149,7 +152,7 @@ const MatchDetails = () => {
 
   const isAdmin = loggedInEmail && adminEmail && loggedInEmail === adminEmail;
 
-  // Function to calculate expenses and player statistics
+  // --- MODIFIED: ให้รับ earlyPayersList มาใช้ ---
   const calculateMemberStats = useCallback(
     (
       currentMatchData,
@@ -158,7 +161,8 @@ const MatchDetails = () => {
       currentOrganizeFee,
       currentCourtFeePerGame,
       currentFixedCourtFeePerPerson,
-      currentAppliedCoupons // New parameter: array of applied coupons
+      currentAppliedCoupons,
+      loadedEarlyPayers // --- ADDED ---
     ) => {
       if (
         !currentMatchData ||
@@ -224,20 +228,21 @@ const MatchDetails = () => {
       const initialPaidStatus = { ...currentMatchData.paidStatus };
 
       playersInMatch.forEach((player) => {
-        tempMemberCalculations[player] = { 
-          name: player, 
-          level: "", 
-          totalGames: 0, 
-          totalBalls: 0, 
-          wins: 0, 
-          score: 0, 
-          ballCost: 0, 
-          courtCostPerPerson: 0, 
-          organizeFeePerPerson: parsedOrganizeFee, 
-          total: 0, 
-          calculatedWins: 0, 
-          calculatedScore: 0, 
-          isPaid: initialPaidStatus[player] || false,
+        tempMemberCalculations[player] = {
+          name: player,
+          level: "",
+          totalGames: 0,
+          totalBalls: 0,
+          wins: 0,
+          score: 0,
+          ballCost: 0,
+          courtCostPerPerson: 0,
+          organizeFeePerPerson: parsedOrganizeFee,
+          total: 0,
+          calculatedWins: 0,
+          calculatedScore: 0,
+          // --- MODIFIED: ใช้ earlyPayersList ในการกำหนดสถานะ ---
+          isPaid: loadedEarlyPayers.includes(player) || initialPaidStatus[player] || false,
           couponAmountUsed: 0, // Reset for each calculation
           couponIdUsed: null, // Reset for each calculation
         };
@@ -319,17 +324,17 @@ const MatchDetails = () => {
           tempMemberCalculations[player].couponIdUsed = couponAppliedToThisMember.couponId;
         }
 
-        tempMemberCalculations[player] = { 
-          ...tempMemberCalculations[player], 
-          totalGames, 
-          totalBalls: ballsUsed, 
-          wins: calculatedWins, 
-          score: calculatedScore, 
-          ballCost: roundedBallCost, 
-          courtCostPerPerson: playerCourtCost, 
-          organizeFeePerPerson: roundedOrganizeFee, 
-          total: totalMemberCost, 
-          calculatedWins, 
+        tempMemberCalculations[player] = {
+          ...tempMemberCalculations[player],
+          totalGames,
+          totalBalls: ballsUsed,
+          wins: calculatedWins,
+          score: calculatedScore,
+          ballCost: roundedBallCost,
+          courtCostPerPerson: playerCourtCost,
+          organizeFeePerPerson: roundedOrganizeFee,
+          total: totalMemberCost,
+          calculatedWins,
           calculatedScore,
         };
       });
@@ -376,6 +381,11 @@ const MatchDetails = () => {
       const data = matchSnap.data();
       setMatchData(data);
 
+      // --- ADDED: ดึงข้อมูล earlyPayers จาก document ---
+      const loadedEarlyPayers = data.earlyPayers || [];
+      setEarlyPayersList(loadedEarlyPayers);
+
+
       const loadedCourtFee = data.courtFee != null ? String(data.courtFee) : "";
       const loadedCourtFeePerGame = data.courtFeePerGame != null ? String(data.courtFeePerGame) : "";
       const loadedFixedCourtFeePerPerson = data.fixedCourtFeePerPerson != null ? String(data.fixedCourtFeePerPerson) : "";
@@ -397,6 +407,7 @@ const MatchDetails = () => {
       setAppliedCoupons(loadedAppliedCoupons);
 
       if (data.matches && data.matches.length > 0) {
+        // --- MODIFIED: ส่ง loadedEarlyPayers ไปให้ฟังก์ชันคำนวณ ---
         calculateMemberStats(
           data,
           loadedCourtFee,
@@ -404,7 +415,8 @@ const MatchDetails = () => {
           loadedOrganizeFee,
           loadedCourtFeePerGame,
           loadedFixedCourtFeePerPerson,
-          loadedAppliedCoupons // Pass the loaded applied coupons
+          loadedAppliedCoupons,
+          loadedEarlyPayers // --- ADDED ---
         );
       } else {
         setMemberCalculations({});
@@ -550,7 +562,8 @@ const MatchDetails = () => {
                 organizeFee,
                 courtFeePerGame,
                 fixedCourtFeePerPerson,
-                updatedAppliedCoupons // Pass the immediately available updated array
+                updatedAppliedCoupons, // Pass the immediately available updated array
+                earlyPayersList // --- ADDED ---
             );
         }
 
@@ -589,7 +602,7 @@ const MatchDetails = () => {
       Swal.fire("Invalid Input", "กรุณากรอกค่าจัดก๊วน และต้องไม่เป็นค่าติดลบ", "warning");
       return;
     }
-    // Pass the array of applied coupons to calculateMemberStats
+    // --- MODIFIED: ส่ง earlyPayersList ไปให้ฟังก์ชันคำนวณ ---
     calculateMemberStats(
       matchData,
       courtFee,
@@ -597,9 +610,14 @@ const MatchDetails = () => {
       organizeFee,
       courtFeePerGame,
       fixedCourtFeePerPerson,
-      appliedCoupons
+      appliedCoupons,
+      earlyPayersList // --- ADDED ---
     );
-    Swal.fire("Calculation Successful", "Expense data calculated", "success");
+    Swal.fire({
+      icon : "success",
+      title: "คำนวณค่าใช้จ่ายสำเร็จ", 
+      text: "โปรดตรวจสอบการคำนวณในตาราง", 
+      });
   };
 
   const handlePaidStatusChange = useCallback(async (memberName, isPaid) => {
@@ -667,7 +685,11 @@ const MatchDetails = () => {
       await setDoc(rankingDocRef, updatedRankingData, { merge: true });
       const matchDocRef = doc(db, `users/${userId}/Matches`, matchId);
       await updateDoc(matchDocRef, { hasRankingSaved: true, lastRankingSavedAt: serverTimestamp() });
-      Swal.fire("Save Successful", `Ranking data for ${monthYearId} saved successfully!`, "success");
+      Swal.fire({
+        icon: "success",
+        title:"บันทึกสถิติ Ranking สำเร็จ", 
+        text: `บันทึกสถิติ เดือนที่ ${monthYearId} สำเร็จ กรุณาอย่าบันทึกซ้ำ!!`,
+        });
       setIsRankingSaved(true);
     } catch (err) {
       console.error("Error saving ranking data:", err);
@@ -782,17 +804,17 @@ const MatchDetails = () => {
     const sortedMembersForExcel = Object.values(memberCalculations).sort((a, b) => b.score - a.score);
     sortedMembersForExcel.forEach((member, index) => {
       ws_data.push([
-        index + 1, 
-        member.name, 
-        member.totalGames, 
-        member.totalBalls, 
-        member.ballCost, 
-        member.courtCostPerPerson, 
+        index + 1,
+        member.name,
+        member.totalGames,
+        member.totalBalls,
+        member.ballCost,
+        member.courtCostPerPerson,
         member.organizeFeePerPerson,
         member.couponAmountUsed > 0 ? member.couponAmountUsed : "-", // Add coupon amount
-        member.wins, 
-        member.score, 
-        member.total, 
+        member.wins,
+        member.score,
+        member.total,
         member.isPaid ? "ใช่" : "ไม่"
       ]);
     });
@@ -860,11 +882,7 @@ const MatchDetails = () => {
       setShowDateInDownloadImage(false);
     }
   };
-  // ******************************************************
 
-  // ******************************************************
-  // พิจารณาแก้ไข handleDownloadGameDetailsImage ด้วยวิธีเดียวกัน ถ้าต้องการให้มีวันที่ในภาพนั้นด้วย
-  // หากต้องการ ให้ทำตามขั้นตอนเดียวกับ handleDownloadImage ด้านบน
   const handleDownloadGameDetailsImage = async () => {
       if (!gameDetailsTableRef.current || !matchData?.matches?.length) {
         Swal.fire("ไม่มีข้อมูล", "ไม่มีข้อมูลเกมสำหรับดาวน์โหลดรูปภาพ", "warning");
@@ -1035,28 +1053,28 @@ const MatchDetails = () => {
         </div>
 
         {/********** START: CORRECTED CODE **********/}
-        <div style={{ 
-          display: "flex", 
+        <div style={{
+          display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          gap: "10px", 
-          marginTop: "15px", 
-          paddingTop: "15px", 
-          borderTop: "1px solid #eee" 
+          gap: "10px",
+          marginTop: "15px",
+          paddingTop: "15px",
+          borderTop: "1px solid #eee"
         }}>
           {/* ปุ่มด้านซ้าย */}
           <div>
             {isDataCalculated && (
-              <button 
-                onClick={handleExportToExcel} 
-                style={{ 
+              <button
+                onClick={handleExportToExcel}
+                style={{
                   backgroundColor: "#4bf196",
-                  color: "#fff", 
-                  padding: "10px 20px", 
-                  borderRadius: "5px", 
-                  border: "none", 
-                  cursor: "pointer", 
-                  fontSize: "15px" 
+                  color: "#fff",
+                  padding: "10px 20px",
+                  borderRadius: "5px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "15px"
                 }}
               >
                 ดาวน์โหลด Excel
@@ -1067,34 +1085,34 @@ const MatchDetails = () => {
           {/* กลุ่มปุ่มด้านขวา */}
           <div style={{ display: "flex", gap: "10px" }}>
             {isDataCalculated && (
-              <button 
-                onClick={handleSaveToRanking} 
-                disabled={isSavingRanking} 
-                style={{ 
-                  backgroundColor: "#d33", 
-                  color: "#fff", 
-                  padding: "10px 20px", 
-                  borderRadius: "5px", 
-                  border: "none", 
-                  cursor: "pointer", 
-                  fontSize: "15px", 
-                  opacity: isSavingRanking ? 0.7 : 1 
+              <button
+                onClick={handleSaveToRanking}
+                disabled={isSavingRanking}
+                style={{
+                  backgroundColor: "#d33",
+                  color: "#fff",
+                  padding: "10px 20px",
+                  borderRadius: "5px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "15px",
+                  opacity: isSavingRanking ? 0.7 : 1
                 }}
               >
                 {isSavingRanking ? (<><span className="spinner"></span> กำลังบันทึก...</>) : ("บันทึกข้อมูล Ranking")}
               </button>
             )}
             {isDataCalculated && (
-              <button 
-                onClick={handleSavePaymentHistory} 
-                style={{ 
-                  backgroundColor: "#4bf196", 
-                  color: "#fff", 
-                  padding: "10px 20px", 
-                  borderRadius: "5px", 
-                  border: "none", 
-                  cursor: "pointer", 
-                  fontSize: "15px" 
+              <button
+                onClick={handleSavePaymentHistory}
+                style={{
+                  backgroundColor: "#4bf196",
+                  color: "#fff",
+                  padding: "10px 20px",
+                  borderRadius: "5px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "15px"
                 }}
               >
                 บันทึกประวัติการชำระ
