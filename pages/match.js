@@ -17,6 +17,14 @@ import {
 
 // --- (ส่วนอื่นๆ ของโค้ดที่ไม่เปลี่ยนแปลง) ---
 const courts = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+
+// --- ADDED: กำหนดลิมิตการสร้างก๊วนต่อเดือน ---
+const packageSessionLimits = {
+  Basic: 15,
+  Pro: 30,
+  Premium: Infinity,
+};
+
 const RESULT_OPTIONS = [
   { value: "", label: "เลือกผล" },
   { value: "A", label: "ทีม A ชนะ" },
@@ -78,10 +86,15 @@ const Match = () => {
   const [selectedRegion, setSelectedRegion] = useState("ภาคอีสาน");
   const [showResultsColumn, setShowResultsColumn] = useState(true);
 
+  // --- ADDED: State for user package and ID ---
+  const [userPackage, setUserPackage] = useState('Basic'); // กำหนดค่าเริ่มต้นเป็น Basic เพื่อความปลอดภัย
+  const [currentUserId, setCurrentUserId] = useState(null);
+
   // --- ADDED: State for early payers ---
   const [earlyPayers, setEarlyPayers] = useState([]);
 
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // <-- STATE ที่เพิ่มใหม่สำหรับป้องกันการกดซ้ำ
   const sessionStateRef = useRef();
 
   const getUserKey = (baseKey) => loggedInEmail ? `${loggedInEmail}_${baseKey}` : null;
@@ -171,15 +184,27 @@ const Match = () => {
     }
   }, [showSaveIndicator]);
 
+  // --- MODIFIED: แก้ไขฟังก์ชัน fetchMembers เพื่อดึงข้อมูลแพ็คเกจ ---
   const fetchMembers = async () => {
     try {
       if (!loggedInEmail) return;
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("email", "==", loggedInEmail));
       const userSnap = await getDocs(q);
-      let userId = null;
-      userSnap.forEach((doc) => { userId = doc.id; });
-      if (!userId) return;
+
+      if (userSnap.empty) {
+        console.error("User not found for member fetching.");
+        return;
+      }
+
+      // --- MODIFIED: ดึง userId และ packageType มาเก็บใน State ---
+      const userDoc = userSnap.docs[0];
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+
+      setCurrentUserId(userId); // <-- บรรทัดที่เพิ่ม
+      setUserPackage(userData.packageType || 'Basic'); // <-- บรรทัดที่เพิ่ม
+
       const membersRef = collection(db, `users/${userId}/Members`);
       const memSnap = await getDocs(membersRef);
       let memberList = [];
@@ -619,7 +644,44 @@ const Match = () => {
       </option>
     ));
 
+  // --- MODIFIED: แก้ไขฟังก์ชัน handleStartGroup เพื่อตรวจสอบโควต้า ---
   const handleStartGroup = async () => {
+    // --- START: ส่วนตรวจสอบโควต้าที่เพิ่มเข้ามา ---
+    if (!currentUserId) {
+        Swal.fire("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ กรุณาลองอีกครั้ง", "error");
+        return;
+    }
+
+    // ถ้าเป็น Premium ให้เริ่มได้เลย ไม่ต้องเช็ค
+    if (userPackage === 'Premium') {
+        // ทำงานตามปกติ (โค้ดจะไปทำส่วนด้านล่างต่อ)
+    } else {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        // ค้นหาจำนวนก๊วนที่เคยบันทึกในเดือนนี้
+        const historyRef = collection(db, `users/${currentUserId}/Matches`);
+        const q = query(historyRef, where('savedAt', '>=', startOfMonth), where('savedAt', '<=', endOfMonth));
+
+        const querySnapshot = await getDocs(q);
+        const sessionsThisMonth = querySnapshot.size;
+        const limit = packageSessionLimits[userPackage] || 0;
+
+        if (sessionsThisMonth >= limit) {
+            Swal.fire({
+                icon: 'error',
+                title: 'โควต้าการจัดก๊วนเต็มแล้ว',
+                html: `คุณใช้โควต้าสำหรับแพ็คเกจ <b>${userPackage}</b><br/>ครบ <b>${sessionsThisMonth}/${limit}</b> ครั้งในเดือนนี้แล้ว`,
+                confirmButtonText: 'เข้าใจแล้ว'
+            });
+            return; // หยุดการทำงาน ไม่ให้สร้างก๊วนใหม่
+        }
+    }
+    // --- END: ส่วนตรวจสอบโควต้า ---
+
+
+    // โค้ดเดิมสำหรับเริ่มก๊วน (ทำงานเมื่อผ่านการตรวจสอบแล้ว)
     if (!topic) {
       Swal.fire({ title: "กรุณาระบุหัวเรื่อง", text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History", icon: "warning" });
       return;
@@ -629,7 +691,7 @@ const Match = () => {
       localStorage.setItem(getUserKey("matches"), JSON.stringify([]));
       localStorage.setItem(getUserKey("activityTime"), "0");
       localStorage.setItem(getUserKey("topic"), topic);
-      localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify([])); // --- ADDED ---
+      localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify([]));
     }
     setIsOpen(true);
     setActivityTime(0);
@@ -638,12 +700,25 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
     setMatchCount(0);
-    setEarlyPayers([]); // --- ADDED ---
+    setEarlyPayers([]);
     await fetchMembers();
   };
 
-  // --- MODIFIED: เพิ่มการส่ง earlyPayers ไปกับข้อมูล ---
+  // --- MODIFIED: แก้ไขฟังก์ชัน handleEndGroup ทั้งหมด ---
   const handleEndGroup = async () => {
+    // ป้องกันการกดซ้ำ
+    if (isSaving) {
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'กำลังบันทึกข้อมูล...',
+        showConfirmButton: false,
+        timer: 2000
+      });
+      return;
+    }
+
     if (matches.length === 0) {
       Swal.fire({
         title: "คุณแน่ใจหรือไม่?",
@@ -662,17 +737,20 @@ const Match = () => {
       });
       return;
     }
+
     const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
       return;
     }
+
     Swal.fire({
       title: "ปิดก๊วนและบันทึก?", text: "คุณแน่ใจหรือไม่ว่าต้องการปิดก๊วนและบันทึกข้อมูลทั้งหมด?", icon: "question",
       showCancelButton: true, confirmButtonColor: "#3085d6", cancelButtonColor: "#d33",
       confirmButtonText: "ใช่, ปิดก๊วนและบันทิก", cancelButtonText: "ยกเลิก",
     }).then(async (result) => {
       if (result.isConfirmed) {
+        setIsSaving(true); // เริ่มกระบวนการบันทึก
         try {
           if (!loggedInEmail) throw new Error("User not logged in.");
           const usersRef = collection(db, "users");
@@ -681,6 +759,7 @@ const Match = () => {
           let userId = null;
           userSnap.forEach((doc) => { userId = doc.id; });
           if (!userId) throw new Error("User data not found. Please log in again.");
+
           const memberUpdates = {};
           const memberSessionStats = {};
           matches.forEach((match) => {
@@ -716,6 +795,7 @@ const Match = () => {
               });
             }
           });
+
           for (const playerName of members.map(m => m.name)) {
             const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
             const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
@@ -736,19 +816,23 @@ const Match = () => {
               });
             }
           }
+
           const matchesRef = collection(db, `users/${userId}/Matches`);
           await addDoc(matchesRef, {
             topic, matchDate, totalTime: activityTime, matches,
             ballPrice, courtFee, courtFeePerGame, fixedCourtFeePerPerson, organizeFee,
-            earlyPayers: earlyPayers, // --- ADDED ---
+            earlyPayers: earlyPayers,
             savedAt: serverTimestamp(),
           });
+
           Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
           await resetSession();
           fetchMembers();
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
           Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
+        } finally {
+          setIsSaving(false); // ปลดบล็อกปุ่ม ไม่ว่าจะสำเร็จหรือล้มเหลว
         }
       }
     });
@@ -814,7 +898,9 @@ const Match = () => {
     } else if (parsedCourtFeePerGame > 0) {
       courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
     } else if (parsedCourtFee > 0) {
-      const totalMembersInSession = members.filter(m => m.gamesPlayed > 0 && !earlyPayers.includes(m.name)).length;
+      // แก้ไข: ให้หารค่าสนามด้วยจำนวนสมาชิกทั้งหมดที่อยู่ในเซสชัน (สถานะ "มา")
+      // ซึ่งก็คือจำนวนของ members ที่ถูก fetch มาแล้ว
+      const totalMembersInSession = members.length; // นี่คือการเปลี่ยนแปลง
       courtCostPerPerson = totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
     const estimatedTotalCost = Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
@@ -842,7 +928,7 @@ const Match = () => {
       `,
       icon: "info",
       showCancelButton: true,
-      confirmButtonColor: "#57e497",
+      confirmButtonColor: "#3fc57b",
       cancelButtonColor: "#6c757d",
       confirmButtonText: "ยืนยันการชำระเงิน",
       cancelButtonText: "ปิดหน้าต่าง",
@@ -914,8 +1000,13 @@ const Match = () => {
             </div>
           </div>
           <div className="action-time-group">
-            <button onClick={isOpen ? handleEndGroup : handleStartGroup} className={`action-button ${isOpen ? "end-group" : "start-group"}`}>
-              {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
+            {/* --- MODIFIED: แก้ไขปุ่มให้ Disabled และเปลี่ยนข้อความได้ --- */}
+            <button
+              onClick={isOpen ? handleEndGroup : handleStartGroup}
+              className={`action-button ${isOpen ? "end-group" : "start-group"}`}
+              disabled={isOpen && isSaving}
+            >
+              {isOpen ? (isSaving ? 'กำลังบันทึก...' : 'ปิดก๊วน') : 'เริ่มจัดก๊วน'}
             </button>
             <div className="activity-time-display">
               <span style={{ color: "#2196f3", fontWeight: 600 }}>Total Activity Time</span>
@@ -1172,6 +1263,10 @@ const Match = () => {
         }
         .save-indicator svg {
           stroke: #2e7d32;
+        }
+        .action-button:disabled {
+          background-color: #cccccc;
+          cursor: not-allowed;
         }
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
