@@ -94,6 +94,7 @@ const Match = () => {
   const [earlyPayers, setEarlyPayers] = useState([]);
 
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // <-- STATE ที่เพิ่มใหม่สำหรับป้องกันการกดซ้ำ
   const sessionStateRef = useRef();
 
   const getUserKey = (baseKey) => loggedInEmail ? `${loggedInEmail}_${baseKey}` : null;
@@ -703,8 +704,21 @@ const Match = () => {
     await fetchMembers();
   };
 
-  // --- MODIFIED: เพิ่มการส่ง earlyPayers ไปกับข้อมูล ---
+  // --- MODIFIED: แก้ไขฟังก์ชัน handleEndGroup ทั้งหมด ---
   const handleEndGroup = async () => {
+    // ป้องกันการกดซ้ำ
+    if (isSaving) {
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'กำลังบันทึกข้อมูล...',
+        showConfirmButton: false,
+        timer: 2000
+      });
+      return;
+    }
+
     if (matches.length === 0) {
       Swal.fire({
         title: "คุณแน่ใจหรือไม่?",
@@ -723,17 +737,20 @@ const Match = () => {
       });
       return;
     }
+
     const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
       return;
     }
+
     Swal.fire({
       title: "ปิดก๊วนและบันทึก?", text: "คุณแน่ใจหรือไม่ว่าต้องการปิดก๊วนและบันทึกข้อมูลทั้งหมด?", icon: "question",
       showCancelButton: true, confirmButtonColor: "#3085d6", cancelButtonColor: "#d33",
       confirmButtonText: "ใช่, ปิดก๊วนและบันทิก", cancelButtonText: "ยกเลิก",
     }).then(async (result) => {
       if (result.isConfirmed) {
+        setIsSaving(true); // เริ่มกระบวนการบันทึก
         try {
           if (!loggedInEmail) throw new Error("User not logged in.");
           const usersRef = collection(db, "users");
@@ -742,6 +759,7 @@ const Match = () => {
           let userId = null;
           userSnap.forEach((doc) => { userId = doc.id; });
           if (!userId) throw new Error("User data not found. Please log in again.");
+
           const memberUpdates = {};
           const memberSessionStats = {};
           matches.forEach((match) => {
@@ -777,6 +795,7 @@ const Match = () => {
               });
             }
           });
+
           for (const playerName of members.map(m => m.name)) {
             const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
             const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
@@ -797,19 +816,23 @@ const Match = () => {
               });
             }
           }
+
           const matchesRef = collection(db, `users/${userId}/Matches`);
           await addDoc(matchesRef, {
             topic, matchDate, totalTime: activityTime, matches,
             ballPrice, courtFee, courtFeePerGame, fixedCourtFeePerPerson, organizeFee,
-            earlyPayers: earlyPayers, // --- ADDED ---
+            earlyPayers: earlyPayers,
             savedAt: serverTimestamp(),
           });
+
           Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
           await resetSession();
           fetchMembers();
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
           Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
+        } finally {
+          setIsSaving(false); // ปลดบล็อกปุ่ม ไม่ว่าจะสำเร็จหรือล้มเหลว
         }
       }
     });
@@ -925,7 +948,7 @@ const Match = () => {
         );
       }
     });
-  }; 
+  };
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
@@ -977,8 +1000,13 @@ const Match = () => {
             </div>
           </div>
           <div className="action-time-group">
-            <button onClick={isOpen ? handleEndGroup : handleStartGroup} className={`action-button ${isOpen ? "end-group" : "start-group"}`}>
-              {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
+            {/* --- MODIFIED: แก้ไขปุ่มให้ Disabled และเปลี่ยนข้อความได้ --- */}
+            <button
+              onClick={isOpen ? handleEndGroup : handleStartGroup}
+              className={`action-button ${isOpen ? "end-group" : "start-group"}`}
+              disabled={isOpen && isSaving}
+            >
+              {isOpen ? (isSaving ? 'กำลังบันทึก...' : 'ปิดก๊วน') : 'เริ่มจัดก๊วน'}
             </button>
             <div className="activity-time-display">
               <span style={{ color: "#2196f3", fontWeight: 600 }}>Total Activity Time</span>
@@ -1235,6 +1263,10 @@ const Match = () => {
         }
         .save-indicator svg {
           stroke: #2e7d32;
+        }
+        .action-button:disabled {
+          background-color: #cccccc;
+          cursor: not-allowed;
         }
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
