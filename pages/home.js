@@ -1,10 +1,11 @@
 // home.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter } from 'next/router';
 import Swal from "sweetalert2";
 import { db, storage } from "../lib/firebaseConfig";
 import {
   collection, getDocs, setDoc, doc, updateDoc, deleteDoc,
-  query, where, writeBatch, limit, orderBy, startAfter, endBefore, getCountFromServer
+  query, where, writeBatch, limit, orderBy, startAfter, getCountFromServer
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import * as XLSX from "xlsx";
@@ -271,6 +272,9 @@ const ImagePreviewModal = ({ show, imageUrl, onClose }) => {
 };
 
 const Home = () => {
+  const router = useRouter();
+  const [isExpired, setIsExpired] = useState(false);
+
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [level, setLevel] = useState("");
@@ -531,6 +535,17 @@ const Home = () => {
           setLoggedInUsername(userData.username);
           setCurrentUserId(docSnapshot.id);
           setUserPackage(userData.packageType || 'basic');
+
+          // --- ส่วนที่เพิ่มเข้ามาเพื่อตรวจสอบวันหมดอายุ ---
+          if (userData.expiryDate) {
+            const expiry = userData.expiryDate.toDate(); // แปลง Firebase Timestamp เป็น Date Object
+            const now = new Date();
+            if (expiry < now) {
+              setIsExpired(true); // ตั้งค่า state ว่าหมดอายุแล้ว
+            }
+          }
+          // --- สิ้นสุดส่วนที่เพิ่มเข้ามา ---
+
         } else {
           console.warn("User data not found for email:", email);
           setUserPackage('basic');
@@ -643,17 +658,17 @@ const Home = () => {
     }
   }, [currentUserId, membersPerPage, sortConfig, levelOrder, search]);
 
-useEffect(() => {
+  useEffect(() => {
     fetchUserData();
-}, []);
+  }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (currentUserId) {
         setCurrentPage(1);
         fetchMembers('current', null);
         fetchTotalMemberCount();
     }
-}, [currentUserId, fetchMembers, sortConfig, search, selectedRegion, fetchTotalMemberCount]);
+  }, [currentUserId, fetchMembers, sortConfig, search, selectedRegion, fetchTotalMemberCount]);
 
   const handleSelectUser = (user) => {
     if (selectedUser && selectedUser.memberId === user.memberId) {
@@ -942,12 +957,29 @@ useEffect(() => {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("loggedInEmail");
+    router.push('/login');
+  };
+
   return (
     <div className="overall-layout">
-    <Head>
-      <title>หน้าหลัก PlayMatch - จัดการสมาชิกก๊วนแบดมินตัน</title>
-      <meta name="description" content="จัดการข้อมูลสมาชิกก๊วนแบดมินตันของคุณได้อย่างง่ายดาย เพิ่ม, แก้ไข, ลบ, ค้นหา, จัดเรียง และนำเข้า/ส่งออกข้อมูลสมาชิกด้วย PlayMatch." />
-    </Head>
+      {isExpired && (
+        <div className="expiry-overlay">
+          <div className="expiry-content">
+            <h3>บัญชีของคุณหมดอายุแล้ว</h3>
+            <p>กรุณาต่ออายุการใช้งานเพื่อเข้าถึงข้อมูลต่อ</p>
+            <button onClick={handleLogout} className="logout-button">
+              ออกจากระบบ
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Head>
+        <title>หน้าหลัก PlayMatch - จัดการสมาชิกก๊วนแบดมินตัน</title>
+        <meta name="description" content="จัดการข้อมูลสมาชิกก๊วนแบดมินตันของคุณได้อย่างง่ายดาย เพิ่ม, แก้ไข, ลบ, ค้นหา, จัดเรียง และนำเข้า/ส่งออกข้อมูลสมาชิกด้วย PlayMatch." />
+      </Head>
       <main className="main-content">
         <h2>สมาชิก</h2>
         <hr className="title-separator" />
@@ -1716,6 +1748,53 @@ useEffect(() => {
         .member-avatar-cell:hover .edit-avatar-overlay { opacity: 1; transform: scale(1); }
         @keyframes spinner-anim { to { transform: rotate(360deg); } }
         .avatar-spinner { animation: spinner-anim 1s linear infinite; }
+
+        .expiry-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.85);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+          backdrop-filter: blur(5px);
+        }
+        .expiry-content {
+          background: white;
+          padding: 40px;
+          border-radius: 12px;
+          text-align: center;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+          max-width: 400px;
+          margin: 20px;
+        }
+        .expiry-content h3 {
+          margin-top: 0;
+          font-size: 24px;
+          color: #d32f2f;
+        }
+        .expiry-content p {
+          font-size: 16px;
+          color: #555;
+          margin-bottom: 30px;
+        }
+        .logout-button {
+          background-color: #d32f2f;
+          color: white;
+          padding: 12px 25px;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        .logout-button:hover {
+          background-color: #b71c1c;
+        }
+
 
         @media (max-width: 768px) {
           .form-grid-container {
