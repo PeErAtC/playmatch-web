@@ -53,11 +53,13 @@ function IndexPage() {
   return (
     <div className={stylesCss.container}>
       <Head>
-        <title>PlayMatch - แพลตฟอร์มจัดการก๊วนแบดมินตันครบวงจร</title>
+        {/* --- ส่วนที่แก้ไข --- */}
+        <title>PlayMatch - โปรแกรมจัดก๊วนแบดมินตัน, สร้างแมตช์, คำนวณค่าใช้จ่ายรายบุคคล , ครบวงจร</title>
         <meta
           name="description"
-          content="PlayMatch คือระบบจัดการสมาชิกก๊วนแบดมินตัน สร้างแมตช์ คำนวณค่าใช้จ่าย จัดอันดับ (Ranking) และแสดงภาพรวม Dashboard ครบวงจรสำหรับนักกีฬาและผู้จัด."
+          content="ยกระดับก๊วนแบดมินตันของคุณด้วย PlayMatch! โปรแกรมจัดการก๊วนที่ช่วยให้คุณบริหารสมาชิก, สร้างแมตช์, คำนวณค่าใช้จ่าย, และจัดอันดับผู้เล่นได้อย่างง่ายดาย"
         />
+        {/* --- จบส่วนที่แก้ไข --- */}
       </Head>
 
       <Navbar />
@@ -164,8 +166,5 @@ function IndexPage() {
     </div>
   );
 }
-
-// ไม่จำเป็นต้องใช้ inlineStyles อีกต่อไป
-// const inlineStyles = { ... };
 
 export default IndexPage;
