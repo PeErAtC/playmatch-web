@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from 'next/router'; // เพิ่ม...
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -17,14 +18,11 @@ import {
 
 // --- (ส่วนอื่นๆ ของโค้ดที่ไม่เปลี่ยนแปลง) ---
 const courts = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
-
-// --- ADDED: กำหนดลิมิตการสร้างก๊วนต่อเดือน ---
 const packageSessionLimits = {
   Basic: 15,
   Pro: 30,
   Premium: Infinity,
 };
-
 const RESULT_OPTIONS = [
   { value: "", label: "เลือกผล" },
   { value: "A", label: "ทีม A ชนะ" },
@@ -60,6 +58,9 @@ const getScoreByResult = (result) => {
 
 
 const Match = () => {
+  const router = useRouter(); // เพิ่ม...
+  const [isExpired, setIsExpired] = useState(false); // เพิ่ม...
+
   const [matchDate, setMatchDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [topic, setTopic] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -85,15 +86,11 @@ const Match = () => {
   const contentRef = useRef(null);
   const [selectedRegion, setSelectedRegion] = useState("ภาคอีสาน");
   const [showResultsColumn, setShowResultsColumn] = useState(true);
-
-  // --- ADDED: State for user package and ID ---
-  const [userPackage, setUserPackage] = useState('Basic'); // กำหนดค่าเริ่มต้นเป็น Basic เพื่อความปลอดภัย
+  const [userPackage, setUserPackage] = useState('Basic');
   const [currentUserId, setCurrentUserId] = useState(null);
-
-  // --- ADDED: State for early payers ---
   const [earlyPayers, setEarlyPayers] = useState([]);
-
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const sessionStateRef = useRef();
 
   const getUserKey = (baseKey) => loggedInEmail ? `${loggedInEmail}_${baseKey}` : null;
@@ -130,11 +127,10 @@ const Match = () => {
     sessionStateRef.current = {
         matches, topic, matchDate, activityTime, ballPrice, courtFee,
         courtFeePerGame, fixedCourtFeePerPerson, organizeFee, selectedRegion,
-        earlyPayers, // --- ADDED: for auto-save
+        earlyPayers,
     };
   });
 
-  // --- ADDED: Persist earlyPayers to localStorage ---
   useEffect(() => {
     if (isBrowser && loggedInEmail && isOpen) {
       localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify(earlyPayers));
@@ -147,20 +143,16 @@ const Match = () => {
     }
     const autoSaveToFirebase = async () => {
         console.log("Auto-saving session to Firebase...");
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("email", "==", loggedInEmail));
-        const userSnap = await getDocs(q);
-        if (userSnap.empty) {
-            console.error("Auto-save failed: Could not find user.");
+        if (!currentUserId) {
+            console.error("Auto-save failed: Could not find user ID.");
             return;
         }
-        const userId = userSnap.docs[0].id;
 
         const dataToBackup = {
             ...sessionStateRef.current,
             lastUpdated: serverTimestamp()
         };
-        const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
+        const backupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
 
         try {
             await setDoc(backupDocRef, dataToBackup);
@@ -172,7 +164,7 @@ const Match = () => {
     };
     const intervalId = setInterval(autoSaveToFirebase, 60000);
     return () => clearInterval(intervalId);
-  }, [isOpen, loggedInEmail, isBrowser]);
+  }, [isOpen, loggedInEmail, isBrowser, currentUserId]);
 
   useEffect(() => {
     if (showSaveIndicator) {
@@ -183,7 +175,7 @@ const Match = () => {
     }
   }, [showSaveIndicator]);
 
-  // --- MODIFIED: แก้ไขฟังก์ชัน fetchMembers เพื่อดึงข้อมูลแพ็คเกจ ---
+  // แก้ไข... เพิ่มการตรวจสอบวันหมดอายุในฟังก์ชันนี้
   const fetchMembers = async () => {
     try {
       if (!loggedInEmail) return;
@@ -196,13 +188,22 @@ const Match = () => {
         return;
       }
 
-      // --- MODIFIED: ดึง userId และ packageType มาเก็บใน State ---
       const userDoc = userSnap.docs[0];
       const userId = userDoc.id;
       const userData = userDoc.data();
 
-      setCurrentUserId(userId); // <-- บรรทัดที่เพิ่ม
-      setUserPackage(userData.packageType || 'Basic'); // <-- บรรทัดที่เพิ่ม
+      // --- ส่วนที่แก้ไข: ตรวจสอบวันหมดอายุ ---
+      if (userData.expiryDate) {
+          const expiry = userData.expiryDate.toDate();
+          const now = new Date();
+          if (expiry < now) {
+              setIsExpired(true); // ตั้งค่า state ว่าหมดอายุแล้ว
+          }
+      }
+      // --- จบส่วนที่แก้ไข ---
+
+      setCurrentUserId(userId);
+      setUserPackage(userData.packageType || 'Basic');
 
       const membersRef = collection(db, `users/${userId}/Members`);
       const memSnap = await getDocs(membersRef);
@@ -307,26 +308,20 @@ const Match = () => {
     setTotalBallsInSession(0);
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
-    setEarlyPayers([]); // --- ADDED ---
+    setEarlyPayers([]);
 
     if (isBrowser && loggedInEmail) {
       localStorage.removeItem(getUserKey("isOpen"));
       localStorage.removeItem(getUserKey("matches"));
       localStorage.removeItem(getUserKey("activityTime"));
-      localStorage.removeItem(getUserKey("earlyPayers")); // --- ADDED ---
+      localStorage.removeItem(getUserKey("earlyPayers"));
     }
 
-    if (loggedInEmail) {
+    if (currentUserId) {
         try {
-            const usersRef = collection(db, "users");
-            const q = query(usersRef, where("email", "==", loggedInEmail));
-            const userSnap = await getDocs(q);
-            if (!userSnap.empty) {
-                const userId = userSnap.docs[0].id;
-                const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
-                await deleteDoc(backupDocRef);
-                console.log("Firebase session backup cleared.");
-            }
+            const backupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
+            await deleteDoc(backupDocRef);
+            console.log("Firebase session backup cleared.");
         } catch (error) {
             console.error("Failed to clear Firebase session backup:", error);
         }
@@ -353,8 +348,8 @@ const Match = () => {
                 setFixedCourtFeePerPerson(parseFloat(localStorage.getItem(getUserKey("fixedCourtFeePerPerson"))) || 0);
                 setOrganizeFee(parseFloat(localStorage.getItem(getUserKey("organizeFee"))) || 0);
                 setSelectedRegion(localStorage.getItem(getUserKey("selectedRegion")) || "ภาคอีสาน");
-                const savedEarlyPayers = JSON.parse(localStorage.getItem(getUserKey("earlyPayers"))) || []; // --- ADDED ---
-                setEarlyPayers(savedEarlyPayers); // --- ADDED ---
+                const savedEarlyPayers = JSON.parse(localStorage.getItem(getUserKey("earlyPayers"))) || [];
+                setEarlyPayers(savedEarlyPayers);
                 setIsOpen(true);
                 console.log("Session restored from user-specific localStorage.");
                 return;
@@ -364,13 +359,13 @@ const Match = () => {
             }
         }
 
+        if (!currentUserId) {
+            console.log("Waiting for user ID to check Firebase backup...");
+            return;
+        }
+
         console.log("localStorage is empty or corrupt, checking Firebase for backup...");
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("email", "==", loggedInEmail));
-        const userSnap = await getDocs(q);
-        if (userSnap.empty) return;
-        const userId = userSnap.docs[0].id;
-        const backupDocRef = doc(db, `users/${userId}/ActiveSession/current_session_backup`);
+        const backupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
 
         try {
             const backupSnap = await getDoc(backupDocRef);
@@ -387,7 +382,7 @@ const Match = () => {
                 setFixedCourtFeePerPerson(data.fixedCourtFeePerPerson || 0);
                 setOrganizeFee(data.organizeFee || 0);
                 setSelectedRegion(data.selectedRegion || "ภาคอีสาน");
-                setEarlyPayers(data.earlyPayers || []); // --- ADDED ---
+                setEarlyPayers(data.earlyPayers || []);
                 setIsOpen(true);
                 setMatchCount((data.matches || []).length);
                 localStorage.setItem(getUserKey("isOpen"), "true");
@@ -400,7 +395,6 @@ const Match = () => {
                 localStorage.setItem(getUserKey("fixedCourtFeePerPerson"), (data.fixedCourtFeePerPerson || 0).toString());
                 localStorage.setItem(getUserKey("organizeFee"), (data.organizeFee || 0).toString());
                 localStorage.setItem(getUserKey("selectedRegion"), data.selectedRegion || "ภาคอีสาน");
-                // --- ADDED: บันทึก earlyPayers กลับลง localStorage หลังกู้คืน ---
                 localStorage.setItem(getUserKey("earlyPayers"), JSON.stringify(data.earlyPayers || []));
                 Swal.fire('กู้ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดถูกกู้คืนจากระบบสำรองข้อมูลแล้ว', 'success');
             } else {
@@ -413,7 +407,7 @@ const Match = () => {
     };
 
     loadSession();
-  }, [isBrowser, loggedInEmail]);
+  }, [isBrowser, loggedInEmail, currentUserId]);
 
   useEffect(() => {
     if (!isBrowser) return;
@@ -507,7 +501,6 @@ const Match = () => {
       }, 100);
   };
 
-  // --- MODIFIED: เพิ่มการกรอง earlyPayers ---
   const getAvailableMembers = (currentMatch, currentField) => {
     const selectedPlayersInCurrentMatch = new Set(
       Object.entries(currentMatch)
@@ -527,7 +520,6 @@ const Match = () => {
       const isCurrentlySelectedInThisField = mem.name === currentMatch[currentField];
       const isSelectedInOtherFieldInCurrentMatch = selectedPlayersInCurrentMatch.has(mem.name);
       const isPlayingInAnotherActiveMatch = playersInOtherActiveMatches.has(mem.name);
-      // --- NEW: ตรวจสอบว่าผู้เล่นจ่ายเงินกลับก่อนไปแล้วหรือไม่ ---
       const hasAlreadyPaidAndLeft = earlyPayers.includes(mem.name);
 
       return (
@@ -572,7 +564,6 @@ const Match = () => {
         const updated = [...prev];
         const matchBeingUpdated = { ...updated[idx] };
 
-        // Standard field updates
         if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
             matchBeingUpdated[field] = value;
             const member = members.find(m => m.name === value);
@@ -581,7 +572,6 @@ const Match = () => {
             matchBeingUpdated[field] = value;
         }
 
-        // --- NEW LOGIC: Auto-set status when 4 players are selected ---
         if (['A1', 'A2', 'B1', 'B2'].includes(field)) {
             const { A1, A2, B1, B2 } = matchBeingUpdated;
             if (A1 && A2 && B1 && B2) {
@@ -594,14 +584,12 @@ const Match = () => {
                 }
             }
         }
-        // --- END NEW LOGIC ---
 
-        // Validation for status change
         if (field === "status" && value === "กำลังแข่งขัน") {
             const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
             if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
                 showIncompleteForPlayingToast();
-                return prev; // Revert change by returning previous state
+                return prev;
             }
         }
         if (field === "status" && value === "จบการแข่งขัน") {
@@ -612,9 +600,8 @@ const Match = () => {
             }
         }
 
-        // Logic for result change
         if (field === "result") {
-            if (value) { // If a result is selected
+            if (value) {
                 const { A1, A2, B1, B2, court, balls } = matchBeingUpdated;
                 if (!A1 || !A2 || !B1 || !B2 || !court || !balls) {
                     showIncompleteForFinishingToast();
@@ -624,15 +611,14 @@ const Match = () => {
                 if (matchBeingUpdated.status !== "จบการแข่งขัน") {
                     matchBeingUpdated.status = "จบการแข่งขัน";
                 }
-            } else { // If result is cleared
+            } else {
                  matchBeingUpdated.score = "";
                  if (matchBeingUpdated.status === "จบการแข่งขัน") {
-                    matchBeingUpdated.status = ""; // Revert status if it was "Finished"
+                    matchBeingUpdated.status = "";
                 }
             }
         }
 
-        // If status is manually changed away from "Finished", clear the result
         if (field === "status" && value !== "จบการแข่งขัน" && updated[idx].status === "จบการแข่งขัน") {
             matchBeingUpdated.result = "";
             matchBeingUpdated.score = "";
@@ -654,23 +640,28 @@ const Match = () => {
       </option>
     ));
 
-  // --- MODIFIED: แก้ไขฟังก์ชัน handleStartGroup เพื่อตรวจสอบโควต้า ---
+  // แก้ไข... เพิ่มการตรวจสอบวันหมดอายุก่อนเริ่มก๊วน
   const handleStartGroup = async () => {
-    // --- START: ส่วนตรวจสอบโควต้าที่เพิ่มเข้ามา ---
+    // --- ส่วนที่เพิ่มเข้ามา: ตรวจสอบวันหมดอายุก่อน ---
+    if (isExpired) {
+        Swal.fire({
+            icon: 'error',
+            title: 'บัญชีของคุณหมดอายุแล้ว',
+            text: 'กรุณาต่ออายุการใช้งานเพื่อเริ่มก๊วนใหม่',
+        });
+        return;
+    }
+
     if (!currentUserId) {
         Swal.fire("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ กรุณาลองอีกครั้ง", "error");
         return;
     }
 
-    // ถ้าเป็น Premium ให้เริ่มได้เลย ไม่ต้องเช็ค
-    if (userPackage === 'Premium') {
-        // ทำงานตามปกติ (โค้ดจะไปทำส่วนด้านล่างต่อ)
-    } else {
+    if (userPackage !== 'Premium') {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-        // ค้นหาจำนวนก๊วนที่เคยบันทึกในเดือนนี้
         const historyRef = collection(db, `users/${currentUserId}/Matches`);
         const q = query(historyRef, where('savedAt', '>=', startOfMonth), where('savedAt', '<=', endOfMonth));
 
@@ -685,13 +676,10 @@ const Match = () => {
                 html: `คุณใช้โควต้าสำหรับแพ็คเกจ <b>${userPackage}</b><br/>ครบ <b>${sessionsThisMonth}/${limit}</b> ครั้งในเดือนนี้แล้ว`,
                 confirmButtonText: 'เข้าใจแล้ว'
             });
-            return; // หยุดการทำงาน ไม่ให้สร้างก๊วนใหม่
+            return;
         }
     }
-    // --- END: ส่วนตรวจสอบโควต้า ---
 
-
-    // โค้ดเดิมสำหรับเริ่มก๊วน (ทำงานเมื่อผ่านการตรวจสอบแล้ว)
     if (!topic) {
       Swal.fire({ title: "กรุณาระบุหัวเรื่อง", text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History", icon: "warning" });
       return;
@@ -714,8 +702,19 @@ const Match = () => {
     await fetchMembers();
   };
 
-  // --- MODIFIED: เพิ่มการส่ง earlyPayers ไปกับข้อมูล ---
   const handleEndGroup = async () => {
+    if (isSaving) {
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'กำลังบันทึกข้อมูล...',
+        showConfirmButton: false,
+        timer: 2000
+      });
+      return;
+    }
+
     if (matches.length === 0) {
       Swal.fire({
         title: "คุณแน่ใจหรือไม่?",
@@ -734,25 +733,23 @@ const Match = () => {
       });
       return;
     }
+
     const hasUnfinished = matches.some((m) => m.status !== "จบการแข่งขัน");
     if (hasUnfinished) {
       Swal.fire("มี Match ที่ยังไม่จบการแข่งขัน", "กรุณาเลือก 'จบการแข่งขัน' ให้ครบทุก Match", "warning");
       return;
     }
+
     Swal.fire({
       title: "ปิดก๊วนและบันทึก?", text: "คุณแน่ใจหรือไม่ว่าต้องการปิดก๊วนและบันทึกข้อมูลทั้งหมด?", icon: "question",
       showCancelButton: true, confirmButtonColor: "#3085d6", cancelButtonColor: "#d33",
       confirmButtonText: "ใช่, ปิดก๊วนและบันทิก", cancelButtonText: "ยกเลิก",
     }).then(async (result) => {
       if (result.isConfirmed) {
+        setIsSaving(true);
         try {
-          if (!loggedInEmail) throw new Error("User not logged in.");
-          const usersRef = collection(db, "users");
-          const q = query(usersRef, where("email", "==", loggedInEmail));
-          const userSnap = await getDocs(q);
-          let userId = null;
-          userSnap.forEach((doc) => { userId = doc.id; });
-          if (!userId) throw new Error("User data not found. Please log in again.");
+          if (!currentUserId) throw new Error("User data not found. Please log in again.");
+
           const memberUpdates = {};
           const memberSessionStats = {};
           matches.forEach((match) => {
@@ -788,10 +785,11 @@ const Match = () => {
               });
             }
           });
+
           for (const playerName of members.map(m => m.name)) {
             const data = memberUpdates[playerName] || { scoreToAdd: 0, winsToAdd: 0 };
             const sessionStats = memberSessionStats[playerName] || { games: 0, balls: 0 };
-            const memberQuery = query(collection(db, `users/${userId}/Members`), where("name", "==", playerName));
+            const memberQuery = query(collection(db, `users/${currentUserId}/Members`), where("name", "==", playerName));
             const memberSnap = await getDocs(memberQuery);
             if (!memberSnap.empty) {
               const memberDoc = memberSnap.docs[0];
@@ -800,7 +798,7 @@ const Match = () => {
               const currentWins = currentData.wins || 0;
               const currentTotalGamesPlayed = currentData.totalGamesPlayed || 0;
               const currentTotalBallsUsed = currentData.totalBallsUsed || 0;
-              await updateDoc(doc(db, `users/${userId}/Members`, memberDoc.id), {
+              await updateDoc(doc(db, `users/${currentUserId}/Members`, memberDoc.id), {
                 score: currentScore + data.scoreToAdd,
                 wins: currentWins + data.winsToAdd,
                 totalGamesPlayed: currentTotalGamesPlayed + sessionStats.games,
@@ -808,19 +806,23 @@ const Match = () => {
               });
             }
           }
-          const matchesRef = collection(db, `users/${userId}/Matches`);
+
+          const matchesRef = collection(db, `users/${currentUserId}/Matches`);
           await addDoc(matchesRef, {
             topic, matchDate, totalTime: activityTime, matches,
             ballPrice, courtFee, courtFeePerGame, fixedCourtFeePerPerson, organizeFee,
-            earlyPayers: earlyPayers, // --- ADDED ---
+            earlyPayers: earlyPayers,
             savedAt: serverTimestamp(),
           });
+
           Swal.fire("บันทึกสำเร็จ!", "บันทึก Match เข้าประวัติและอัปเดตคะแนนสมาชิกแล้ว", "success");
           await resetSession();
           fetchMembers();
         } catch (error) {
           console.error("Error ending group and saving matches:", error);
           Swal.fire("เกิดข้อผิดพลาด", error.message, "error");
+        } finally {
+          setIsSaving(false);
         }
       }
     });
@@ -857,7 +859,6 @@ const Match = () => {
   const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
   const paginatedMatches = matches.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // --- NEW: ปรับปรุงฟังก์ชันคำนวณให้มีการยืนยันการชำระเงิน ---
   const calculatePlayerSummary = () => {
     if (!selectedMemberForEarlyExit) {
       Swal.fire("กรุณาเลือกสมาชิกที่ต้องการคำนวณ", "", "warning");
@@ -886,9 +887,7 @@ const Match = () => {
     } else if (parsedCourtFeePerGame > 0) {
       courtCostPerPerson = gamesPlayed * parsedCourtFeePerGame;
     } else if (parsedCourtFee > 0) {
-      // แก้ไข: ให้หารค่าสนามด้วยจำนวนสมาชิกทั้งหมดที่อยู่ในเซสชัน (สถานะ "มา")
-      // ซึ่งก็คือจำนวนของ members ที่ถูก fetch มาแล้ว
-      const totalMembersInSession = members.length; // นี่คือการเปลี่ยนแปลง
+      const totalMembersInSession = members.length;
       courtCostPerPerson = totalMembersInSession > 0 ? parsedCourtFee / totalMembersInSession : 0;
     }
     const estimatedTotalCost = Math.ceil(ballCost) + Math.ceil(courtCostPerPerson) + Math.ceil(parsedOrganizeFee);
@@ -898,7 +897,7 @@ const Match = () => {
       courtCost: Math.ceil(courtCostPerPerson), organizeFee: Math.ceil(parsedOrganizeFee),
     };
 
-    setEarlyExitCalculationResult(result); // ยังเก็บผลไว้เผื่อต้องใช้
+    setEarlyExitCalculationResult(result);
 
     Swal.fire({
       title: `ยอดรวมสำหรับ ${result.name}`,
@@ -922,13 +921,9 @@ const Match = () => {
       cancelButtonText: "ปิดหน้าต่าง",
     }).then((actionResult) => {
       if (actionResult.isConfirmed) {
-        // --- เมื่อกดยืนยัน ให้เพิ่มชื่อผู้เล่นลง State ---
         setEarlyPayers(prev => [...prev, player.name]);
-
-        // --- ล้างค่าที่เลือกไว้ ---
         setSelectedMemberForEarlyExit("");
         setEarlyExitCalculationResult(null);
-
         Swal.fire(
           "บันทึกสำเร็จ!",
           `${player.name} ถูกบันทึกสถานะ 'จ่ายแล้ว' และจะถูกนำออกจากรายชื่อผู้เล่นที่ว่าง`,
@@ -936,7 +931,7 @@ const Match = () => {
         );
       }
     });
-  }; 
+  };
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
@@ -973,8 +968,27 @@ const Match = () => {
     });
   };
 
+  // เพิ่ม... ฟังก์ชันสำหรับออกจากระบบ
+  const handleLogout = () => {
+    localStorage.removeItem("loggedInEmail");
+    router.push('/login'); // แก้ไข path ไปยังหน้า login ของคุณ
+  };
+
   return (
     <div style={{ padding: "15px", backgroundColor: "#f0f2f5", minHeight: "100vh", fontFamily: "'Kanit', sans-serif" }}>
+      {/* เพิ่ม... หน้าต่างทับเมื่อหมดอายุ */}
+      {isExpired && (
+        <div className="expiry-overlay">
+          <div className="expiry-content">
+            <h3>บัญชีของคุณหมดอายุแล้ว</h3>
+            <p>กรุณาต่ออายุการใช้งานเพื่อเข้าถึงข้อมูลต่อ</p>
+            <button onClick={handleLogout} className="logout-button">
+              ออกจากระบบ
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="card control-panel-card">
         <div className="control-panel">
           <div className="date-topic-group">
@@ -988,8 +1002,12 @@ const Match = () => {
             </div>
           </div>
           <div className="action-time-group">
-            <button onClick={isOpen ? handleEndGroup : handleStartGroup} className={`action-button ${isOpen ? "end-group" : "start-group"}`}>
-              {isOpen ? "ปิดก๊วน" : "เริ่มจัดก๊วน"}
+            <button
+              onClick={isOpen ? handleEndGroup : handleStartGroup}
+              className={`action-button ${isOpen ? "end-group" : "start-group"}`}
+              disabled={isOpen && isSaving}
+            >
+              {isOpen ? (isSaving ? 'กำลังบันทึก...' : 'ปิดก๊วน') : 'เริ่มจัดก๊วน'}
             </button>
             <div className="activity-time-display">
               <span style={{ color: "#2196f3", fontWeight: 600 }}>Total Activity Time</span>
@@ -1052,7 +1070,6 @@ const Match = () => {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <select value={selectedMemberForEarlyExit} onChange={(e) => setSelectedMemberForEarlyExit(e.target.value)} className="early-exit-select">
               <option value="">เลือกสมาชิก</option>
-              {/* --- MODIFIED: กรองคนที่จ่ายแล้วออกจากตัวเลือกนี้ด้วย --- */}
               {members
                 .filter(mem => !earlyPayers.includes(mem.name))
                 .map((mem) => (
@@ -1205,59 +1222,31 @@ const Match = () => {
         .pagination-controls button { background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 12px; transition: background-color 0.3s ease; }
         .pagination-controls button:hover:not(:disabled) { background-color: #0056b3; }
         .pagination-controls button:disabled { background-color: #cccccc; cursor: not-allowed; }
-
-        .add-match-controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            margin-top: 25px;
-        }
+        .add-match-controls { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 25px; }
         .add-match-button { display: block; width: fit-content; margin: 0; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
         .add-match-button.random-match-button { background-color: #4bf196; }
         .add-match-button:hover:not(:disabled) { background-color: #0056b3; }
         .add-match-button.random-match-button:hover:not(:disabled) { background-color: #3fc57b; }
         .add-match-button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .save-indicator { position: absolute; bottom: -50px; left: 50%; z-index: 10; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #2e7d32; background-color: #e8f5e9; padding: 8px 12px; border-radius: 8px; border: 1px solid #a5d6a7; opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(10px); transition: all 0.5s ease-in-out; }
+        .save-indicator.visible { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+        .save-indicator svg { stroke: #2e7d32; }
+        .action-button:disabled { background-color: #cccccc; cursor: not-allowed; }
 
-        .save-indicator {
-          position: absolute;
-          bottom: -50px;
-          left: 50%;
-          z-index: 10;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 13px;
-          font-weight: 500;
-          color: #2e7d32;
-          background-color: #e8f5e9;
-          padding: 8px 12px;
-          border-radius: 8px;
-          border: 1px solid #a5d6a7;
-          opacity: 0;
-          visibility: hidden;
-          transform: translateX(-50%) translateY(10px);
-          transition: all 0.5s ease-in-out;
-        }
-        .save-indicator.visible {
-          opacity: 1;
-          visibility: visible;
-          transform: translateX(-50%) translateY(0);
-        }
-        .save-indicator svg {
-          stroke: #2e7d32;
-        }
+        /* เพิ่ม... CSS สำหรับหน้าต่างหมดอายุ */
+        .expiry-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
+        .expiry-content { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-width: 400px; margin: 20px; }
+        .expiry-content h3 { margin-top: 0; font-size: 24px; color: #d32f2f; }
+        .expiry-content p { font-size: 16px; color: #555; margin-bottom: 30px; }
+        .logout-button { background-color: #d32f2f; color: white; padding: 12px 25px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+        .logout-button:hover { background-color: #b71c1c; }
+
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
           .date-topic-group, .action-time-group { flex-direction: column; align-items: stretch; }
           .control-input { width: 100%; }
           .action-button { width: 100%; }
-          .save-indicator {
-            width: fit-content;
-            bottom: -45px;
-            left: 50%;
-            transform: translateX(-50%) translateY(10px);
-          }
+          .save-indicator { width: fit-content; bottom: -45px; left: 50%; transform: translateX(-50%) translateY(10px); }
           .match-table thead { display: none; }
           .match-table, .match-table tbody, .match-table tr, .match-table td { display: block; width: 100%; }
           .match-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; padding: 10px; }
@@ -1282,7 +1271,7 @@ const Match = () => {
           .cost-input-group { min-width: unset; width: 100%; }
           .cost-input { width: 100%; }
           .early-exit-select { width: 100%; min-width: unset; }
-          .add-match-controls { flex-direction: column; gap: 15px; } /* Stack buttons on mobile */
+          .add-match-controls { flex-direction: column; gap: 15px; }
           .add-match-button { width: 100%; }
         }
         @media (max-width: 480px) {
