@@ -87,11 +87,15 @@ export default function Login() {
   return (
     <main className="login-main">
       <Head>
-        <title>เข้าสู่ระบบ PlayMatch - จัดการและติดตามการแข่งขันกีฬา</title>
+        <title>เข้าสู่ระบบ - PlayMatch</title>
+        {/* --- บอก Search Engines ไม่ให้เก็บข้อมูลหน้านี้ --- */}
+        <meta name="robots" content="noindex, nofollow" />
+
         <meta
           name="description"
-          content="เข้าสู่ระบบ PlayMatch แพลตฟอร์มจัดการก๊วนแบดมินตันและกีฬาอื่นๆ เพื่อการบริหารสมาชิก สร้างแมตช์ และติดตามผลได้อย่างง่ายดาย."
+          content="เข้าสู่ระบบ PlayMatch เพื่อบริหารจัดการก๊วนแบดมินตันของคุณ"
         />
+        <link rel="canonical" href="https://playmatch.pro/login" />
       </Head>
 
       <Toaster position="top-center" reverseOrder={false} />
@@ -182,7 +186,7 @@ export default function Login() {
         </div>
 
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.5.4
+          © 2025–2026 PlayMatch version 1.5.8
         </div>
       </div>
 
@@ -197,12 +201,10 @@ export default function Login() {
           font-family: "Poppins", "Noto Sans Thai", Arial, sans-serif;
           box-sizing: border-box;
           
-          /* เพิ่มโค้ดนี้เพื่อซ่อน Scrollbar */
-          -ms-overflow-style: none; /* สำหรับ Internet Explorer และ Edge */
-          scrollbar-width: none; /* สำหรับ Firefox */
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
         
-        /* เพิ่มโค้ดนี้สำหรับ WebKit browsers (Chrome, Safari, etc.) */
         body::-webkit-scrollbar {
           display: none;
         }
@@ -217,7 +219,7 @@ export default function Login() {
           justify-content: center;
           position: relative;
           z-index: 0;
-          overflow-y: hidden; /* เปลี่ยนจาก auto เป็น hidden */
+          overflow-y: hidden;
           padding: 20px;
           box-sizing: border-box;
         }
@@ -335,7 +337,6 @@ export default function Login() {
           height: 16px;
         }
         .login-form button[type="submit"] {
-          /* พื้นหลังไล่สีที่สวยงามขึ้น */
           background: linear-gradient(90deg, #146cfa 70%, #4fa3f7 100%);
           color: #fff;
           font-weight: 700;
@@ -344,44 +345,22 @@ export default function Login() {
           border-radius: 44px;
           border: none;
           cursor: pointer;
-          
-          /* เพิ่มเงาที่ดูมีมิติและทันสมัย */
           box-shadow: 0 4px 18px #2976d629;
-          
-          /* กำหนดการเปลี่ยนสถานะให้ลื่นไหล (เพิ่ม transform) */
           transition: 
             background 0.2s ease-in-out, 
             transform 0.1s ease-in-out, 
             box-shadow 0.18s ease-in-out;
-          
           margin-top: 2px;
-          outline: none; /* ลบเส้นกรอบเมื่อกดเลือกปุ่ม */
+          outline: none;
         }
-
-        /* เอฟเฟกต์เมื่อเอาเมาส์ไปชี้ (Hover State) */
         .login-form button[type="submit"]:hover {
-          /* เปลี่ยนพื้นหลังเมื่อชี้ */
           background: linear-gradient(90deg, #104b9e 60%, #18c9f4 100%);
-          
-          /* ยกปุ่มขึ้นเล็กน้อยเพื่อสร้างมิติ */
           transform: translateY(-2px) scale(1.035);
-          
-          /* เพิ่มเงาให้ดูโดดเด่นขึ้น */
           box-shadow: 0 7px 24px #2c9cfd48;
         }
-
-        /* เอฟเฟกต์เมื่อกดปุ่มค้างไว้ (Active State) */
         .login-form button[type="submit"]:active {
-          /* กดปุ่มให้จมลงไปเล็กน้อย */
           transform: translateY(1px) scale(0.99);
-          
-          /* ลดเงาให้ดูเหมือนปุ่มจมลงไป */
           box-shadow: 0 2px 8px #2976d629;
-        }
-        .login-form button[type="submit"]:hover {
-          background: linear-gradient(90deg, #104b9e 60%, #18c9f4 100%);
-          box-shadow: 0 7px 24px #2c9cfd48;
-          transform: translateY(-2px) scale(1.035);
         }
         .login-loading {
           color: #2196f3;
@@ -390,7 +369,6 @@ export default function Login() {
           margin: 13px 0 0 0;
           text-align: center;
         }
-
         .login-contact {
           display: flex;
           gap: 22px;
@@ -418,8 +396,6 @@ export default function Login() {
           height: 29px;
           object-fit: contain;
         }
-
-        /* Glowing Animated Border */
         .login-form-wrapper::before {
           content: "";
           position: absolute;
@@ -442,7 +418,6 @@ export default function Login() {
           filter: blur(8px);
           opacity: 0.9;
         }
-
         @keyframes glowing-border {
           0% {
             background-position: 0% 50%;
@@ -454,8 +429,6 @@ export default function Login() {
             background-position: 0% 50%;
           }
         }
-
-        /* White Dot "Stars" (::after) */
         .login-form-wrapper::after {
           content: "";
           position: absolute;
@@ -557,7 +530,6 @@ export default function Login() {
           letter-spacing: 0.03em;
         }
 
-        /* Responsive: Tablet */
         @media (max-width: 700px) {
           .login-form-wrapper {
             padding: 32px 16vw 16px 16vw;
@@ -572,7 +544,6 @@ export default function Login() {
             font-size: 1rem;
           }
         }
-        /* Responsive: Mobile */
         @media (max-width: 520px) {
           .login-form-wrapper {
             padding: 22px 7vw 12px 7vw;
