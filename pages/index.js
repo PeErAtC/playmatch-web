@@ -53,13 +53,23 @@ function IndexPage() {
   return (
     <div className={stylesCss.container}>
       <Head>
-        {/* --- ส่วนที่แก้ไข --- */}
-        <title>PlayMatch - โปรแกรมจัดก๊วนแบดมินตัน, จับคู่ผู้เล่นอัตโนมัติ, คำนวณค่าใช้จ่ายรายบุคคล , ครบวงจร</title>
+        {/* --- START: ส่วนที่ปรับปรุงเพื่อ SEO และ Branding (playmatch.pro) --- */}
+        <title>PlayMatch - โปรแกรมจัดการก๊วนแบดมินตันครบวงจร | จัดคิวผู้เล่นลงสนามและคำนวณค่าใช้จ่ายอัตโนมัติ</title>
         <meta
           name="description"
           content="ยกระดับก๊วนแบดมินตันของคุณด้วย PlayMatch! โปรแกรมจัดการก๊วนที่ช่วยให้คุณบริหารสมาชิก, สร้างแมตช์, คำนวณค่าใช้จ่าย, และจัดอันดับผู้เล่นได้อย่างง่ายดาย"
         />
-        {/* --- จบส่วนที่แก้ไข --- */}
+
+        {/* URL หลักของเว็บไซต์สำหรับบอก Google */}
+        <link rel="canonical" href="https://playmatch.pro" />
+
+        {/* ข้อมูลสำหรับแสดงผลเมื่อแชร์บน Social Media (Facebook, LINE, etc.) */}
+        <meta property="og:title" content="PlayMatch - โปรแกรมจัดการก๊วนแบดมินตันครบวงจร" />
+        <meta property="og:description" content="บริหารสมาชิก, สร้างแมตช์, คำนวณค่าใช้จ่าย, และจัดอันดับผู้เล่นได้อย่างง่ายดาย" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://playmatch.pro" />
+        <meta property="og:image" content="https://playmatch.pro/images/สกรีนช็อต 2025-07-04 005806.png" />
+        {/* --- END: ส่วนที่ปรับปรุง --- */}
       </Head>
 
       <Navbar />
@@ -97,7 +107,6 @@ function IndexPage() {
               <div
                 key={index}
                 ref={ref}
-                // ใช้ className ในการจัดการ layout ทั้งหมด
                 className={`${stylesCss.featureItem} ${directionClass} ${visibilityClass}`}
               >
                 <div className={stylesCss.featureImageContainer}>
