@@ -43,7 +43,7 @@ const PaymentHistory = () => {
   const lastVisibleRef = useRef(null);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage, setRecordsPerPage] = useState(25); // <<< เปลี่ยนเป็น State
+  const [recordsPerPage, setRecordsPerPage] = useState(25);
   const detailTableRefs = useRef({}); // Ref to hold refs for each detail table
 
   // Define a Toast mixin for subtle notifications
@@ -157,7 +157,7 @@ const PaymentHistory = () => {
         setLoading(false);
       }
     },
-    [loggedInEmail, recordsPerPage] // <<< recordsPerPage อยู่ในนี้แล้ว จะทำงานอัตโนมัติเมื่อค่าเปลี่ยน
+    [loggedInEmail, recordsPerPage]
   );
 
   useEffect(() => {
@@ -168,7 +168,7 @@ const PaymentHistory = () => {
       setCurrentPage(1);
       fetchPaymentHistory(false, 1);
     }
-  }, [loggedInEmail, recordsPerPage, fetchPaymentHistory]); // <<< เพิ่ม recordsPerPage เพื่อให้ re-fetch เมื่อมีการเปลี่ยนค่า
+  }, [loggedInEmail, recordsPerPage, fetchPaymentHistory]);
 
   const handleNextPage = () => {
     setCurrentPage((prevPage) => prevPage + 1);
@@ -207,12 +207,10 @@ const PaymentHistory = () => {
     }
   };
 
-  // Filter records based on search term
   const filteredRecords = paymentRecords.filter((record) =>
     record.topic.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Helper function for the expanded details style
   const getExpandedDetailsStyle = (isExpanded) => ({
     maxHeight: isExpanded ? '9999px' : '0',
     opacity: isExpanded ? '1' : '0',
@@ -269,7 +267,6 @@ const PaymentHistory = () => {
         </div>
       </div>
       
-      {/* --- START: ส่วนควบคุมที่ปรับปรุงใหม่ --- */}
       {!loading && paymentRecords.length > 0 && (
         <div
           style={{
@@ -338,7 +335,6 @@ const PaymentHistory = () => {
           </div>
         </div>
       )}
-       {/* --- END: ส่วนควบคุมที่ปรับปรุงใหม่ --- */}
 
 
       {loading && paymentRecords.length === 0 ? (
@@ -434,6 +430,16 @@ const PaymentHistory = () => {
                 ).length;
                 const totalMembers = record.membersData.length;
                 const allPaid = paidCount === totalMembers;
+
+                // <<< START: โค้ดที่เพิ่มเข้ามาสำหรับคำนวณสรุปยอด >>>
+                const totalPaid = record.membersData
+                  .filter(m => m.isPaid)
+                  .reduce((sum, m) => sum + m.total, 0);
+
+                const totalUnpaid = record.membersData
+                  .filter(m => !m.isPaid)
+                  .reduce((sum, m) => sum + m.total, 0);
+                // <<< END: โค้ดที่เพิ่มเข้ามาสำหรับคำนวณสรุปยอด >>>
 
                 return (
                   <React.Fragment key={record.id}>
@@ -594,6 +600,29 @@ const PaymentHistory = () => {
                                   </tbody>
                                 </table>
                               </div>
+                              
+                              {/* <<< START: โค้ดส่วนแสดงผลสรุปยอดที่เพิ่มเข้ามา >>> */}
+                              <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '2px solid #007bff', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '15px' }}>
+                                <h5 style={{ fontSize: '14px', marginBottom: '15px', color: '#0056b3', textAlign: 'center' }}>
+                                  สรุปยอดรวมของ Match นี้
+                                </h5>
+                                <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '15px', fontSize: '13px' }}>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <span style={{ display: 'block', color: '#6c757d', marginBottom: '5px' }}>ยอดที่ชำระแล้ว:</span>
+                                    <span style={{ color: '#28a745', fontWeight: 'bold', fontSize: '16px' }}>{totalPaid} บาท</span>
+                                  </div>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <span style={{ display: 'block', color: '#6c757d', marginBottom: '5px' }}>ยอดค้างชำระ:</span>
+                                    <span style={{ color: '#dc3545', fontWeight: 'bold', fontSize: '16px' }}>{totalUnpaid} บาท</span>
+                                  </div>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <span style={{ display: 'block', color: '#6c757d', marginBottom: '5px' }}>ยอดรวมทั้งหมด:</span>
+                                    <span style={{ color: '#007bff', fontWeight: 'bold', fontSize: '16px' }}>{record.totalOverall} บาท</span>
+                                  </div>
+                                </div>
+                              </div>
+                              {/* <<< END: โค้ดส่วนแสดงผลสรุปยอดที่เพิ่มเข้ามา >>> */}
+                              
                             </div>
                           )}
                         </div>
