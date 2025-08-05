@@ -1,10 +1,10 @@
 // settings.jsx
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX, Camera, Loader, Image, ImageOff } from "lucide-react"; // ✨ เพิ่ม Image, ImageOff ✨
+import { Bell, BellOff, Mail, Users, Briefcase, Calendar, Clock, Volume2, VolumeX, RefreshCcw, ListChecks, ListX, Camera, Loader, Image, ImageOff, Save, UploadCloud } from "lucide-react";
 import { FaRegUserCircle } from "react-icons/fa";
 
 import { db, storage } from "../lib/firebaseConfig";
-import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import imageCompression from 'browser-image-compression';
 
@@ -39,10 +39,17 @@ const texts = {
   trackResultsLabel: "แสดงผลการแข่งขัน",
   trackResultsOn: "แสดง",
   trackResultsOff: "ซ่อน",
-  // ✨ เพิ่มข้อความใหม่ ✨
   showMemberImagesLabel: "แสดงรูปภาพสมาชิก",
   showMemberImagesOn: "แสดง",
   showMemberImagesOff: "ซ่อน",
+  paymentInfoTitle: "ข้อมูลการชำระเงิน",
+  accountNameLabel: "ชื่อบัญชี",
+  accountNumberLabel: "เลขที่บัญชี",
+  qrCodeLabel: "QR Code รับเงิน",
+  addQrCode: "เพิ่ม/แก้ไข QR Code",
+  savePaymentInfo: "บันทึกข้อมูล",
+  paymentInfoSaved: "บันทึกข้อมูลการชำระเงินแล้ว!",
+  uploadingQrCode: "กำลังอัปโหลด...",
 };
 const getText = (key) => texts[key];
 
@@ -53,7 +60,6 @@ export default function SettingsPage() {
   const [inAppSounds, setInAppSounds] = useState(true);
   const [trackMatchResults, setTrackMatchResults] = useState(true);
   const [showSaveMessage, setShowSaveMessage] = useState(false);
-  // ✨ เพิ่ม State ใหม่สำหรับรูปภาพสมาชิก ✨
   const [showMemberImages, setShowMemberImages] = useState(true);
 
   const [userProfile, setUserProfile] = useState(null);
@@ -65,27 +71,26 @@ export default function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  const [paymentInfo, setPaymentInfo] = useState({ accountName: '', accountNumber: '', qrCodeUrl: null });
+  const [originalPaymentInfo, setOriginalPaymentInfo] = useState({ accountName: '', accountNumber: '', qrCodeUrl: null });
+  const [loadingPaymentInfo, setLoadingPaymentInfo] = useState(true);
+  const [paymentInfoError, setPaymentInfoError] = useState(null);
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
+  const [showPaymentSaveMessage, setShowPaymentSaveMessage] = useState(false);
+  const qrCodeInputRef = useRef(null);
+
+
   useEffect(() => {
     if (isBrowser) {
       const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
       const savedInAppSounds = localStorage.getItem("inAppSounds");
       const savedTrackMatchResults = localStorage.getItem("trackMatchResults");
-      // ✨ โหลดค่าใหม่จาก localStorage ✨
       const savedShowMemberImages = localStorage.getItem("showMemberImages");
 
-      if (savedBirthdayNotifications !== null) {
-        setBirthdayNotifications(JSON.parse(savedBirthdayNotifications));
-      }
-      if (savedInAppSounds !== null) {
-        setInAppSounds(JSON.parse(savedInAppSounds));
-      }
-      if (savedTrackMatchResults !== null) {
-        setTrackMatchResults(JSON.parse(savedTrackMatchResults));
-      }
-      // ✨ ตั้งค่า State ใหม่ ✨
-      if (savedShowMemberImages !== null) {
-        setShowMemberImages(JSON.parse(savedShowMemberImages));
-      }
+      if (savedBirthdayNotifications !== null) setBirthdayNotifications(JSON.parse(savedBirthdayNotifications));
+      if (savedInAppSounds !== null) setInAppSounds(JSON.parse(savedInAppSounds));
+      if (savedTrackMatchResults !== null) setTrackMatchResults(JSON.parse(savedTrackMatchResults));
+      if (savedShowMemberImages !== null) setShowMemberImages(JSON.parse(savedShowMemberImages));
 
       const email = localStorage.getItem("loggedInEmail");
       if (email) {
@@ -124,7 +129,6 @@ export default function SettingsPage() {
     }
   }, [trackMatchResults, isBrowser]);
 
-  // ✨ useEffect ใหม่สำหรับ showMemberImages ✨
   useEffect(() => {
     if (isBrowser) {
       localStorage.setItem("showMemberImages", JSON.stringify(showMemberImages));
@@ -134,11 +138,9 @@ export default function SettingsPage() {
     }
   }, [showMemberImages, isBrowser]);
 
-
   useEffect(() => {
     const fetchUserId = async () => {
       if (!loggedInEmail) return;
-
       try {
         setLoadingProfile(true);
         const usersRef = collection(db, "users");
@@ -146,10 +148,8 @@ export default function SettingsPage() {
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-          querySnapshot.forEach(doc => {
-            setCurrentUserId(doc.id);
-            return;
-          });
+          const userDoc = querySnapshot.docs[0];
+          setCurrentUserId(userDoc.id);
         } else {
           setProfileError(getText("noData"));
           setLoadingProfile(false);
@@ -160,20 +160,17 @@ export default function SettingsPage() {
         setLoadingProfile(false);
       }
     };
-
     fetchUserId();
   }, [loggedInEmail]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!currentUserId) return;
-
       setLoadingProfile(true);
       setProfileError(null);
       try {
         const userDocRef = doc(db, "users", currentUserId);
         const userDocSnap = await getDoc(userDocRef);
-
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           setUserProfile({
@@ -197,47 +194,107 @@ export default function SettingsPage() {
       }
     };
 
+    const fetchPaymentInfo = async () => {
+        if (!currentUserId) return;
+        setLoadingPaymentInfo(true);
+        setPaymentInfoError(null);
+        try {
+            const paymentDocRef = doc(db, "paymentInfo", currentUserId);
+            const paymentDocSnap = await getDoc(paymentDocRef);
+            if (paymentDocSnap.exists()) {
+                const data = paymentDocSnap.data();
+                setPaymentInfo(data);
+                setOriginalPaymentInfo(data);
+            } else {
+                const initialData = { accountName: '', accountNumber: '', qrCodeUrl: null };
+                setPaymentInfo(initialData);
+                setOriginalPaymentInfo(initialData);
+            }
+        } catch (err) {
+            console.error("Error fetching payment info:", err);
+            setPaymentInfoError(getText("error") + " " + err.message);
+        } finally {
+            setLoadingPaymentInfo(false);
+        }
+    };
+
     fetchUserProfile();
+    fetchPaymentInfo();
   }, [currentUserId]);
 
   const handleImageUpload = async (event) => {
     const imageFile = event.target.files[0];
     if (!imageFile || !currentUserId) return;
 
-    const options = {
-      maxSizeMB: 1,
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-    };
+    const options = { maxSizeMB: 1, maxWidthOrHeight: 800, useWebWorker: true };
 
     try {
       setIsUploading(true);
-
       const compressedFile = await imageCompression(imageFile, options);
-
       const storageRef = ref(storage, `profile_images/${currentUserId}`);
       await uploadBytes(storageRef, compressedFile);
-
       const downloadURL = await getDownloadURL(storageRef);
       const userDocRef = doc(db, "users", currentUserId);
-      await updateDoc(userDocRef, {
-        profileImageUrl: downloadURL,
-      });
-      setUserProfile(prevProfile => ({
-        ...prevProfile,
-        profileImageUrl: downloadURL,
-      }));
-
+      await updateDoc(userDocRef, { profileImageUrl: downloadURL });
+      setUserProfile(prevProfile => ({ ...prevProfile, profileImageUrl: downloadURL }));
     } catch (error) {
       console.error("Error processing or uploading image: ", error);
       alert("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ");
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
+  const handleQrCodeUpload = async (event) => {
+    const imageFile = event.target.files[0];
+    if (!imageFile || !currentUserId) return;
+
+    const options = { maxSizeMB: 1, maxWidthOrHeight: 800, useWebWorker: true };
+
+    try {
+      setIsUploadingQr(true);
+      const compressedFile = await imageCompression(imageFile, options);
+      const storageRef = ref(storage, `payment_qrcodes/${currentUserId}`);
+      await uploadBytes(storageRef, compressedFile);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      setPaymentInfo(prev => ({ ...prev, qrCodeUrl: downloadURL }));
+
+    } catch (error) {
+        console.error("Error uploading QR code: ", error);
+        alert("เกิดข้อผิดพลาดในการอัปโหลด QR Code");
+    } finally {
+        setIsUploadingQr(false);
+        if (qrCodeInputRef.current) {
+            qrCodeInputRef.current.value = "";
+        }
+    }
+  };
+
+  const handleSavePaymentInfo = async () => {
+    if (!currentUserId) return;
+    try {
+        const paymentDocRef = doc(db, "paymentInfo", currentUserId);
+        await setDoc(paymentDocRef, paymentInfo, { merge: true });
+        setOriginalPaymentInfo(paymentInfo);
+        setShowPaymentSaveMessage(true);
+        setTimeout(() => setShowPaymentSaveMessage(false), 2000);
+    } catch (error) {
+        console.error("Error saving payment info:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + error.message);
+    }
+  };
+
+  const handlePaymentInfoChange = (e) => {
+    const { name, value } = e.target;
+    setPaymentInfo(prev => ({ ...prev, [name]: value }));
+  };
+
+  const isPaymentInfoChanged = useMemo(() => {
+    return JSON.stringify(paymentInfo) !== JSON.stringify(originalPaymentInfo);
+  }, [paymentInfo, originalPaymentInfo]);
+
 
   const accountExpiryInfo = useMemo(() => {
     if (!userProfile || !userProfile.expiryDate) {
@@ -269,7 +326,6 @@ export default function SettingsPage() {
   const toggleBirthdayNotifications = () => setBirthdayNotifications((prev) => !prev);
   const toggleInAppSounds = () => setInAppSounds((prev) => !prev);
   const toggleTrackMatchResults = () => setTrackMatchResults((prev) => !prev);
-  // ✨ ฟังก์ชันใหม่สำหรับ Toggle showMemberImages ✨
   const toggleShowMemberImages = () => setShowMemberImages((prev) => !prev);
 
 
@@ -278,13 +334,13 @@ export default function SettingsPage() {
       setBirthdayNotifications(true);
       setInAppSounds(true);
       setTrackMatchResults(true);
-      setShowMemberImages(true); // ✨ รีเซ็ตค่าใหม่ด้วย ✨
+      setShowMemberImages(true);
 
       if (isBrowser) {
         localStorage.removeItem("birthdayNotifications");
         localStorage.removeItem("inAppSounds");
         localStorage.removeItem("trackMatchResults");
-        localStorage.removeItem("showMemberImages"); // ✨ ลบค่าใหม่จาก localStorage ✨
+        localStorage.removeItem("showMemberImages");
       }
       setShowSaveMessage(true);
       const timer = setTimeout(() => setShowSaveMessage(false), 2000);
@@ -330,86 +386,97 @@ export default function SettingsPage() {
 
         <div className="settings-section personal-info-section">
           <h3>{getText("personalInfo")}</h3>
-          {loadingProfile ? (
-            <p>{getText("loading")}</p>
-          ) : profileError ? (
-            <p className="error-message">{getText("error")} {profileError}</p>
-          ) : userProfile ? (
-            <div className="profile-card">
-              <div className="profile-header">
+          <div className="personal-info-grid">
+            {loadingProfile ? (
+              <p>{getText("loading")}</p>
+            ) : profileError ? (
+              <p className="error-message">{getText("error")} {profileError}</p>
+            ) : userProfile ? (
+              <div className="profile-card">
+                <div className="profile-header">
+                  <div className="profile-avatar-wrapper" onClick={() => !isUploading && fileInputRef.current.click()}>
+                    {isUploading ? (
+                      <div className="upload-loader"><Loader size={32} /></div>
+                    ) : userProfile.profileImageUrl ? (
+                      <img src={userProfile.profileImageUrl} alt="Profile" className="profile-image" />
+                    ) : (
+                      <FaRegUserCircle size={100} color="var(--accent-color, #007bff)" />
+                    )}
+                    {!isUploading && (
+                      <div className="upload-overlay"><Camera size={24} color="white" /></div>
+                    )}
+                  </div>
+                  <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{ display: "none" }} accept="image/png, image/jpeg, image/gif" />
+                  <div className="profile-name-role">
+                    <h4>{userProfile.username}</h4>
+                    <p className="profile-role">{userProfile.role}</p>
+                  </div>
+                </div>
+                <div className="profile-details-list">
+                  <div className="info-item"><Mail size={18} className="info-icon" /><span className="info-label">{getText("emailLabel")}:</span><span className="info-value">{userProfile.email}</span></div>
+                  <div className="info-item"><Users size={18} className="info-icon" /><span className="info-label">{getText("groupNameLabel")}:</span><span className="info-value">{userProfile.groupName}</span></div>
+                  <div className="info-item"><Briefcase size={18} className="info-icon" /><span className="info-label">{getText("packageLabel")}:</span><span className={`info-value ${getPackageTypeClassName(userProfile.packageType)}`}>{userProfile.packageType || 'N/A'}</span></div>
+                  <div className="info-item"><Calendar size={18} className="info-icon" /><span className="info-label">{getText("accountCreatedLabel")}:</span><span className="info-value">{formatDate(userProfile.createDate)}</span></div>
+                  <div className="info-item"><Calendar size={18} className="info-icon" /><span className="info-label">{getText("expiryDateLabel")}:</span><span className="info-value">{formatDate(userProfile.expiryDate)}</span></div>
+                  <div className="info-item"><Clock size={18} className="info-icon" /><span className="info-label">{getText("accountStatusLabel")}:</span><span className={`info-value ${accountExpiryInfo.status === 'expired' ? 'status-expired' : accountExpiryInfo.isExpiringSoon ? 'status-expiring-soon' : ''}`}>{accountExpiryInfo.message}</span></div>
+                </div>
+              </div>
+            ) : (
+              <p>{getText("noData")}</p>
+            )}
 
-                <div className="profile-avatar-wrapper" onClick={() => !isUploading && fileInputRef.current.click()}>
-                  {isUploading ? (
-                    <div className="upload-loader"><Loader size={32} /></div>
-                  ) : userProfile.profileImageUrl ? (
-                    <img src={userProfile.profileImageUrl} alt="Profile" className="profile-image" />
-                  ) : (
-                    <FaRegUserCircle size={80} color="var(--accent-color, #007bff)" />
-                  )}
-                  {!isUploading && (
-                    <div className="upload-overlay">
-                      <Camera size={24} color="white" />
+            <div className="payment-info-card">
+              <h4 className="payment-info-title">{getText("paymentInfoTitle")}</h4>
+              {loadingPaymentInfo ? (
+                <p>{getText("loading")}</p>
+              ) : paymentInfoError ? (
+                <p className="error-message">{paymentInfoError}</p>
+              ) : (
+                <>
+                  <div className="payment-input-group">
+                    <label htmlFor="accountName">{getText("accountNameLabel")}</label>
+                    <input type="text" id="accountName" name="accountName" value={paymentInfo.accountName} onChange={handlePaymentInfoChange} placeholder="เช่น นายพร้อมเพย์ ใจดี" />
+                  </div>
+                  <div className="payment-input-group">
+                    <label htmlFor="accountNumber">{getText("accountNumberLabel")}</label>
+                    <input type="text" id="accountNumber" name="accountNumber" value={paymentInfo.accountNumber} onChange={handlePaymentInfoChange} placeholder="เช่น 123-456-7890"/>
+                  </div>
+
+                  <div className="payment-input-group">
+                    <label>{getText("qrCodeLabel")}</label>
+                    <div className="qr-code-uploader" onClick={() => !isUploadingQr && qrCodeInputRef.current.click()}>
+                        {isUploadingQr ? (
+                           <div className="upload-loader"><Loader size={32} /><span>{getText("uploadingQrCode")}</span></div>
+                        ) : paymentInfo.qrCodeUrl ? (
+                           <img src={paymentInfo.qrCodeUrl} alt="QR Code" className="qr-code-image" />
+                        ) : (
+                           <div className="qr-placeholder">
+                             <UploadCloud size={40} />
+                             <span>{getText("addQrCode")}</span>
+                           </div>
+                        )}
                     </div>
-                  )}
-                </div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageUpload}
-                  style={{ display: "none" }}
-                  accept="image/png, image/jpeg, image/gif"
-                />
+                    <input type="file" ref={qrCodeInputRef} onChange={handleQrCodeUpload} style={{ display: "none" }} accept="image/png, image/jpeg, image/gif"/>
+                  </div>
 
-                <div className="profile-name-role">
-                  <h4>{userProfile.username}</h4>
-                  <p className="profile-role">{userProfile.role}</p>
-                </div>
-              </div>
-              <div className="profile-details-list">
-                <div className="info-item">
-                  <Mail size={18} className="info-icon" />
-                  <span className="info-label">{getText("emailLabel")}:</span>
-                  <span className="info-value">{userProfile.email}</span>
-                </div>
-                <div className="info-item">
-                  <Users size={18} className="info-icon" />
-                  <span className="info-label">{getText("groupNameLabel")}:</span>
-                  <span className="info-value">{userProfile.groupName}</span>
-                </div>
-                <div className="info-item">
-                  <Briefcase size={18} className="info-icon" />
-                  <span className="info-label">{getText("packageLabel")}:</span>
-                  <span className={`info-value ${getPackageTypeClassName(userProfile.packageType)}`}>
-                    {userProfile.packageType || 'N/A'}
-                  </span>
-                </div>
-                <div className="info-item">
-                  <Calendar size={18} className="info-icon" />
-                  <span className="info-label">{getText("accountCreatedLabel")}:</span>
-                  <span className="info-value">{formatDate(userProfile.createDate)}</span>
-                </div>
-                <div className="info-item">
-                  <Calendar size={18} className="info-icon" />
-                  <span className="info-label">{getText("expiryDateLabel")}:</span>
-                  <span className="info-value">{formatDate(userProfile.expiryDate)}</span>
-                </div>
-                <div className="info-item">
-                  <Clock size={18} className="info-icon" />
-                  <span className="info-label">{getText("accountStatusLabel")}:</span>
-                  <span className={`info-value ${accountExpiryInfo.status === 'expired' ? 'status-expired' : accountExpiryInfo.isExpiringSoon ? 'status-expiring-soon' : ''}`}>
-                    {accountExpiryInfo.message}
-                  </span>
-                </div>
-              </div>
+                  {showPaymentSaveMessage && <p className="save-message">{getText("paymentInfoSaved")}</p>}
+
+                  <button 
+                    onClick={handleSavePaymentInfo} 
+                    className="save-payment-button"
+                    disabled={!isPaymentInfoChanged || isUploadingQr}
+                  >
+                    <Save size={18} className="button-icon" />
+                    {getText("savePaymentInfo")}
+                  </button>
+                </>
+              )}
             </div>
-          ) : (
-            <p>{getText("noData")}</p>
-          )}
+          </div>
         </div>
 
         <div className="settings-section">
           <h3>{getText("generalSettings")}</h3>
-
           {showSaveMessage && (
             <p className="save-message">{getText("settingsSaved")}</p>
           )}
@@ -480,7 +547,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* ✨ เพิ่ม Setting สำหรับรูปภาพสมาชิก ✨ */}
           <div className="setting-item">
             <div className="setting-label">
               {showMemberImages ? (
@@ -502,7 +568,6 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
-          {/* ✨ สิ้นสุดการเพิ่ม Setting ✨ */}
 
           <div className="setting-item reset-button-container">
             <button onClick={handleResetSettings} className="reset-button">
@@ -510,14 +575,12 @@ export default function SettingsPage() {
               {getText("resetSettings")}
             </button>
           </div>
-
         </div>
       </main>
 
       <style jsx global>{`
-        /* ... (คงเดิม CSS ทั้งหมด) ... */
         :root {
-          --background-color-light: #f7f7f7;
+          --background-color-light: #f7f9fc;
           --text-color-light: #333;
           --card-background-light: #ffffff;
           --border-color-light: #e0e0e0;
@@ -566,8 +629,8 @@ export default function SettingsPage() {
         .settings-section {
           background-color: var(--card-background-light);
           border-radius: 12px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-          padding: 20px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+          padding: 24px;
           margin-top: 20px;
         }
 
@@ -580,6 +643,111 @@ export default function SettingsPage() {
           color: var(--text-color-light);
         }
 
+        .personal-info-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .profile-card, .payment-info-card {
+          border: 1px solid #e9e9e9;
+          border-radius: 12px;
+          padding: 24px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .payment-info-card {
+            gap: 16px;
+        }
+
+        .payment-info-title {
+            font-size: 16px;
+            margin: 0 0 10px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color-light);
+            font-weight: 600;
+            color: var(--text-color-light);
+        }
+
+        .payment-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .payment-input-group label {
+            font-weight: 500;
+            font-size: 14px;
+            color: #555;
+        }
+        .payment-input-group input[type="text"] {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .payment-input-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-color-light);
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+        }
+
+        .qr-code-uploader {
+            border: 2px dashed #d0d0d0;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 150px;
+            cursor: pointer;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+        .qr-code-uploader:hover {
+            border-color: var(--accent-color-light);
+            background-color: #f7f9fc;
+        }
+        .qr-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            color: #888;
+        }
+        .qr-code-image {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+        }
+
+        .save-payment-button {
+            background-color: var(--accent-color-light);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            margin-top: auto;
+        }
+        .save-payment-button:hover:not(:disabled) {
+            opacity: 0.85;
+            transform: translateY(-1px);
+        }
+        .save-payment-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
         .setting-item {
           display: flex;
           justify-content: space-between;
@@ -587,11 +755,9 @@ export default function SettingsPage() {
           padding: 12px 0;
           border-bottom: 1px solid #f0f0f0;
         }
-
         .setting-item:last-of-type:not(.reset-button-container) {
           border-bottom: none;
         }
-
         .setting-label {
           display: flex;
           align-items: center;
@@ -600,274 +766,55 @@ export default function SettingsPage() {
           color: var(--text-color-light);
           font-weight: 500;
         }
+        .setting-icon { color: var(--icon-color-light); }
+        .setting-control { flex-shrink: 0; min-width: 120px; text-align: right; }
+        .toggle-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+        .switch-track { width: 45px; height: 24px; border-radius: 12px; position: relative; transition: background-color 0.3s; }
+        .switch-track.off { background-color: var(--toggle-off-background-light); }
+        .switch-track.on { background-color: var(--toggle-on-background-light); }
+        .switch-thumb { width: 20px; height: 20px; background-color: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+        .switch-track.on .switch-thumb { transform: translateX(21px); }
+        .toggle-label { font-size: 14px; color: #555; font-weight: 400; }
 
-        .setting-icon {
-            color: var(--icon-color-light);
-        }
+        .profile-header { display: flex; align-items: center; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
+        /* --- ADJUSTED CODE START --- */
+        .profile-avatar-wrapper { position: relative; flex-shrink: 0; width: 100px; height: 100px; border-radius: 50%; overflow: hidden; background-color: #e9ecef; display: flex; justify-content: center; align-items: center; border: 3px solid var(--accent-color-light); color: var(--accent-color-light); cursor: pointer; }
+        /* --- ADJUSTED CODE END --- */
+        .profile-image { width: 100%; height: 100%; object-fit: cover; }
+        .upload-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); display: flex; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease; }
+        .profile-avatar-wrapper:hover .upload-overlay { opacity: 1; }
+        .upload-loader { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; flex-direction: column; gap: 8px; }
+        .upload-loader .lucide-loader { animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .profile-name-role { display: flex; flex-direction: column; align-items: flex-start; }
+        /* --- ADJUSTED CODE START --- */
+        .profile-name-role h4 { margin: 0; font-size: 1.6em; color: #333; }
+        /* --- ADJUSTED CODE END --- */
+        .profile-role { margin: 5px 0 0; font-size: 0.95em; color: #666; background-color: #f0f0f0; padding: 4px 10px; border-radius: 5px; }
+        /* --- ADJUSTED CODE START --- */
+        .profile-details-list { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+        /* --- ADJUSTED CODE END --- */
+        .info-item { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+        .info-icon { color: var(--icon-color-light); }
+        .info-label { font-weight: 500; color: #555; min-width: 120px; }
+        .info-value { color: #333; font-weight: 400; flex-grow: 1; }
+        .info-value.package-type { font-weight: 600; padding: 3px 8px; border-radius: 5px; display: inline-block; line-height: 1.2; flex-grow: 0; width: fit-content; white-space: nowrap; color: #fff; }
+        .info-value.package-type.basic { background-color: #388E3C; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        .info-value.package-type.pro { background-color: #0056b3; box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        .info-value.package-type.premium { background-color: #6A0DAD; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        .info-value.status-expiring-soon { color: var(--status-expiring-soon-light); font-weight: bold; }
+        .info-value.status-expired { color: var(--status-expired-light); font-weight: bold; }
+        .error-message { color: red; font-weight: bold; }
+        .save-message { background-color: var(--save-message-bg-light); color: var(--save-message-text-light); padding: 10px 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: 500; animation: fadeOut 2s forwards; animation-delay: 1s; }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; display: none; } }
+        .reset-button-container { border-top: 1px solid #f0f0f0; padding-top: 15px; justify-content: center; }
+        .reset-button { background-color: var(--reset-button-bg-light); color: var(--reset-button-text-light); border: none; border-radius: 8px; padding: 10px 20px; font-size: 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background-color 0.3s ease; }
+        .reset-button:hover { opacity: 0.9; }
 
-        .setting-control {
-          flex-shrink: 0;
-          min-width: 120px;
-          text-align: right;
-        }
-
-        .toggle-switch {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-          user-select: none;
-        }
-
-        .switch-track {
-          width: 45px;
-          height: 24px;
-          border-radius: 12px;
-          position: relative;
-          transition: background-color 0.3s;
-        }
-
-        .switch-track.off {
-          background-color: var(--toggle-off-background-light);
-        }
-
-        .switch-track.on {
-          background-color: var(--toggle-on-background-light);
-        }
-
-        .switch-thumb {
-          width: 20px;
-          height: 20px;
-          background-color: #fff;
-          border-radius: 50%;
-          position: absolute;
-          top: 2px;
-          left: 2px;
-          transition: transform 0.3s;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-        }
-
-        .switch-track.on .switch-thumb {
-          transform: translateX(21px);
-        }
-
-        .toggle-label {
-          font-size: 14px;
-          color: #555;
-          font-weight: 400;
-        }
-
-        .personal-info-section {
-          padding: 20px;
-        }
-
-        .profile-card {
-          background-color: #ffffff;
-          border-radius: 10px;
-          padding: 20px;
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .profile-header {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          padding-bottom: 15px;
-          border-bottom: 1px solid #e0e0e0;
-        }
-
-        .profile-avatar-wrapper {
-          position: relative;
-          flex-shrink: 0;
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          overflow: hidden;
-          background-color: #e9ecef;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          border: 2px solid var(--accent-color-light);
-          color: var(--accent-color-light);
-          cursor: pointer;
-        }
-
-        .profile-image {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .upload-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background-color: rgba(0, 0, 0, 0.4);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .profile-avatar-wrapper:hover .upload-overlay {
-          opacity: 1;
-        }
-
-        .upload-loader {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: 100%;
-        }
-
-        .upload-loader .lucide-loader {
-            animation: spin 2s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .profile-name-role {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-        }
-
-        .profile-name-role h4 {
-          margin: 0;
-          font-size: 1.5em;
-          color: #333;
-        }
-
-        .profile-role {
-          margin: 5px 0 0;
-          font-size: 0.95em;
-          color: #666;
-          background-color: #f0f0f0;
-          padding: 4px 10px;
-          border-radius: 5px;
-        }
-
-        .profile-details-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .info-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 15px;
-        }
-
-        .info-icon {
-            color: var(--icon-color-light);
-        }
-
-        .info-label {
-          font-weight: 500;
-          color: #555;
-          min-width: 120px;
-        }
-
-        .info-value {
-          color: #333;
-          font-weight: 400;
-          flex-grow: 1;
-        }
-
-        .info-value.package-type {
-            font-weight: 600;
-            padding: 3px 8px;
-            border-radius: 5px;
-            display: inline-block;
-            line-height: 1.2;
-            flex-grow: 0;
-            width: fit-content;
-            white-space: nowrap;
-            color: #fff;
-        }
-
-        .info-value.package-type.basic {
-            background-color: #388E3C;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        .info-value.package-type.pro {
-            background-color: #0056b3;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        .info-value.package-type.premium {
-            background-color: #6A0DAD;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        .info-value.status-expiring-soon {
-          color: var(--status-expiring-soon-light);
-          font-weight: bold;
-        }
-        .info-value.status-expired {
-          color: var(--status-expired-light);
-          font-weight: bold;
-        }
-
-        .error-message {
-          color: red;
-          font-weight: bold;
-        }
-
-        .save-message {
-            background-color: var(--save-message-bg-light);
-            color: var(--save-message-text-light);
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-weight: 500;
-            animation: fadeOut 2s forwards;
-            animation-delay: 1s;
-        }
-
-        @keyframes fadeOut {
-            from { opacity: 1; }
-            to { opacity: 0; display: none; }
-        }
-
-        .reset-button-container {
-            border-top: 1px solid #f0f0f0;
-            padding-top: 15px;
-            justify-content: center;
-        }
-
-        .reset-button {
-            background-color: var(--reset-button-bg-light);
-            color: var(--reset-button-text-light);
-            border: none;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background-color 0.3s ease;
-        }
-
-        .reset-button:hover {
-            opacity: 0.9;
+        @media (max-width: 992px) {
+            .personal-info-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 768px) {
