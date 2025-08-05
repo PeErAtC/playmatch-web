@@ -16,6 +16,7 @@ import {
   Lock,
   Ticket,
   Swords,
+  BookCopy, // ไอคอนใหม่
 } from "lucide-react";
 
 // --- เพิ่มการ import สำหรับ Firestore ---
@@ -72,6 +73,13 @@ const allMenuList = [
     path: "/Dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
   },
+  // START: โค้ดส่วนที่แก้ไข
+  {
+    label: "Ledger",
+    path: "/ExpenseManager",
+    icon: <BookCopy size={20} strokeWidth={1.7} />,
+  },
+  // END: โค้ดส่วนที่แก้ไข
 ];
 
 export default function Sidebar({
