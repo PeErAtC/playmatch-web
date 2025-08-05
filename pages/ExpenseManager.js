@@ -11,7 +11,10 @@ import {
   query,
   where,
   serverTimestamp,
-  getDoc
+  getDoc,
+  orderBy,
+  limit,
+  startAfter
 } from 'firebase/firestore';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -19,9 +22,10 @@ import {
   faPlus, faEdit, faTrashAlt, faCircle,
   faShoppingBag, faHome, faTools, faMoneyBillWave, faPiggyBank,
   faShop, faTruck, faPlug, faWater, faFileAlt, faDonate,
-  faDollarSign, faRedo, faFolderPlus, faSearch,
+  faDollarSign, faRedo, faFolderPlus, faSearch, faSpinner
 } from '@fortawesome/free-solid-svg-icons';
 
+// --- ส่วนของ constants, formatDate, และ FinancialEntryTicket ไม่เปลี่ยนแปลง ---
 const FA_ICONS_MAP = {
   'faPlus': faPlus, 'faEdit': faEdit, 'faTrashAlt': faTrashAlt, 'faCircle': faCircle,
   'faShoppingBag': faShoppingBag, 'faHome': faHome, 'faTools': faTools, 'faMoneyBillWave': faMoneyBillWave,
@@ -29,13 +33,11 @@ const FA_ICONS_MAP = {
   'faWater': faWater, 'faFileAlt': faFileAlt, 'faDonate': faDonate,
   'faDollarSign': faDollarSign, 'faRedo': faRedo, 'faFolderPlus': faFolderPlus,
 };
-
 const CATEGORIES = {
   'รายรับ': [{ name: 'ทั่วไป', icon: 'faCircle' }],
   'รายจ่าย': [{ name: 'ทั่วไป', icon: 'faCircle' }],
   'เงินทุน': [{ name: 'ทั่วไป', icon: 'faCircle' }],
 };
-
 const formatDate = (dateInput) => {
     let d;
     if (dateInput instanceof Date) { d = dateInput;
@@ -60,6 +62,7 @@ const formatDate = (dateInput) => {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     return `${day}/${month}/${yearBE}`;
 };
+
 
 const FinancialEntryTicket = ({ entry, onEdit, onDelete }) => {
     if (!entry) return null;
@@ -104,13 +107,6 @@ const ExpenseManager = () => {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const formContentRef = useRef(null);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) { setLoggedInUser(user); } else { setLoggedInUser(null); }
-    });
-    return () => unsubscribe();
-  }, []);
-
   const [filterType, setFilterType] = useState('month');
   const [startDate, setStartDate] = useState(() => {
     const d = new Date(); d.setDate(1); return d.toISOString().substring(0, 10);
@@ -119,20 +115,35 @@ const ExpenseManager = () => {
   const [editCategoryMode, setEditCategoryMode] = useState(false);
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [customCategories, setCustomCategories] = useState({ 'รายรับ': [], 'รายจ่าย': [], 'เงินทุน': [] });
-  const [isEntryFormVisible, setIsEntryFormVisible] = useState(true);
+  const [isEntryFormVisible, setIsEntryFormVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryType, setNewCategoryType] = useState('รายรับ');
+
   const [newEntry, setNewEntry] = useState({
-    name: '', amount: '', type: 'รายรับ',
+    name: '',
+    amount: '',
+    type: 'รายรับ',
     date: new Date().toISOString().substring(0, 10),
-    category: CATEGORIES['รายรับ'][0].name,
-    categoryIcon: CATEGORIES['รายรับ'][0].icon,
+    category: '', 
+    categoryIcon: 'faCircle',
   });
+
   const [isEditing, setIsEditing] = useState(false);
   const [editEntryId, setEditEntryId] = useState(null);
   const [originalNewEntryState, setOriginalNewEntryState] = useState(null);
-
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [lastVisible, setLastVisible] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const ENTRIES_PER_PAGE = 20;
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) { setLoggedInUser(user); } else { setLoggedInUser(null); }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const email = localStorage.getItem('loggedInEmail');
@@ -147,9 +158,9 @@ const ExpenseManager = () => {
       try {
         const q = query(collection(db, 'users'), where('email', '==', loggedInEmail));
         const snapshot = await getDocs(q);
-        if (!snapshot.empty) { setCurrentUserId(snapshot.docs[0].id); } 
+        if (!snapshot.empty) { setCurrentUserId(snapshot.docs[0].id); }
         else { setError("ไม่พบผู้ใช้ในระบบ. โปรดลงทะเบียนหรือเข้าสู่ระบบด้วยบัญชีที่ถูกต้อง."); setCurrentUserId(null); }
-      } catch (err) { console.error("Error fetching user ID:", err); setError("เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้."); } 
+      } catch (err) { console.error("Error fetching user ID:", err); setError("เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้."); }
       finally { setLoading(false); }
     };
     fetchUserId();
@@ -171,41 +182,86 @@ const ExpenseManager = () => {
     loadCustomCategories();
   }, [currentUserId]);
 
-  useEffect(() => {
-    const loadEntries = async () => {
-      if (!currentUserId) return;
-      setLoading(true); setError(null);
-      try {
+  const fetchEntries = useCallback(async (loadMore = false) => {
+    if (!currentUserId) return;
+
+    if (loadMore) {
+        setIsFetchingMore(true);
+    } else {
+        setLoading(true);
+    }
+    setError(null);
+
+    try {
         const entriesRef = collection(db, `users/${currentUserId}/financial_entries`);
-        const snapshot = await getDocs(entriesRef);
-        let data = snapshot.docs.map(doc => {
-          const docData = doc.data();
-          let entryDate;
-          if (docData.date && typeof docData.date.toDate === 'function') { entryDate = docData.date.toDate(); } 
-          else if (docData.date) { entryDate = new Date(docData.date); } 
-          else { entryDate = new Date(); }
-          return { id: doc.id, ...docData, date: entryDate };
-        });
+        let queryConstraints = [];
+
         if (filterType === 'month') {
-          const now = new Date();
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-          data = data.filter(entry => entry.date >= startOfMonth && entry.date <= endOfMonth);
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            queryConstraints.push(where('date', '>=', startOfMonth));
+            queryConstraints.push(where('date', '<=', endOfMonth));
         } else if (filterType === 'custom' && startDate && endDate) {
-          const start = new Date(startDate); const end = new Date(endDate);
-          data = data.filter(entry => entry.date >= start && entry.date <= end);
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            queryConstraints.push(where('date', '>=', start));
+            queryConstraints.push(where('date', '<=', end));
         }
-        setEntries(data);
-      } catch (err) { console.error("Error loading entries:", err); setError("เกิดข้อผิดพลาดในการโหลดรายการทางการเงิน."); } 
-      finally { setLoading(false); }
-    };
-    loadEntries();
+
+        queryConstraints.push(orderBy('date', 'desc'));
+        if (loadMore && lastVisible) {
+            queryConstraints.push(startAfter(lastVisible));
+        }
+        queryConstraints.push(limit(ENTRIES_PER_PAGE));
+
+        const finalQuery = query(entriesRef, ...queryConstraints);
+        const snapshot = await getDocs(finalQuery);
+
+        const data = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            let entryDate = docData.date?.toDate ? docData.date.toDate() : new Date(docData.date);
+            return { id: doc.id, ...docData, date: entryDate };
+        });
+
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setLastVisible(lastDoc);
+        setHasMore(data.length === ENTRIES_PER_PAGE);
+
+        if (loadMore) {
+            setEntries(prev => [...prev, ...data]);
+        } else {
+            setEntries(data);
+        }
+
+    } catch (err) {
+        console.error("Error loading entries:", err);
+        setError("เกิดข้อผิดพลาดในการโหลดรายการทางการเงิน: " + err.message);
+    } finally {
+        setLoading(false);
+        setIsFetchingMore(false);
+    }
+  }, [currentUserId, filterType, startDate, endDate, lastVisible]);
+
+  useEffect(() => {
+    if(currentUserId) {
+        setLastVisible(null);
+        setHasMore(true);
+        fetchEntries(false);
+    }
   }, [currentUserId, filterType, startDate, endDate]);
+
+  const handleLoadMore = () => {
+    if (!isFetchingMore && hasMore) {
+        fetchEntries(true);
+    }
+  };
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim() || !loggedInUser) return;
     if (customCategories[newCategoryType]?.some(catName => catName.toLowerCase() === newCategoryName.trim().toLowerCase())) {
-      Swal.fire({ icon: 'warning', title: 'ชื่อหมวดหมู่นี้มีอยู่แล้ว', timer: 2000, showConfirmButton: false });
+      Swal.fire({ icon: 'warning', title: 'ชื่อซ้ำ', text: 'มีชื่อหมวดหมู่นี้อยู่ในระบบแล้ว' });
       return;
     }
     try {
@@ -213,31 +269,43 @@ const ExpenseManager = () => {
       await setDoc(docRef, { name: newCategoryName.trim(), type: newCategoryType });
       setCustomCategories(prev => ({ ...prev, [newCategoryType]: [...prev[newCategoryType], newCategoryName.trim()] }));
       setNewCategoryName(''); setShowCategoryForm(false);
-      Swal.fire({ icon: 'success', title: 'เพิ่มหมวดหมู่เรียบร้อย', timer: 2000, showConfirmButton: false });
-    } catch (error) { console.error("เพิ่มหมวดหมู่ล้มเหลว", error); Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.message }); }
+      Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'เพิ่มหมวดหมู่ใหม่เรียบร้อยแล้ว' });
+    } catch (error) { 
+        console.error("เพิ่มหมวดหมู่ล้มเหลว", error); 
+        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.message }); 
+    }
   };
 
   const resetForm = useCallback(() => {
     setNewEntry({
-      name: '', amount: '', type: 'รายรับ',
+      name: '',
+      amount: '',
+      type: 'รายรับ',
       date: new Date().toISOString().substring(0, 10),
-      category: CATEGORIES['รายรับ'][0].name,
-      categoryIcon: CATEGORIES['รายรับ'][0].icon,
+      category: '',
+      categoryIcon: 'faCircle',
     });
     setIsEditing(false); setEditEntryId(null); setOriginalNewEntryState(null);
   }, []);
 
   const handleSaveOrAdd = useCallback(async () => {
     const userId = loggedInUser?.uid;
-    if (!newEntry.name || !newEntry.amount || newEntry.amount <= 0 || !userId) {
-      Swal.fire({ title: '⚠️ ข้อมูลไม่ครบ', text: 'โปรดกรอกชื่อรายการและจำนวนเงินให้ครบถ้วน', icon: 'warning', showConfirmButton: false, timer: 2500 });
+    if (!newEntry.name || !newEntry.amount || newEntry.amount <= 0 || !newEntry.category || !userId) {
+      Swal.fire({ 
+        icon: 'warning', 
+        title: 'ข้อมูลไม่ครบ', 
+        text: 'โปรดกรอกชื่อรายการ, จำนวนเงิน, และเลือกหมวดหมู่ให้ครบถ้วน' 
+      });
       return;
     }
     let parsedDate;
     try {
       parsedDate = new Date(newEntry.date + 'T00:00:00');
       if (isNaN(parsedDate.getTime())) throw new Error("Invalid date");
-    } catch (e) { Swal.fire({ icon: 'error', title: '❌ วันที่ไม่ถูกต้อง', text: 'โปรดตรวจสอบรูปแบบวันที่ (เช่น YYYY-MM-DD)', showConfirmButton: false, timer: 2500 }); return; }
+    } catch (e) { 
+        Swal.fire({ icon: 'error', title: 'วันที่ไม่ถูกต้อง', text: 'โปรดตรวจสอบรูปแบบวันที่ (เช่น YYYY-MM-DD)' }); 
+        return; 
+    }
 
     const docRef = isEditing && editEntryId ? 
         doc(db, `users/${userId}/financial_entries/${editEntryId}`) : 
@@ -255,31 +323,39 @@ const ExpenseManager = () => {
 
     try {
       await setDoc(docRef, dataToSave, { merge: true });
-      Swal.fire({ title: isEditing ? '✅ แก้ไขเรียบร้อย' : '🎉 เพิ่มรายการสำเร็จ!', icon: 'success', showConfirmButton: false, timer: 1500 });
-
-      const newEntryObject = { ...dataToSave, id: docRef.id, date: parsedDate };
-
-      setEntries(prev => {
-        if (isEditing) { return prev.map(e => (e.id === editEntryId ? newEntryObject : e)); } 
-        else { return [...prev, newEntryObject]; }
+      Swal.fire({ 
+        icon: 'success', 
+        title: isEditing ? 'แก้ไขสำเร็จ!' : 'เพิ่มรายการสำเร็จ!', 
+        text: `รายการ "${dataToSave.name}" ถูกบันทึกแล้ว` 
       });
-    } catch (error) { console.error("Error saving document: ", error); Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: "ไม่สามารถบันทึกข้อมูลได้: " + error.message }); }
-    resetForm();
-  }, [newEntry, isEditing, editEntryId, loggedInUser, resetForm]);
+
+      resetForm();
+      fetchEntries(false); 
+
+    } catch (error) { 
+        console.error("Error saving document: ", error); 
+        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: "ไม่สามารถบันทึกข้อมูลได้: " + error.message }); 
+    }
+  }, [newEntry, isEditing, editEntryId, loggedInUser, resetForm, fetchEntries]);
 
   const handleEditClick = useCallback((entryToEdit) => {
+    setIsEntryFormVisible(true); 
     setOriginalNewEntryState({ ...newEntry });
     setNewEntry({
-      name: entryToEdit.name, amount: entryToEdit.amount, type: entryToEdit.type,
+      name: entryToEdit.name,
+      amount: entryToEdit.amount,
+      type: entryToEdit.type,
       date: entryToEdit.date instanceof Date ? entryToEdit.date.toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10),
-      category: entryToedit.category, categoryIcon: entryToEdit.categoryIcon,
+      category: entryToEdit.category,
+      categoryIcon: entryToEdit.categoryIcon,
     });
-    setIsEditing(true); setEditEntryId(entryToEdit.id); setIsEntryFormVisible(true);
+    setIsEditing(true);
+    setEditEntryId(entryToEdit.id);
   }, [newEntry]);
 
   const handleCancelEdit = useCallback(() => {
     if (originalNewEntryState) { setNewEntry(originalNewEntryState); }
-    resetForm(); setIsEntryFormVisible(true);
+    resetForm();
   }, [originalNewEntryState, resetForm]);
 
   const totalBalance = useMemo(() => {
@@ -302,9 +378,16 @@ const ExpenseManager = () => {
       await setDoc(newDocRef, { ...data, name: newCategoryName.trim() });
       await deleteDoc(oldDocRef);
       setCustomCategories(prev => ({ ...prev, [newCategoryType]: prev[newCategoryType].map(name => name === editingCategoryName ? newCategoryName.trim() : name) }));
-      Swal.fire({ icon: 'success', title: 'แก้ไขหมวดหมู่สำเร็จ', timer: 2000, showConfirmButton: false });
-    } catch (err) { console.error('แก้ไขหมวดหมู่ล้มเหลว', err); Swal.fire({ icon: 'error', title: 'ไม่สามารถแก้ไขหมวดหมู่', text: err.message });
-    } finally { setEditCategoryMode(false); setShowCategoryForm(false); setNewCategoryName(''); setEditingCategoryName(''); }
+      Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'แก้ไขชื่อหมวดหมู่เรียบร้อยแล้ว' });
+    } catch (err) { 
+        console.error('แก้ไขหมวดหมู่ล้มเหลว', err); 
+        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+    } finally { 
+        setEditCategoryMode(false); 
+        setShowCategoryForm(false); 
+        setNewCategoryName(''); 
+        setEditingCategoryName(''); 
+    }
   };
 
   const calculateColumnTotal = useCallback((type) => {
@@ -314,19 +397,6 @@ const ExpenseManager = () => {
   const groupedEntries = useMemo(() => {
     let filteredEntries = entries;
 
-    // Filter by date first
-    if (filterType === 'month') {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        filteredEntries = filteredEntries.filter(entry => entry.date >= startOfMonth && entry.date <= endOfMonth);
-    } else if (filterType === 'custom' && startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        filteredEntries = filteredEntries.filter(entry => entry.date >= start && entry.date <= end);
-    }
-    
-    // Then filter by search term
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
       filteredEntries = filteredEntries.filter(entry => entry.name.toLowerCase().includes(lowerCaseSearchTerm));
@@ -334,9 +404,9 @@ const ExpenseManager = () => {
 
     const groups = { 'รายรับ': [], 'รายจ่าย': [], 'เงินทุน': [] };
     filteredEntries.forEach(entry => { if (groups[entry.type]) { groups[entry.type].push(entry); } });
-    for (const type in groups) { groups[type].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); }
+
     return groups;
-  }, [entries, filterType, startDate, endDate, searchTerm]);
+  }, [entries, searchTerm]);
 
   const blockTitle = useMemo(() => {
     if (isEditing) { return 'แก้ไขรายการ'; } 
@@ -347,18 +417,20 @@ const ExpenseManager = () => {
 
   return (
     <div className="main-container">
-      <div className="top-bar">
-        <span className="left-text">บัญชีรายรับ-รายจ่าย ก๊วนแบด</span>
-        <span className="right-text">
-          ยอดเงินคงเหลือทั้งหมด:
-          <span className="green-amount">
-            {totalBalance.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-          </span>{' '}
-          <span className="baht-text">บาท</span>
-        </span>
-      </div>
+      {/* START: โค้ดส่วนที่แก้ไข JSX */}
+      <h2>บัญชีรายรับ-รายจ่าย</h2>
+      <hr className="title-separator" />
 
-      {loading && <div className="loading-message">กำลังโหลดข้อมูล...</div>}
+      <div className="total-balance-display">
+        ยอดเงินคงเหลือทั้งหมด:
+        <span className="balance-amount">
+          {totalBalance.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+        <span className="balance-currency">บาท</span>
+      </div>
+      {/* END: โค้ดส่วนที่แก้ไข JSX */}
+
+      {loading && entries.length === 0 && <div className="loading-message">กำลังโหลดข้อมูล...</div>}
       {error && <div className="error-message">{error}</div>}
       {!loggedInEmail && !loading && !error && (
         <div className="info-message">
@@ -366,82 +438,110 @@ const ExpenseManager = () => {
         </div>
       )}
 
-      {loggedInEmail && currentUserId && !loading && !error && (
+
+      {loggedInEmail && currentUserId && !error && (
         <>
           <div className="form-bar-container">
             <div className="form-toggle-header" onClick={() => setIsEntryFormVisible(!isEntryFormVisible)}>
               <span className="form-block-title">{blockTitle}</span>
-              <span className="form-toggle-icon" style={{ transform: isEntryFormVisible ? 'rotate(45deg)' : 'rotate(0deg)' }}>+</span>
+              <button className="toggle-form-button">
+                {isEntryFormVisible ? "-" : "+"}
+              </button>
             </div>
 
             <div 
-              className="form-content-wrapper" 
-              style={{ maxHeight: isEntryFormVisible ? (formContentRef.current ? `${formContentRef.current.scrollHeight}px` : '500px') : '0px' }}
+              className={`form-content-collapsible ${isEntryFormVisible ? "expanded" : "collapsed"}`}
             >
               <div ref={formContentRef} className="form-content-inner">
                 <div className="form-bar">
                   {showCategoryForm ? (
                     <>
-                      <input type="text" className="form-input" placeholder="ชื่อหมวดหมู่ใหม่" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-                      <select className="form-select" value={newCategoryType} onChange={(e) => setNewCategoryType(e.target.value)}>
-                        <option value="รายรับ">รายรับ</option>
-                        <option value="รายจ่าย">รายจ่าย</option>
-                        <option value="เงินทุน">เงินทุน</option>
-                      </select>
+                      <div>
+                        <label className="form-label">ชื่อหมวดหมู่ใหม่</label>
+                        <input type="text" className="form-input" placeholder="เช่น ค่าอาหาร, เงินเดือน" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="form-label">ประเภทของหมวดหมู่</label>
+                        <select className="form-select" value={newCategoryType} onChange={(e) => setNewCategoryType(e.target.value)}>
+                          <option value="รายรับ">รายรับ</option>
+                          <option value="รายจ่าย">รายจ่าย</option>
+                          <option value="เงินทุน">เงินทุน</option>
+                        </select>
+                      </div>
                     </>
                   ) : (
                     <>
-                      <input type="text" placeholder="ชื่อรายการ (เช่น ค่าคอร์ต, ค่าลูกแบด)" className="form-input" value={newEntry.name} onChange={(e) => setNewEntry({ ...newEntry, name: e.target.value })} />
-                      <input type="number" placeholder="จำนวนเงิน" className="form-input" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })} />
-                      <select className="form-select" value={newEntry.type} onChange={(e) => {
-                        const selectedType = e.target.value;
-                        const allCategories = [...(CATEGORIES[selectedType]?.map(c => c.name) || []), ...(customCategories[selectedType] || [])];
-                        setNewEntry({ ...newEntry, type: selectedType, category: allCategories[0] || 'ทั่วไป' });
-                      }}>
-                        <option value="รายรับ">รายรับ</option>
-                        <option value="รายจ่าย">รายจ่าย</option>
-                        <option value="เงินทุน">เงินทุน</option>
-                      </select>
-                      <select className="form-select" value={newEntry.category} onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value })}>
-                        {[...(CATEGORIES[newEntry.type]?.map(cat => cat.name) || []), ...(customCategories[newEntry.type] || [])].map(name => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
-                      <input type="date" className="form-input" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} />
+                      <div>
+                        <label className="form-label">ชื่อรายการ</label>
+                        <input type="text" placeholder="เช่น ค่าคอร์ต, ค่าลูกแบด" className="form-input" value={newEntry.name} onChange={(e) => setNewEntry({ ...newEntry, name: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="form-label">จำนวนเงิน</label>
+                        <input type="number" placeholder="0.00" className="form-input" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="form-label">ประเภท</label>
+                        <select className="form-select" value={newEntry.type} onChange={(e) => {
+                          setNewEntry({ ...newEntry, type: e.target.value, category: '' });
+                        }}>
+                          <option value="รายรับ">รายรับ</option>
+                          <option value="รายจ่าย">รายจ่าย</option>
+                          <option value="เงินทุน">เงินทุน</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label">หมวดหมู่</label>
+                        <select className="form-select" value={newEntry.category} onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value })}>
+                          <option value="" disabled>—เลือกหมวดหมู่—</option>
+                          {[...(CATEGORIES[newEntry.type]?.map(cat => cat.name) || []), ...(customCategories[newEntry.type] || [])].map(name => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label">วันที่</label>
+                        <input type="date" className="form-input" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} />
+                      </div>
                     </>
                   )}
                 </div>
                 <div className="button-actions-bar">
                   {isEditing ? (
                     <div className="button-group">
-                      <button className="action-button save-edit-button" onClick={handleSaveOrAdd}><FontAwesomeIcon icon={faEdit} /> บันทึกการแก้ไข</button>
-                      <button className="action-button cancel-button" onClick={handleCancelEdit}><FontAwesomeIcon icon={faRedo} /> ยกเลิก</button>
+                      <button className="action-button save-edit-button" onClick={handleSaveOrAdd}>บันทึกการแก้ไข</button>
+                      <button className="action-button cancel-button" onClick={handleCancelEdit}>ยกเลิก</button>
                     </div>
                   ) : showCategoryForm ? (
                     <div className="button-group">
                       {editCategoryMode ? (
                         <>
-                          <button className="action-button save-edit-button" onClick={handleUpdateCategory}><FontAwesomeIcon icon={faEdit} /> บันทึกหมวดหมู่</button>
-                          <button className="action-button cancel-button" onClick={() => { setEditCategoryMode(false); setShowCategoryForm(false); setNewCategoryName(''); setEditingCategoryName(''); }}><FontAwesomeIcon icon={faRedo} /> ยกเลิก</button>
+                          <button className="action-button save-edit-button" onClick={handleUpdateCategory}>บันทึกหมวดหมู่</button>                          <button className="action-button cancel-button" onClick={() => { setEditCategoryMode(false); setShowCategoryForm(false); setNewCategoryName(''); setEditingCategoryName(''); }}>ยกเลิก</button>
                         </>
                       ) : (
                         <>
                           <button className="action-button add-entry" onClick={handleAddCategory}><FontAwesomeIcon icon={faPlus} /> เพิ่มหมวดหมู่</button>
-                          <button className="action-button cancel-button" onClick={() => setShowCategoryForm(false)}><FontAwesomeIcon icon={faRedo} /> ยกเลิก</button>
+                          <button className="action-button cancel-button" onClick={() => {setShowCategoryForm(false); setNewCategoryName('');}}>ยกเลิก</button>
                         </>
                       )}
                     </div>
                   ) : (
                     <div className="button-group-split">
-                      <button className="action-button add-entry" onClick={handleSaveOrAdd}><FontAwesomeIcon icon={faPlus} /> เพิ่มรายการ</button>
                       <div className="category-buttons-split">
-                        <button className="action-button add-category-left" onClick={() => { setShowCategoryForm(true); setEditCategoryMode(false); setNewCategoryName(''); setEditingCategoryName(''); setNewCategoryType(newEntry.type); }}><FontAwesomeIcon icon={faFolderPlus} /> เพิ่มหมวดหมู่</button>
+                        <button className="action-button add-category-left" onClick={() => { setShowCategoryForm(true); setEditCategoryMode(false); setNewCategoryName(''); setEditingCategoryName(''); setNewCategoryType(newEntry.type); }}>เพิ่มหมวดหมู่</button>
                         <button className="action-button add-category-right" onClick={() => {
                           const isCustomAndNotGeneral = customCategories[newEntry.type]?.includes(newEntry.category) && newEntry.category !== 'ทั่วไป';
-                          if (isCustomAndNotGeneral) { setEditCategoryMode(true); setNewCategoryName(newEntry.category); setEditingCategoryName(newEntry.category); setNewCategoryType(newEntry.type); setShowCategoryForm(true);
-                          } else { Swal.fire({ icon: 'info', title: 'ไม่สามารถแก้ไขหมวดหมู่เริ่มต้น', showConfirmButton: false, timer: 3000 }); }
-                        }}><FontAwesomeIcon icon={faEdit} /> แก้ไข</button>
+                          if (isCustomAndNotGeneral) { 
+                              setEditCategoryMode(true); 
+                              setNewCategoryName(newEntry.category); 
+                              setEditingCategoryName(newEntry.category); 
+                              setNewCategoryType(newEntry.type); 
+                              setShowCategoryForm(true);
+                          } else { 
+                              Swal.fire({ icon: 'info', title: 'ไม่สามารถแก้ไขได้', text: 'คุณสามารถแก้ไขได้เฉพาะหมวดหมู่ที่สร้างเองเท่านั้น' }); 
+                          }
+                        }}>แก้ไข</button>
                       </div>
+                      <button className="action-button add-entry" onClick={handleSaveOrAdd}>เพิ่มรายการ</button>
                     </div>
                   )}
                 </div>
@@ -449,46 +549,32 @@ const ExpenseManager = () => {
             </div>
           </div>
 
-          <div className="financial-analysis-section">
-            <div className="filter-search-row">
-              <div className="filter-buttons-container">
-                <button
-                  className={`filter-button ${filterType === 'month' ? 'active' : ''}`}
-                  onClick={() => setFilterType('month')}
-                >
-                  เดือนนี้
-                </button>
-                <button
-                  className={`filter-button ${filterType === 'all' ? 'active' : ''}`}
-                  onClick={() => setFilterType('all')}
-                >
-                  ทั้งหมด
-                </button>
-                <button
-                  className={`filter-button ${filterType === 'custom' ? 'active' : ''}`}
-                  onClick={() => setFilterType('custom')}
-                >
-                  กำหนดเอง
-                </button>
-                {filterType === 'custom' && (
+          <div className="filter-search-row">
+              <div className="filter-controls-container">
+                  <select 
+                      className="filter-dropdown" 
+                      value={filterType} 
+                      onChange={(e) => setFilterType(e.target.value)}
+                  >
+                      <option value="month">เดือนนี้</option>
+                      <option value="all">ทั้งหมด</option>
+                      <option value="custom">กำหนดเอง</option>
+                  </select>
+                  {filterType === 'custom' && (
                   <div className="custom-date-inputs">
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                      <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                      <span>ถึง</span>
+                      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                   </div>
-                )}
+                  )}
               </div>
-
               <div className="search-input-container">
-                <input
-                  type="text"
-                  placeholder="ค้นหาชื่อรายการ..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <FontAwesomeIcon icon={faSearch} className="search-icon" />
+                  <input type="text" placeholder="ค้นหาชื่อรายการ..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  <FontAwesomeIcon icon={faSearch} className="search-icon" />
               </div>
-            </div>
-            
+          </div>
+
+          <div className="financial-analysis-section">
             <div className="summary-columns-grid">
                 {['รายรับ', 'รายจ่าย', 'เงินทุน'].map(type => (
                   <div key={type} className="column-card">
@@ -509,9 +595,14 @@ const ExpenseManager = () => {
                               onEdit={handleEditClick}
                               onDelete={async (id) => {
                                 const result = await Swal.fire({
-                                  title: 'ยืนยันการลบ', text: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?',
-                                  icon: 'warning', showCancelButton: true, confirmButtonText: 'ลบเลย',
-                                  cancelButtonText: 'ยกเลิก', confirmButtonColor: '#dc3545',
+                                  title: 'ยืนยันการลบ',
+                                  text: "คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?",
+                                  icon: 'warning',
+                                  showCancelButton: true,
+                                  confirmButtonColor: '#d33',
+                                  cancelButtonColor: '#6c757d',
+                                  confirmButtonText: 'ลบเลย',
+                                  cancelButtonText: 'ยกเลิก',
                                 });
                                 if (result.isConfirmed) {
                                   try {
@@ -519,8 +610,11 @@ const ExpenseManager = () => {
                                     if (!userId) throw new Error("ไม่พบผู้ใช้");
                                     await deleteDoc(doc(db, `users/${userId}/financial_entries/${id}`));
                                     setEntries(prev => prev.filter(e => e.id !== id));
-                                    await Swal.fire({ icon: 'success', title: 'ลบสำเร็จ', showConfirmButton: false, timer: 1500 });
-                                  } catch (error) { console.error("Error removing document: ", error); Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.message }); }
+                                    Swal.fire({icon: 'success', title: 'ลบสำเร็จ!', text: 'รายการของคุณถูกลบออกแล้ว'});
+                                  } catch (error) { 
+                                      console.error("Error removing document: ", error); 
+                                      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.message }); 
+                                  }
                                 }
                               }}
                             />
@@ -530,327 +624,289 @@ const ExpenseManager = () => {
                   </div>
                 ))}
             </div>
+
+            <div className="load-more-container">
+                {isFetchingMore && (
+                    <div className="fetching-more-indicator">
+                        <FontAwesomeIcon icon={faSpinner} spin /> กำลังโหลด...
+                    </div>
+                )}
+                {!isFetchingMore && hasMore && entries.length > 0 && (
+                    <button onClick={handleLoadMore} className="load-more-button">
+                        โหลดเพิ่มเติม
+                    </button>
+                )}
+                {!hasMore && entries.length > 0 && (
+                    <p className="no-more-entries">-- สิ้นสุดรายการ --</p>
+                )}
+            </div>
           </div>
         </>
       )}
 
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap');
-
-        /* --- CHANGE: White Theme Colors --- */
         body { 
-          background: #fff; /* เปลี่ยนจากสีกรมเป็นสีขาว */
+          background: #f7f7f7; 
           font-family: 'Kanit', sans-serif; 
           margin: 0;
           padding: 0;
           box-sizing: border-box;
-          color: #212529; /* เปลี่ยนสีข้อความหลักเป็นสีดำ */
+          color: #333; 
         }
-
         .main-container { 
-          padding: 10px 20px;
+          padding: 20px;
           width: 100%;
           box-sizing: border-box;
-          background: #f8f9fa; /* สีพื้นหลังอ่อนๆ */
+          background: #f7f7f7; 
         }
 
-        .top-bar { 
+        /* START: CSS ที่แก้ไขและเพิ่มใหม่ */
+        h2 {
+          font-size: 18px;
+          margin-bottom: 10px;
+          color: #333;
+        }
+        .title-separator {
+          border: 0;
+          border-top: 1px solid #aebdc9;
+          margin-bottom: 20px;
+        }
+        .total-balance-display {
+          font-size: 16px;
+          font-weight: 500;
+          color: #333;
+          margin-bottom: 20px;
+          padding: 15px;
+          background-color: #fff;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          border: 1px solid #e9e9e9;
+          text-align: center;
+        }
+        .total-balance-display .balance-amount {
+          color: #2ecc71;
+          font-weight: 600;
+          margin: 0 8px;
+        }
+        .total-balance-display .balance-currency {
+          color: #555;
+        }
+        /* END: CSS ที่แก้ไขและเพิ่มใหม่ */
+
+        .loading-message, .error-message, .info-message { text-align: center; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .loading-message { background: #e9ecef; color: #495057; }
+        .error-message { color: #fff; background: #dc3545; }
+        .info-message { color: #6c757d; background: #e9ecef; }
+        .form-bar-container { 
+          background: #ffffff;
+          border-radius: 8px; 
+          box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+          margin-bottom: 20px;
+          border: 1px solid #e9e9e9;
+        }
+        .form-toggle-header { 
           display: flex; 
           justify-content: space-between; 
           align-items: center; 
-          padding: 10px 15px; 
-          background: #e9ecef; /* เปลี่ยนจากสีกรมเป็นสีเทาอ่อน */
-          border-radius: 8px; 
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1); /* ปรับเงาให้ดูละมุนขึ้น */
-          margin-bottom: 20px;
+          cursor: pointer; 
+          user-select: none;
+          padding: 10px 15px;
+          background-color: #e9e9e9;
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+          border-bottom: 1px solid #ddd;
         }
-        .left-text, .right-text { font-size: 15px; color: #212529; } /* ปรับสีข้อความ */
-        .green-amount { color: #2ecc71; font-weight: 600; }
-        .baht-text { color: #212529; } /* ปรับสีข้อความ */
-
-        .loading-message, .error-message, .info-message { text-align: center; padding: 20px; margin: 20px 0; border-radius: 8px; }
-        .loading-message { background: #e9ecef; color: #495057; } /* ปรับสี */
-        .error-message { color: #fff; background: #dc3545; }
-        .info-message { color: #6c757d; background: #e9ecef; } /* ปรับสี */
-
-        .form-bar-container { 
-          background: #e9ecef; /* เปลี่ยนจากสีกรมเป็นสีเทาอ่อน */
-          border-radius: 10px; 
-          padding: 20px; 
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* ปรับเงา */
-          margin-bottom: 0;
+        .form-block-title { font-size: 14px; font-weight: 600; color: #333; }
+        .toggle-form-button {
+          background: none; border: none; font-size: 20px; font-weight: bold;
+          cursor: pointer; color: #555; padding: 5px 8px; line-height: 1;
         }
-        .form-toggle-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
-        .form-block-title { font-size: 18px; font-weight: 600; color: #212529; } /* ปรับสีข้อความ */
-        .form-toggle-icon { font-size: 28px; font-weight: 300; color: #6c757d; transition: transform 0.3s ease; } /* ปรับสี */
-        .form-content-wrapper { overflow: hidden; transition: max-height 0.4s ease-in-out; }
-        .form-content-inner { padding-top: 20px; }
-
-        .form-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .form-content-collapsible {
+          overflow: hidden;
+          transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding 0.5s ease-out;
+          max-height: 0;
+          opacity: 0;
+          padding: 0 15px;
+        }
+        .form-content-collapsible.expanded {
+          max-height: 1000px;
+          opacity: 1;
+          padding: 20px 15px;
+        }
+        .form-content-inner { }
+        .form-bar { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px; 
+            align-items: end;
+        }
+        .form-label {
+            font-size: 12px;
+            color: #333;
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
         .form-input, .form-select { 
-          padding: 10px 14px; 
-          border: 1px solid #ced4da; /* ปรับสีขอบ */
-          border-radius: 6px; 
-          font-size: 14px; 
-          flex: 1 1 160px; 
-          background: #fff; /* เปลี่ยนเป็นสีขาว */
-          color: #212529; /* เปลี่ยนสีข้อความ */
+          width: 100%;
+          padding: 8px;
+          border: 1px solid #ccc;
+          border-radius: 5px; 
+          font-size: 12px;
+          background: #fff; 
+          color: #333;
+          outline: none;
+          transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
-        .form-input::placeholder { color: #adb5bd; } /* ปรับสี */
-        .form-select { appearance: none; }
-        .form-select option { background-color: #fff; color: #212529; } /* ปรับสี */
+        .form-input:focus, .form-select:focus {
+          border-color: #333;
+          box-shadow: 0 0 0 3px rgba(226, 226, 226, 0.2);
+        }
+        .form-input::placeholder { color: #888; }
 
+        .form-select {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          padding-right: 30px;
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23333333' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+          background-repeat: no-repeat;
+          background-position: right 0.5rem center;
+          background-size: 16px 12px;
+        }
 
-        .button-actions-bar { margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6; } /* ปรับสีขอบ */
+        .form-select option { background-color: #fff; color: #333; }
+        .button-actions-bar { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; }
         .button-group, .button-group-split { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
         .button-group-split { justify-content: space-between; }
-
-        .action-button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; color: white; }
-        .action-button.add-entry { background-color: #007bff; }
-        .action-button.add-entry:hover { background-color: #0056b3; }
-        .action-button.save-edit-button { background-color: #28a745; }
-        .action-button.save-edit-button:hover { background-color: #218838; }
+        .action-button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .action-button.add-entry { background-color: #57e497; color: black; }
+        .action-button.add-entry:hover { background-color: #3fc57b; }
+        .action-button.save-edit-button { background-color: #ff9800; }
+        .action-button.save-edit-button:hover { background-color: #ffa500; }
         .action-button.cancel-button { background-color: #6c757d; }
         .action-button.cancel-button:hover { background-color: #5a6268; }
-
         .category-buttons-split { display: flex; }
-        .action-button.add-category-left, .action-button.add-category-right { background-color: #25222a; color: white; flex-grow: 1; justify-content: center; }
+        .action-button.add-category-left, .action-button.add-category-right { background-color: #495057; color: white; }
         .action-button.add-category-left { border-radius: 6px 0 0 6px; }
-        .action-button.add-category-right { border-radius: 0 6px 6px 0; border-left: 1px solid #39383b; }
-        .action-button.add-category-left:hover, .action-button.add-category-right:hover { background-color: #000000; }
+        .action-button.add-category-right { border-radius: 0 6px 6px 0; border-left: 1px solid #6c757d; }
+        .action-button.add-category-left:hover, .action-button.add-category-right:hover { background-color: #343a40; }
 
-        /* --- STYLES FOR FILTER AND SEARCH BAR --- */
         .financial-analysis-section {
-            background: #e9ecef; /* เปลี่ยนจากสีกรมเป็นสีเทาอ่อน */
-            border-radius: 10px;
+            background: #fff;
+            border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-            margin-top: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05); 
+            border: 1px solid #e9e9e9;
         }
-
-        .filter-search-row {
+        .filter-search-row { 
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: space-between; 
+            align-items: center; 
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .filter-controls-container {
             display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
             align-items: center;
             gap: 15px;
+            flex-wrap: wrap;
         }
-
-        .filter-buttons-container {
-            display: flex;
-            align-items: center; /* จัดให้อยู่ในแนวเดียวกัน */
-            border-radius: 0;
-            gap: 15px; /* เพิ่มช่องว่างระหว่างปุ่ม */
-        }
-
-        .filter-button {
-            padding: 10px 0; /* เปลี่ยน padding */
-            border: none;
-            background-color: transparent; 
+        .filter-dropdown {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: 'Kanit', sans-serif;
+            background-color: #fff;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            color: #6c757d; /* ปรับสีข้อความปกติ */
-            transition: color 0.2s, border-bottom 0.2s; 
-            border-bottom: 2px solid transparent; 
+            width: 140px;
         }
-        
-        .filter-button:hover:not(.active) {
-            color: #495057;
+        .custom-date-inputs { display: flex; align-items: center; gap: 8px; }
+        .custom-date-inputs input { padding: 8px 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; background: #fff; color: #333; }
+        .custom-date-inputs span {
+            font-size: 13px;
+            color: #555;
         }
-
-        .filter-button.active {
-            background-color: transparent;
-            color: #007bff; /* สีฟ้าตามที่ต้องการ */
-            font-weight: 600;
-            border-bottom: 2px solid #007bff; /* แถบสีฟ้าด้านล่าง */
-        }
-        
-        /* แก้ไขตามคำขอ: ย้าย input ให้อยู่บรรทัดเดียวกับปุ่ม "กำหนดเอง" */
-        .custom-date-inputs {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-left: 15px; /* เพิ่มช่องว่างเล็กน้อย */
-        }
-
-        .custom-date-inputs input {
-          padding: 8px 12px;
-          border: 1px solid #ced4da;
-          border-radius: 6px;
-          font-size: 14px;
-          background: #fff;
-          color: #212529;
-        }
-
-        .search-input-container {
-            position: relative;
-            flex-grow: 1;
-            max-width: 300px;
-        }
-
-        .search-input-container input {
-            width: 100%;
-            padding: 10px 15px 10px 40px;
-            border: 1px solid #ced4da; /* ปรับสีขอบ */
-            border-radius: 4px; /* ปรับเป็นสี่เหลี่ยมมีขอบเล็กน้อย */
-            font-size: 14px;
-            box-sizing: border-box;
-            background: #fff;
-            color: #212529;
-        }
-        
-        .search-icon {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6c757d; /* ปรับสี */
-        }
-
-        /* --- SUMMARY COLUMNS --- */
-        .summary-columns-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-top: 25px;
-        }
-        
-        .column-card {
-            background: #fff; /* เปลี่ยนเป็นสีขาว */
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
+        .search-input-container { position: relative; flex-grow: 1; max-width: 300px; }
+        .search-input-container input { width: 100%; padding: 8px 12px 8px 35px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; box-sizing: border-box; background: #fff; color: #333; }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #888; }
+        .summary-columns-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .column-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); border: 1px solid #e9e9e9; overflow: hidden; }
 
         .column-header {
-            background-color: #f1f1f1; /* สีพื้นหลังส่วนหัว */
-            border-bottom: 1px solid #dee2e6; /* ปรับสีขอบ */
-            padding: 15px 20px;
+            background-color: #323943;
+            color: white;
+            border-bottom: 1px solid #323943;
+            padding: 12px 15px;
         }
-
-        .column-card:nth-child(1) .column-header { background-color: #595959; color: #fff; }
-        .column-card:nth-child(2) .column-header { background-color: #595959; color: #fff; }
-        .column-card:nth-child(3) .column-header { background-color: #595959; color: #fff; }
-
-        .block-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-            color: inherit; /* ให้รับสีจาก parent */
-        }
-
+        .block-title { font-size: 16px; font-weight: 600; margin: 0; color: inherit; }
         .header-flex { display: flex; justify-content: space-between; align-items: center; }
-
-        .small-text { font-size: 13px; color: inherit; }
-
-        .column-content {
-            padding: 10px;
-            max-height: 400px;
-            min-height: 400px; 
-            overflow-y: auto;
-        }
-        
-        .no-entries-message {
-            text-align: center;
-            color: #6c757d; /* ปรับสี */
-            padding: 20px;
-            font-style: italic;
-        }
-        
-        .financial-entry-card {
-            background: #f8f9fa; /* สีพื้นหลังรายการ */
-            border: 1px solid #dee2e6; /* ปรับสีขอบ */
-            border-radius: 5px;
-            margin-bottom: 10px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            transition: all 0.2s;
-        }
-        
-        .financial-entry-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-
+        .small-text { font-size: 12px; color: inherit; opacity: 0.9; }
+        .column-content { padding: 10px; max-height: 400px; min-height: 200px; overflow-y: auto; }
+        .no-entries-message { text-align: center; color: #888; padding: 20px; font-style: italic; font-size: 12px; }
+        .financial-entry-card { background: #fdfdfd; border: 1px solid #f0f0f0; border-left: 4px solid; border-radius: 4px; margin-bottom: 10px; padding: 10px 12px; transition: all 0.2s; }
+        .financial-entry-card.entry-income { border-left-color: #2ecc71; }
+        .financial-entry-card.entry-expense { border-left-color: #e74c3c; }
+        .financial-entry-card.entry-capital { border-left-color: #3498db; }
+        .financial-entry-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08); }
         .entry-first-line { display: flex; justify-content: space-between; align-items: center; }
-        .entry-name { font-weight: 600; font-size: 15px; color: #212529; } /* ปรับสี */
+        .entry-name { font-weight: 600; font-size: 13px; color: #333; }
         .entry-amount-actions { display: flex; align-items: center; gap: 10px; }
-        .entry-amount-value { font-size: 16px; font-weight: bold; }
+        .entry-amount-value { font-size: 14px; font-weight: bold; }
         .entry-action-buttons { display: flex; gap: 6px; }
-
-        .icon-button {
-            font-size: 12px;
-            padding: 6px;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-            color: #fff;
-        }
+        .icon-button { font-size: 11px; padding: 6px; border-radius: 50%; width: 26px; height: 26px; border: none; cursor: pointer; color: #fff; display:flex; justify-content:center; align-items:center; }
         .icon-button.edit-button { background-color: #ffc107; }
         .icon-button.delete-button { background-color: #dc3545; }
+        .entry-second-line { margin-top: 5px; display: flex; justify-content: space-between; font-size: 11px; color: #777; }
 
-        .entry-second-line { display: flex; justify-content: space-between; font-size: 13px; color: #6c757d; }
-
-        /* --- RESPONSIVE DESIGN --- */
-        @media (max-width: 992px) {
-          .summary-columns-grid { 
-            grid-template-columns: 1fr; 
-          }
+        .load-more-container {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+        .load-more-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            font-size: 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-family: 'Kanit', sans-serif;
+        }
+        .load-more-button:hover {
+            background-color: #0056b3;
+        }
+        .fetching-more-indicator, .no-more-entries {
+            font-size: 14px;
+            color: #6c757d;
+            text-align: center;
+        }
+        .fetching-more-indicator svg {
+            margin-right: 8px;
         }
 
+        @media (max-width: 992px) { .summary-columns-grid { grid-template-columns: 1fr; } }
         @media (max-width: 768px) {
           .button-group, .button-group-split { flex-direction: column; align-items: stretch; }
           .action-button { justify-content: center; }
           .category-buttons-split { flex-direction: row; }
+          .filter-search-row { flex-direction: column; align-items: stretch; }
+          .search-input-container { max-width: none; }
+          .form-bar { grid-template-columns: 1fr; }
         }
-
         @media (max-width: 576px) {
-          .top-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
-          .right-text { font-size: 14px; }
+          .main-container, .financial-analysis-section, .form-bar-container { padding: 15px; }
+          .total-balance-display { padding: 10px; text-align: left;}
           .entry-first-line { flex-direction: column; align-items: flex-start; gap: 5px; }
           .entry-amount-actions { width: 100%; justify-content: space-between; margin-top: 5px; }
-          .entry-second-line { flex-direction: column; align-items: flex-start; gap: 3px; margin-top: 10px; }
-          
-          .financial-analysis-section {
-            gap: 10px;
-          }
-          .filter-search-row {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 10px;
-          }
-          .custom-date-inputs {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 10px;
-          }
-          .custom-date-inputs input {
-            width: 100%;
-          }
-          .search-input-container {
-            max-width: 100%;
-          }
-
-          .form-bar {
-            flex-direction: row;
-            flex-wrap: wrap;
-            align-items: stretch;
-            gap: 8px;
-          }
-          .form-input, .form-select {
-            flex: 1 1 calc(50% - 4px);
-            max-width: calc(50% - 4px);
-            font-size: 13px;
-          }
-          .form-bar input[type="date"] {
-            flex: 1 1 100%;
-            max-width: 100%;
-          }
+          .entry-second-line { flex-direction: column; align-items: flex-start; gap: 3px; margin-top: 8px; }
+          .custom-date-inputs { flex-direction: column; align-items: stretch; width: 100%; margin-left: 0; }
+          .form-bar { flex-direction: column; }
         }
       `}</style>
     </div>
