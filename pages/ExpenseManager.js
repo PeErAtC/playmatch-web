@@ -19,7 +19,7 @@ import {
   faPlus, faEdit, faTrashAlt, faCircle,
   faShoppingBag, faHome, faTools, faMoneyBillWave, faPiggyBank,
   faShop, faTruck, faPlug, faWater, faFileAlt, faDonate,
-  faDollarSign, faRedo, faFolderPlus,
+  faDollarSign, faRedo, faFolderPlus, faSearch,
 } from '@fortawesome/free-solid-svg-icons';
 
 const FA_ICONS_MAP = {
@@ -61,62 +61,37 @@ const formatDate = (dateInput) => {
     return `${day}/${month}/${yearBE}`;
 };
 
-const FinancialEntryTicket = ({ entry, gradientStartColor, gradientEndColor, ticketId, onEdit, onDelete }) => {
+const FinancialEntryTicket = ({ entry, onEdit, onDelete }) => {
     if (!entry) return null;
     const mainText = entry.name ? entry.name.toUpperCase() : 'NO NAME';
     const amountValue = parseFloat(entry.amount);
     const amountText = `฿${amountValue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const dateText = entry.date ? formatDate(entry.date) : 'N/A';
     const categoryText = entry.category ? entry.category : 'ทั่วไป';
-    const dynamicAmountColor = entry.type === 'รายรับ' ? '#28a745' : entry.type === 'รายจ่าย' ? '#dc3545' : '#007bff';
+    const dynamicAmountColor = entry.type === 'รายรับ' ? '#2ecc71' : entry.type === 'รายจ่าย' ? '#e74c3c' : '#3498db';
 
     return (
-        <div className="ticket-svg-container">
-            <svg width="100%" height="100%" viewBox="0 0 500 120">
-                <defs>
-                    <linearGradient id={ticketId} x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" style={{ stopColor: gradientStartColor, stopOpacity: 1 }} />
-                        <stop offset="100%" style={{ stopColor: gradientEndColor, stopOpacity: 1 }} />
-                    </linearGradient>
-                    <filter id="shadow">
-                        <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000" floodOpacity="0.2" />
-                    </filter>
-                </defs>
-                <path
-                    d="M10 0 C 0 0, 0 10, 0 20 L 0 100 C 0 110, 0 120, 10 120 L 490 120 C 500 120, 500 110, 500 100 L 500 20 C 500 10, 500 0, 490 0 Z"
-                    fill={`url(#${ticketId})`} filter="url(#shadow)"
-                />
-                <foreignObject x="15" y="10" width="470" height="100">
-                    <div xmlns="http://www.w3.org/1999/xhtml" className="financial-entry-content-wrapper">
-                        <div className="entry-first-line">
-                            <span className="entry-name">{mainText}</span>
-                            <div className="entry-amount-actions">
-                                <span className="entry-amount-value" style={{ color: dynamicAmountColor }}>{amountText}</span>
-                                <div className="entry-action-buttons">
-                                    <button className="icon-button edit-button" onClick={(e) => { e.stopPropagation(); onEdit(entry); }}>
-                                        <FontAwesomeIcon icon={faEdit} />
-                                    </button>
-                                    <button className="icon-button delete-button" onClick={(e) => { e.stopPropagation(); onDelete(entry.id); }}>
-                                        <FontAwesomeIcon icon={faTrashAlt} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="entry-second-line">
-                            <span className="entry-category-label">ประเภท: {categoryText}</span>
-                            <span className="entry-date-text">วันที่: {dateText}</span>
-                        </div>
+        <div className={`financial-entry-card entry-${entry.type === 'รายรับ' ? 'income' : entry.type === 'รายจ่าย' ? 'expense' : 'capital'}`}>
+            <div className="entry-first-line">
+                <span className="entry-name">{mainText}</span>
+                <div className="entry-amount-actions">
+                    <span className="entry-amount-value" style={{ color: dynamicAmountColor }}>{amountText}</span>
+                    <div className="entry-action-buttons">
+                        <button className="icon-button edit-button" onClick={(e) => { e.stopPropagation(); onEdit(entry); }}>
+                            <FontAwesomeIcon icon={faEdit} />
+                        </button>
+                        <button className="icon-button delete-button" onClick={(e) => { e.stopPropagation(); onDelete(entry.id); }}>
+                            <FontAwesomeIcon icon={faTrashAlt} />
+                        </button>
                     </div>
-                </foreignObject>
-            </svg>
+                </div>
+            </div>
+            <div className="entry-second-line">
+                <span className="entry-category-label">ประเภท: {categoryText}</span>
+                <span className="entry-date-text">วันที่: {dateText}</span>
+            </div>
         </div>
     );
-};
-
-const TICKET_COLORS = {
-    'รายรับ': { gradientStart: '#ffffff', gradientEnd: '#ffffff' },
-    'รายจ่าย': { gradientStart: '#ffffff', gradientEnd: '#ffffff' },
-    'เงินทุน': { gradientStart: '#ffffff', gradientEnd: '#ffffff' },
 };
 
 const ExpenseManager = () => {
@@ -156,6 +131,8 @@ const ExpenseManager = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editEntryId, setEditEntryId] = useState(null);
   const [originalNewEntryState, setOriginalNewEntryState] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const email = localStorage.getItem('loggedInEmail');
@@ -295,7 +272,7 @@ const ExpenseManager = () => {
     setNewEntry({
       name: entryToEdit.name, amount: entryToEdit.amount, type: entryToEdit.type,
       date: entryToEdit.date instanceof Date ? entryToEdit.date.toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10),
-      category: entryToEdit.category, categoryIcon: entryToEdit.categoryIcon,
+      category: entryToedit.category, categoryIcon: entryToEdit.categoryIcon,
     });
     setIsEditing(true); setEditEntryId(entryToEdit.id); setIsEntryFormVisible(true);
   }, [newEntry]);
@@ -335,11 +312,31 @@ const ExpenseManager = () => {
   }, [entries]);
 
   const groupedEntries = useMemo(() => {
+    let filteredEntries = entries;
+
+    // Filter by date first
+    if (filterType === 'month') {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        filteredEntries = filteredEntries.filter(entry => entry.date >= startOfMonth && entry.date <= endOfMonth);
+    } else if (filterType === 'custom' && startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        filteredEntries = filteredEntries.filter(entry => entry.date >= start && entry.date <= end);
+    }
+    
+    // Then filter by search term
+    if (searchTerm) {
+      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      filteredEntries = filteredEntries.filter(entry => entry.name.toLowerCase().includes(lowerCaseSearchTerm));
+    }
+
     const groups = { 'รายรับ': [], 'รายจ่าย': [], 'เงินทุน': [] };
-    entries.forEach(entry => { if (groups[entry.type]) { groups[entry.type].push(entry); } });
+    filteredEntries.forEach(entry => { if (groups[entry.type]) { groups[entry.type].push(entry); } });
     for (const type in groups) { groups[type].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); }
     return groups;
-  }, [entries]);
+  }, [entries, filterType, startDate, endDate, searchTerm]);
 
   const blockTitle = useMemo(() => {
     if (isEditing) { return 'แก้ไขรายการ'; } 
@@ -453,21 +450,45 @@ const ExpenseManager = () => {
           </div>
 
           <div className="financial-analysis-section">
-            <div className="filter-bar">
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                <option value="month">เดือนนี้</option>
-                <option value="all">ทั้งหมด</option>
-                <option value="custom">กำหนดวันที่เอง</option>
-              </select>
-              {filterType === 'custom' && (
-                <>
-                  <label>เริ่ม:</label>
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                  <label>สิ้นสุด:</label>
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                </>
-              )}
+            <div className="filter-search-row">
+              <div className="filter-buttons-container">
+                <button
+                  className={`filter-button ${filterType === 'month' ? 'active' : ''}`}
+                  onClick={() => setFilterType('month')}
+                >
+                  เดือนนี้
+                </button>
+                <button
+                  className={`filter-button ${filterType === 'all' ? 'active' : ''}`}
+                  onClick={() => setFilterType('all')}
+                >
+                  ทั้งหมด
+                </button>
+                <button
+                  className={`filter-button ${filterType === 'custom' ? 'active' : ''}`}
+                  onClick={() => setFilterType('custom')}
+                >
+                  กำหนดเอง
+                </button>
+                {filterType === 'custom' && (
+                  <div className="custom-date-inputs">
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  </div>
+                )}
+              </div>
+
+              <div className="search-input-container">
+                <input
+                  type="text"
+                  placeholder="ค้นหาชื่อรายการ..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <FontAwesomeIcon icon={faSearch} className="search-icon" />
+              </div>
             </div>
+            
             <div className="summary-columns-grid">
                 {['รายรับ', 'รายจ่าย', 'เงินทุน'].map(type => (
                   <div key={type} className="column-card">
@@ -485,9 +506,7 @@ const ExpenseManager = () => {
                           groupedEntries[type].map((entry) => (
                             <FinancialEntryTicket
                               key={entry.id} entry={entry}
-                              gradientStartColor={TICKET_COLORS[entry.type]?.gradientStart}
-                              gradientEndColor={TICKET_COLORS[entry.type]?.gradientEnd}
-                              ticketId={`ticket-${entry.id}`} onEdit={handleEditClick}
+                              onEdit={handleEditClick}
                               onDelete={async (id) => {
                                 const result = await Swal.fire({
                                   title: 'ยืนยันการลบ', text: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?',
@@ -518,80 +537,266 @@ const ExpenseManager = () => {
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap');
 
-        body { background: #f0f2f5; font-family: 'Kanit', sans-serif; }
-
-        /* --- CHANGE: Remove max-width and margin:auto to make it full-width --- */
-        .main-container { 
-          padding: 20px; 
-          width: 100%;
+        /* --- CHANGE: White Theme Colors --- */
+        body { 
+          background: #fff; /* เปลี่ยนจากสีกรมเป็นสีขาว */
+          font-family: 'Kanit', sans-serif; 
+          margin: 0;
+          padding: 0;
           box-sizing: border-box;
+          color: #212529; /* เปลี่ยนสีข้อความหลักเป็นสีดำ */
         }
 
-        .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; margin-bottom: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .left-text, .right-text { font-size: 15px; }
-        .green-amount { color: #28a745; font-weight: 600; }
+        .main-container { 
+          padding: 10px 20px;
+          width: 100%;
+          box-sizing: border-box;
+          background: #f8f9fa; /* สีพื้นหลังอ่อนๆ */
+        }
+
+        .top-bar { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center; 
+          padding: 10px 15px; 
+          background: #e9ecef; /* เปลี่ยนจากสีกรมเป็นสีเทาอ่อน */
+          border-radius: 8px; 
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1); /* ปรับเงาให้ดูละมุนขึ้น */
+          margin-bottom: 20px;
+        }
+        .left-text, .right-text { font-size: 15px; color: #212529; } /* ปรับสีข้อความ */
+        .green-amount { color: #2ecc71; font-weight: 600; }
+        .baht-text { color: #212529; } /* ปรับสีข้อความ */
 
         .loading-message, .error-message, .info-message { text-align: center; padding: 20px; margin: 20px 0; border-radius: 8px; }
-        .error-message { color: #dc3545; background: #f8d7da; }
+        .loading-message { background: #e9ecef; color: #495057; } /* ปรับสี */
+        .error-message { color: #fff; background: #dc3545; }
+        .info-message { color: #6c757d; background: #e9ecef; } /* ปรับสี */
 
-        .form-bar-container { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 25px; }
+        .form-bar-container { 
+          background: #e9ecef; /* เปลี่ยนจากสีกรมเป็นสีเทาอ่อน */
+          border-radius: 10px; 
+          padding: 20px; 
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* ปรับเงา */
+          margin-bottom: 0;
+        }
         .form-toggle-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
-        .form-block-title { font-size: 18px; font-weight: 600; color: #333; }
-        .form-toggle-icon { font-size: 28px; font-weight: 300; color: #555; transition: transform 0.3s ease; }
+        .form-block-title { font-size: 18px; font-weight: 600; color: #212529; } /* ปรับสีข้อความ */
+        .form-toggle-icon { font-size: 28px; font-weight: 300; color: #6c757d; transition: transform 0.3s ease; } /* ปรับสี */
         .form-content-wrapper { overflow: hidden; transition: max-height 0.4s ease-in-out; }
         .form-content-inner { padding-top: 20px; }
 
         .form-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-        .form-input, .form-select { padding: 10px 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; flex: 1 1 160px; }
+        .form-input, .form-select { 
+          padding: 10px 14px; 
+          border: 1px solid #ced4da; /* ปรับสีขอบ */
+          border-radius: 6px; 
+          font-size: 14px; 
+          flex: 1 1 160px; 
+          background: #fff; /* เปลี่ยนเป็นสีขาว */
+          color: #212529; /* เปลี่ยนสีข้อความ */
+        }
+        .form-input::placeholder { color: #adb5bd; } /* ปรับสี */
+        .form-select { appearance: none; }
+        .form-select option { background-color: #fff; color: #212529; } /* ปรับสี */
 
-        .button-actions-bar { margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0; }
+
+        .button-actions-bar { margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6; } /* ปรับสีขอบ */
         .button-group, .button-group-split { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
         .button-group-split { justify-content: space-between; }
 
-        .action-button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; }
-        .action-button.add-entry { background-color: #007bff; color: white; }
+        .action-button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; color: white; }
+        .action-button.add-entry { background-color: #007bff; }
         .action-button.add-entry:hover { background-color: #0056b3; }
-        .action-button.save-edit-button { background-color: #28a745; color: white; }
+        .action-button.save-edit-button { background-color: #28a745; }
         .action-button.save-edit-button:hover { background-color: #218838; }
-        .action-button.cancel-button { background-color: #6c757d; color: white; }
+        .action-button.cancel-button { background-color: #6c757d; }
         .action-button.cancel-button:hover { background-color: #5a6268; }
 
         .category-buttons-split { display: flex; }
-        .action-button.add-category-left, .action-button.add-category-right { background-color: #555; color: white; flex-grow: 1; justify-content: center; }
+        .action-button.add-category-left, .action-button.add-category-right { background-color: #25222a; color: white; flex-grow: 1; justify-content: center; }
         .action-button.add-category-left { border-radius: 6px 0 0 6px; }
-        .action-button.add-category-right { border-radius: 0 6px 6px 0; border-left: 1px solid #777; }
-        .action-button.add-category-left:hover, .action-button.add-category-right:hover { background-color: #333; }
+        .action-button.add-category-right { border-radius: 0 6px 6px 0; border-left: 1px solid #39383b; }
+        .action-button.add-category-left:hover, .action-button.add-category-right:hover { background-color: #000000; }
 
-        .filter-bar { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; margin-bottom: 25px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .filter-bar select, .filter-bar input[type="date"], .filter-bar label { font-size: 14px; }
-
-        /* --- CHANGE: Use CSS Grid for the 3-column layout --- */
-        .summary-columns-grid { 
-          display: grid; 
-          grid-template-columns: repeat(3, 1fr); 
-          gap: 20px; 
+        /* --- STYLES FOR FILTER AND SEARCH BAR --- */
+        .financial-analysis-section {
+            background: #e9ecef; /* เปลี่ยนจากสีกรมเป็นสีเทาอ่อน */
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            margin-top: 20px;
         }
 
-        .column-card { background: #ffffff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); overflow: hidden; display: flex; flex-direction: column; }
-        .column-header { padding: 15px 20px; border-bottom: 1px solid #e9ecef; }
-        .block-title { font-size: 18px; margin: 0; font-weight: 600; }
-        .small-text { font-size: 13px; color: #6c757d; }
-        .column-content { min-height: 400px; max-height: 500px; overflow-y: auto; padding: 10px; }
-        .no-entries-message { text-align: center; color: #888; padding: 20px; }
+        .filter-search-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
 
-        .ticket-svg-container { height: 100px; width: 100%; }
-        .financial-entry-content-wrapper { display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 8px 12px; }
+        .filter-buttons-container {
+            display: flex;
+            align-items: center; /* จัดให้อยู่ในแนวเดียวกัน */
+            border-radius: 0;
+            gap: 15px; /* เพิ่มช่องว่างระหว่างปุ่ม */
+        }
+
+        .filter-button {
+            padding: 10px 0; /* เปลี่ยน padding */
+            border: none;
+            background-color: transparent; 
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6c757d; /* ปรับสีข้อความปกติ */
+            transition: color 0.2s, border-bottom 0.2s; 
+            border-bottom: 2px solid transparent; 
+        }
+        
+        .filter-button:hover:not(.active) {
+            color: #495057;
+        }
+
+        .filter-button.active {
+            background-color: transparent;
+            color: #007bff; /* สีฟ้าตามที่ต้องการ */
+            font-weight: 600;
+            border-bottom: 2px solid #007bff; /* แถบสีฟ้าด้านล่าง */
+        }
+        
+        /* แก้ไขตามคำขอ: ย้าย input ให้อยู่บรรทัดเดียวกับปุ่ม "กำหนดเอง" */
+        .custom-date-inputs {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-left: 15px; /* เพิ่มช่องว่างเล็กน้อย */
+        }
+
+        .custom-date-inputs input {
+          padding: 8px 12px;
+          border: 1px solid #ced4da;
+          border-radius: 6px;
+          font-size: 14px;
+          background: #fff;
+          color: #212529;
+        }
+
+        .search-input-container {
+            position: relative;
+            flex-grow: 1;
+            max-width: 300px;
+        }
+
+        .search-input-container input {
+            width: 100%;
+            padding: 10px 15px 10px 40px;
+            border: 1px solid #ced4da; /* ปรับสีขอบ */
+            border-radius: 4px; /* ปรับเป็นสี่เหลี่ยมมีขอบเล็กน้อย */
+            font-size: 14px;
+            box-sizing: border-box;
+            background: #fff;
+            color: #212529;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d; /* ปรับสี */
+        }
+
+        /* --- SUMMARY COLUMNS --- */
+        .summary-columns-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 25px;
+        }
+        
+        .column-card {
+            background: #fff; /* เปลี่ยนเป็นสีขาว */
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .column-header {
+            background-color: #f1f1f1; /* สีพื้นหลังส่วนหัว */
+            border-bottom: 1px solid #dee2e6; /* ปรับสีขอบ */
+            padding: 15px 20px;
+        }
+
+        .column-card:nth-child(1) .column-header { background-color: #595959; color: #fff; }
+        .column-card:nth-child(2) .column-header { background-color: #595959; color: #fff; }
+        .column-card:nth-child(3) .column-header { background-color: #595959; color: #fff; }
+
+        .block-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            color: inherit; /* ให้รับสีจาก parent */
+        }
+
+        .header-flex { display: flex; justify-content: space-between; align-items: center; }
+
+        .small-text { font-size: 13px; color: inherit; }
+
+        .column-content {
+            padding: 10px;
+            max-height: 400px;
+            min-height: 400px; 
+            overflow-y: auto;
+        }
+        
+        .no-entries-message {
+            text-align: center;
+            color: #6c757d; /* ปรับสี */
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .financial-entry-card {
+            background: #f8f9fa; /* สีพื้นหลังรายการ */
+            border: 1px solid #dee2e6; /* ปรับสีขอบ */
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s;
+        }
+        
+        .financial-entry-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
         .entry-first-line { display: flex; justify-content: space-between; align-items: center; }
-        .entry-name { font-weight: 600; font-size: 15px; }
+        .entry-name { font-weight: 600; font-size: 15px; color: #212529; } /* ปรับสี */
         .entry-amount-actions { display: flex; align-items: center; gap: 10px; }
         .entry-amount-value { font-size: 16px; font-weight: bold; }
         .entry-action-buttons { display: flex; gap: 6px; }
-        .icon-button { font-size: 12px; padding: 6px; border-radius: 50%; width: 28px; height: 28px; border: none; cursor: pointer; transition: all 0.2s; }
-        .icon-button.edit-button { background-color: #ffc107; color: #fff; }
-        .icon-button.delete-button { background-color: #dc3545; color: #fff; }
-        .entry-second-line { display: flex; justify-content: space-between; font-size: 13px; color: #666; }
 
-        /* --- CHANGE: Responsive stacking for columns on smaller screens --- */
+        .icon-button {
+            font-size: 12px;
+            padding: 6px;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #fff;
+        }
+        .icon-button.edit-button { background-color: #ffc107; }
+        .icon-button.delete-button { background-color: #dc3545; }
+
+        .entry-second-line { display: flex; justify-content: space-between; font-size: 13px; color: #6c757d; }
+
+        /* --- RESPONSIVE DESIGN --- */
         @media (max-width: 992px) {
           .summary-columns-grid { 
             grid-template-columns: 1fr; 
@@ -599,10 +804,53 @@ const ExpenseManager = () => {
         }
 
         @media (max-width: 768px) {
-          .form-bar { flex-direction: column; align-items: stretch; }
           .button-group, .button-group-split { flex-direction: column; align-items: stretch; }
           .action-button { justify-content: center; }
           .category-buttons-split { flex-direction: row; }
+        }
+
+        @media (max-width: 576px) {
+          .top-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
+          .right-text { font-size: 14px; }
+          .entry-first-line { flex-direction: column; align-items: flex-start; gap: 5px; }
+          .entry-amount-actions { width: 100%; justify-content: space-between; margin-top: 5px; }
+          .entry-second-line { flex-direction: column; align-items: flex-start; gap: 3px; margin-top: 10px; }
+          
+          .financial-analysis-section {
+            gap: 10px;
+          }
+          .filter-search-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .custom-date-inputs {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .custom-date-inputs input {
+            width: 100%;
+          }
+          .search-input-container {
+            max-width: 100%;
+          }
+
+          .form-bar {
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 8px;
+          }
+          .form-input, .form-select {
+            flex: 1 1 calc(50% - 4px);
+            max-width: calc(50% - 4px);
+            font-size: 13px;
+          }
+          .form-bar input[type="date"] {
+            flex: 1 1 100%;
+            max-width: 100%;
+          }
         }
       `}</style>
     </div>
