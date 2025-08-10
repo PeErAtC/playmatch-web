@@ -1,14 +1,15 @@
 // pages/signup.jsx
-import { useState, useEffect } from "react"; // 👈 1. Import useEffect
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from 'next/link';
 import { useRouter } from "next/router";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db, serverTimestamp } from "../lib/firebaseConfig";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import Head from 'next/head';
 import toast, { Toaster } from 'react-hot-toast';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import Swal from 'sweetalert2';
 
 export default function SignUp() {
   const router = useRouter();
@@ -22,13 +23,92 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState(""); // 👈 2. เพิ่ม State สำหรับจัดการ Error
+  const [passwordError, setPasswordError] = useState("");
+  const [adminContact, setAdminContact] = useState(null);
 
-  // 👇 3. เพิ่ม useEffect เพื่อตรวจสอบรหัสผ่านแบบ Real-time
   useEffect(() => {
-    if (confirmPassword && password !== confirmPassword) {
+    const fetchAdminContact = async () => {
+      try {
+        const configDocRef = doc(db, "configurations", "appConfig");
+        const configSnap = await getDoc(configDocRef);
+        if (configSnap.exists() && configSnap.data().adminLineId) {
+          setAdminContact({
+            adminLineId: configSnap.data().adminLineId,
+            adminLineUrl: configSnap.data().adminLineUrl || "#",
+          });
+        } else {
+          setAdminContact({ adminLineId: "admin_contact", adminLineUrl: "#" });
+          console.warn("Admin contact info not found in configurations/appConfig.");
+        }
+      } catch (error) {
+        console.error("Error fetching admin contact:", error);
+      }
+    };
+    fetchAdminContact();
+  }, []);
+
+  useEffect(() => {
+    if (adminContact) {
+      Swal.fire({
+        title: 'แจ้งเพื่อทราบ',
+        html: `
+          <div class="swal-custom-content">
+            <p style="margin-bottom: 0.5rem;">
+              การสมัครสมาชิกหน้านี้จะได้รับแพ็กเกจ <strong>Free</strong><br>
+              (ใช้งานฟรี 1 ปี) ซึ่งมีข้อจำกัดบางประการ:
+            </p>
+            <ul class="swal-custom-list">
+              <li>จำกัดสมาชิกสูงสุด 12 คน</li>
+              <li>บางเมนูการใช้งานจะถูกล็อค</li>
+            </ul>
+            <p class="swal-custom-contact-info">
+              หากต้องการเพิ่มสมาชิกมากกว่า 12 คน<br>
+              สามารถติดต่อผู้ดูแลเพื่อสมัครแพ็กเกจ <strong>Basic หรือ Pro</strong><br>
+              (ทดลองใช้ฟรี 30 วันไม่มีค่าใช้จ่ายก่อน)
+            </p>
+          </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'ติดต่อแอดมินผ่าน LINE',
+        showCloseButton: true,
+        customClass: {
+          popup: 'swal-custom-popup',
+          title: 'swal-custom-title',
+          htmlContainer: 'swal-custom-html-container',
+          confirmButton: 'swal-custom-confirm-button',
+          closeButton: 'swal-custom-close-button',
+        },
+        didOpen: (popup) => {
+            const titleElement = popup.querySelector('.swal-custom-title');
+            if(titleElement){
+                const iconHTML = `
+                <div class="swal-custom-icon-wrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="m12 8-.01.01"/></svg>
+                </div>`;
+                titleElement.insertAdjacentHTML('beforebegin', iconHTML);
+            }
+        },
+        preConfirm: () => {
+          const myLineUrl = 'https://line.me/R/ti/p/@136rjkgt?from=page&searchId=136rjkgt';
+          window.open(myLineUrl, '_blank');
+          return false;
+        }
+      });
+    }
+  }, [adminContact]);
+
+
+  useEffect(() => {
+    // 1. ตรวจสอบความยาวของรหัสผ่านก่อน (เมื่อผู้ใช้เริ่มพิมพ์)
+    if (password && password.length < 7) {
+      setPasswordError("รหัสผ่านต้องมีอย่างน้อย 7 ตัวอักษร");
+    }
+    // 2. ถ้าความยาวยาวพอแล้ว ให้ตรวจสอบว่ารหัสตรงกันหรือไม่
+    else if (confirmPassword && password !== confirmPassword) {
       setPasswordError("รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน");
-    } else {
+    }
+    // 3. ถ้าทุกอย่างถูกต้อง ให้ลบข้อความ error ออก
+    else {
       setPasswordError("");
     }
   }, [password, confirmPassword]);
@@ -37,39 +117,30 @@ export default function SignUp() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // --- ส่วนการตรวจสอบข้อมูล ---
     if (!email || !password || !confirmPassword || !username || !groupName || !phone) {
       toast.error("กรุณากรอกข้อมูลให้ครบทุกช่อง");
-      return;
-    }
-    if (email !== email.toLowerCase()) {
-      toast.error("อีเมลต้องเป็นตัวพิมพ์เล็กเท่านั้น");
       return;
     }
     if (phone.length !== 10 || !/^\d+$/.test(phone)) {
         toast.error("กรุณากรอกเบอร์โทรศัพท์ 10 หลักให้ถูกต้อง");
         return;
     }
-    // 👇 4. การตรวจสอบรหัสผ่านในส่วนนี้ยังคงไว้เพื่อความปลอดภัย แต่ลบ toast ออก
-    if (password !== confirmPassword) {
-      // ไม่จำเป็นต้องมี toast เพราะผู้ใช้เห็น error message แบบ real-time แล้ว
-      return;
+    if (passwordError) { // ตรวจสอบว่ามี error จาก useEffect หรือไม่
+        return;
     }
     if (groupName.length > 13) {
       toast.error("ชื่อก๊วนต้องมีความยาวไม่เกิน 13 ตัวอักษร");
       return;
     }
-    // --- สิ้นสุดส่วนการตรวจสอบ ---
 
     setLoading(true);
 
     try {
-      // ... (ส่วนที่เหลือของโค้ดเหมือนเดิม) ...
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newUser = userCredential.user;
 
       const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 15);
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
       const userData = {
         username: username,
@@ -80,7 +151,7 @@ export default function SignUp() {
         expiryDate: expiryDate,
         lastLogin: serverTimestamp(),
         role: "Admin",
-        packageType: "Basic",
+        packageType: "Free",
       };
 
       await setDoc(doc(db, "users", newUser.uid), userData);
@@ -95,7 +166,7 @@ export default function SignUp() {
       if (error.code === 'auth/email-already-in-use') {
         toast.error("อีเมลนี้ถูกใช้งานแล้วในระบบ");
       } else if (error.code === 'auth/weak-password') {
-        toast.error("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+        toast.error("รหัสผ่านสั้นเกินไป กรุณาตั้งรหัสผ่านอย่างน้อย 7 ตัวอักษร");
       } else {
         toast.error("เกิดข้อผิดพลาดในการสมัครสมาชิก: " + error.message);
       }
@@ -131,7 +202,6 @@ export default function SignUp() {
         </div>
         <h1 className="login-title">สมัครสมาชิก</h1>
         <form className="login-form" onSubmit={handleSubmit} autoComplete="off">
-           {/* ... Input fields for username, groupName, phone, email ... */}
            <input
             type="text"
             placeholder="Username"
@@ -160,7 +230,7 @@ export default function SignUp() {
             placeholder="Email (ตัวพิมพ์เล็กเท่านั้น)"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.toLowerCase())}
           />
 
           <div className="password-input-wrapper">
@@ -188,7 +258,6 @@ export default function SignUp() {
             </button>
           </div>
 
-          {/* 👇 5. แสดง error message ที่นี่ */}
           {passwordError && <p className="error-text">{passwordError}</p>}
 
           <button type="submit" disabled={loading || passwordError}>
@@ -205,7 +274,6 @@ export default function SignUp() {
       </div>
 
       <style jsx global>{`
-        /* ... Global styles remain the same ... */
         html,
         body,
         #__next {
@@ -221,9 +289,108 @@ export default function SignUp() {
         body::-webkit-scrollbar {
           display: none;
         }
+
+        .swal-custom-popup {
+            border-radius: 1.25rem !important;
+            padding: 1.5rem 1.5rem 2rem 1.5rem !important;
+            width: 90% !important;
+            max-width: 480px !important;
+        }
+
+        .swal-custom-icon-wrapper {
+            margin: 0 auto 1.25rem;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: #e0f2f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #00796b;
+        }
+
+        .swal-custom-title {
+            font-size: 1.75rem !important;
+            font-weight: 600 !important;
+            color: #263238 !important;
+            margin-bottom: 0.5rem !important;
+        }
+
+        .swal-custom-html-container {
+            margin: 0 !important;
+            font-size: 1rem !important;
+            color: #546e7a !important;
+        }
+
+        .swal-custom-content {
+            text-align: center;
+        }
+
+        .swal-custom-content p {
+            margin: 0 0 1rem 0;
+            line-height: 1.6;
+        }
+
+        .swal-custom-list {
+            list-style-type: none;
+            padding-left: 0;
+            margin: 0 auto 1.5rem;
+            display: inline-block;
+            text-align: left;
+        }
+
+        .swal-custom-list li {
+            position: relative;
+            padding-left: 25px;
+            margin-bottom: 0.5rem;
+        }
+
+        .swal-custom-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #00796b;
+            font-weight: bold;
+        }
+
+        .swal-custom-contact-info {
+            font-size: 0.95rem;
+            color: #37474f;
+            background-color: #f1f8e9;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border-left: 4px solid #7cb342;
+        }
+
+        .swal-custom-confirm-button {
+            background-color: transparent !important;
+            color: #00796b !important;
+            border: 2px solid #00796b !important;
+            border-radius: 50px !important;
+            padding: 0.75rem 2rem !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            transition: all 0.2s ease-in-out !important;
+            box-shadow: none !important;
+        }
+
+        .swal-custom-confirm-button:hover {
+            background-color: #00796b !important;
+            color: white !important;
+            transform: translateY(-2px);
+        }
+
+        .swal-custom-close-button {
+            color: #90a4ae !important;
+            font-size: 2rem !important;
+            transition: color 0.2s ease-in-out !important;
+        }
+
+        .swal-custom-close-button:hover {
+            color: #263238 !important;
+        }
       `}</style>
       <style jsx>{`
-        /* ... Other component styles remain the same ... */
         .login-main {
           min-height: 100vh;
           width: 100%;
@@ -302,7 +469,6 @@ export default function SignUp() {
           width: 100%;
           display: flex;
           align-items: center;
-          /* This is new to handle error message below */
           flex-wrap: wrap; 
         }
         .password-input-wrapper input {
@@ -359,7 +525,6 @@ export default function SignUp() {
           transform: translateY(1px) scale(0.99);
           box-shadow: 0 2px 8px #2976d629;
         }
-        /* Style for disabled button */
         .login-form button[type="submit"]:disabled {
             background: #8b96a8;
             cursor: not-allowed;
@@ -386,18 +551,15 @@ export default function SignUp() {
           margin-top: 24px;
           letter-spacing: 0.03em;
         }
-
-        /* 👇 6. เพิ่ม Style สำหรับข้อความ Error */
         .error-text {
           color: #ff9a9a;
           font-size: 0.9rem;
           width: 100%;
           text-align: left;
-          margin-top: -10px; /* ทำให้ข้อความขยับขึ้นไปใกล้ input */
-          margin-bottom: -5px; /* ลดช่องว่างด้านล่าง */
+          margin-top: -10px;
+          margin-bottom: -5px;
           padding-left: 5px;
         }
-
         .login-form-wrapper::before, .login-form-wrapper::after {
             content: "";
             position: absolute;
