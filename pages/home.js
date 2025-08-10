@@ -317,14 +317,17 @@ const Home = () => {
 
   const [showMemberImagesColumn, setShowMemberImagesColumn] = useState(true);
 
+  // --- START: เพิ่มแพ็กเกจ Free ---
   const packageLimits = useMemo(() => ({
+    Free: 12,
     Basic: 40,
     Pro: 150,
     Premium: Infinity
   }), []);
+  // --- END: เพิ่มแพ็กเกจ Free ---
 
   const currentLimit = userPackage ? packageLimits[userPackage] : 0;
-  const isLimitReached = userPackage !== 'premium' && totalMemberCount >= currentLimit;
+  const isLimitReached = userPackage !== 'Premium' && totalMemberCount >= currentLimit;
   const limitMessage = `คุณมีสมาชิก ${totalMemberCount}/${currentLimit} คน (เต็มจำนวน) สำหรับแพ็คเกจ ${userPackage}`;
 
   useEffect(() => {
@@ -415,7 +418,7 @@ const Home = () => {
           let membersToProcess = jsonData;
           const availableSlots = currentLimit - totalMemberCount;
 
-          if (userPackage !== 'premium' && jsonData.length > availableSlots) {
+          if (userPackage !== 'Premium' && jsonData.length > availableSlots) {
             const confirmation = await Swal.fire({
               title: 'จำนวนสมาชิกเกินโควต้า',
               html: `แพ็คเกจ <b>${userPackage}</b> ของคุณสามารถเพิ่มสมาชิกได้อีก <b>${availableSlots}</b> คนเท่านั้น (จาก ${jsonData.length} คนในไฟล์)<br/><br/>คุณต้องการเพิ่มสมาชิก ${availableSlots} คนแรกหรือไม่?`,
@@ -534,25 +537,23 @@ const Home = () => {
           const userData = docSnapshot.data();
           setLoggedInUsername(userData.username);
           setCurrentUserId(docSnapshot.id);
-          setUserPackage(userData.packageType || 'basic');
+          setUserPackage(userData.packageType || 'Free');
 
-          // --- ส่วนที่เพิ่มเข้ามาเพื่อตรวจสอบวันหมดอายุ ---
           if (userData.expiryDate) {
-            const expiry = userData.expiryDate.toDate(); // แปลง Firebase Timestamp เป็น Date Object
+            const expiry = userData.expiryDate.toDate();
             const now = new Date();
             if (expiry < now) {
-              setIsExpired(true); // ตั้งค่า state ว่าหมดอายุแล้ว
+              setIsExpired(true);
             }
           }
-          // --- สิ้นสุดส่วนที่เพิ่มเข้ามา ---
 
         } else {
           console.warn("User data not found for email:", email);
-          setUserPackage('basic');
+          setUserPackage('Free');
         }
       } catch (error) {
         console.error("Error fetching user data: ", error);
-        setUserPackage('basic');
+        setUserPackage('Free');
       }
     }
   };
@@ -709,7 +710,6 @@ const Home = () => {
         return;
     }
 
-    // --- เริ่มส่วนที่เพิ่มเข้ามาเพื่อตรวจสอบชื่อซ้ำ ---
     try {
       if (!currentUserId) {
         Swal.fire("ข้อผิดพลาด", "ไม่พบ ID ผู้ใช้ในระบบ", "error");
@@ -723,10 +723,8 @@ const Home = () => {
       let isDuplicate = false;
       if (!querySnapshot.empty) {
         if (isEditing && selectedUser) {
-          // ถ้ากำลังแก้ไข, เช็คว่าชื่อที่ซ้ำไม่ใช่ของ user คนปัจจุบัน
           isDuplicate = querySnapshot.docs.some(doc => doc.id !== selectedUser.memberId);
         } else if (!isEditing) {
-          // ถ้ากำลังเพิ่มใหม่, แค่เจอชื่อซ้ำก็คือซ้ำเลย
           isDuplicate = true;
         }
       }
@@ -735,7 +733,6 @@ const Home = () => {
         Swal.fire("ชื่อซ้ำ", "มีชื่อสมาชิกนี้อยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น", "error");
         return;
       }
-    // --- สิ้นสุดส่วนที่เพิ่มเข้ามา ---
 
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       if (!dateRegex.test(birthDate)) {
@@ -749,7 +746,7 @@ const Home = () => {
       }
 
       const newUser = {
-        name: trimmedName, // ใช้ trimmedName ที่ตัดช่องว่างแล้ว
+        name: trimmedName,
         level,
         lineId: lineId || "",
         handed: handed || "Right",
@@ -1145,6 +1142,8 @@ const Home = () => {
                         <option value="20">20 รายชื่อ</option>
                         <option value="30">30 รายชื่อ</option>
                         <option value="50">50 รายชื่อ</option>
+                        <option value="100">100 รายชื่อ</option>
+                        <option value="300">รายชื่อทั้งหมด</option>
                     </select>
                 </div>
             </div>
