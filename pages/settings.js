@@ -368,15 +368,18 @@ export default function SettingsPage() {
     });
   };
 
+  // --- START: นี่คือจุดที่แก้ไข (1/2) ---
   const getPackageTypeClassName = (type) => {
     if (!type) return "package-type";
     switch (type.toLowerCase()) {
+      case "free": return "package-type free"; // <<< เพิ่ม case สำหรับ 'free'
       case "basic": return "package-type basic";
       case "pro": return "package-type pro";
       case "premium": return "package-type premium";
       default: return "package-type";
     }
   };
+  // --- END: นี่คือจุดที่แก้ไข (1/2) ---
 
   return (
     <div className="overall-layout">
@@ -777,9 +780,7 @@ export default function SettingsPage() {
         .toggle-label { font-size: 14px; color: #555; font-weight: 400; }
 
         .profile-header { display: flex; align-items: center; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
-        /* --- ADJUSTED CODE START --- */
         .profile-avatar-wrapper { position: relative; flex-shrink: 0; width: 100px; height: 100px; border-radius: 50%; overflow: hidden; background-color: #e9ecef; display: flex; justify-content: center; align-items: center; border: 3px solid var(--accent-color-light); color: var(--accent-color-light); cursor: pointer; }
-        /* --- ADJUSTED CODE END --- */
         .profile-image { width: 100%; height: 100%; object-fit: cover; }
         .upload-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); display: flex; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease; }
         .profile-avatar-wrapper:hover .upload-overlay { opacity: 1; }
@@ -787,18 +788,19 @@ export default function SettingsPage() {
         .upload-loader .lucide-loader { animation: spin 2s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .profile-name-role { display: flex; flex-direction: column; align-items: flex-start; }
-        /* --- ADJUSTED CODE START --- */
         .profile-name-role h4 { margin: 0; font-size: 1.6em; color: #333; }
-        /* --- ADJUSTED CODE END --- */
         .profile-role { margin: 5px 0 0; font-size: 0.95em; color: #666; background-color: #f0f0f0; padding: 4px 10px; border-radius: 5px; }
-        /* --- ADJUSTED CODE START --- */
         .profile-details-list { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
-        /* --- ADJUSTED CODE END --- */
         .info-item { display: flex; align-items: center; gap: 10px; font-size: 15px; }
         .info-icon { color: var(--icon-color-light); }
         .info-label { font-weight: 500; color: #555; min-width: 120px; }
         .info-value { color: #333; font-weight: 400; flex-grow: 1; }
         .info-value.package-type { font-weight: 600; padding: 3px 8px; border-radius: 5px; display: inline-block; line-height: 1.2; flex-grow: 0; width: fit-content; white-space: nowrap; color: #fff; }
+
+        /* --- START: นี่คือจุดที่แก้ไข (2/2) --- */
+        .info-value.package-type.free { background-color: #C0C0C0; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        /* --- END: นี่คือจุดที่แก้ไข (2/2) --- */
+
         .info-value.package-type.basic { background-color: #388E3C; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
         .info-value.package-type.pro { background-color: #0056b3; box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
         .info-value.package-type.premium { background-color: #6A0DAD; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
