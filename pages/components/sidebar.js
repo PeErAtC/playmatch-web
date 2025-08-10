@@ -73,13 +73,14 @@ const allMenuList = [
     path: "/Dashboard",
     icon: <LayoutDashboard size={20} strokeWidth={1.7} />,
   },
-  // START: โค้ดส่วนที่แก้ไข
+  // --- START: นี่คือจุดที่แก้ไข ---
   {
     label: "Ledger",
     path: "/ExpenseManager",
     icon: <BookCopy size={20} strokeWidth={1.7} />,
+    access: ["Basic", "Pro", "Premium"], // <<< เพิ่มบรรทัดนี้เพื่อล็อคสำหรับแพ็กเกจ Free
   },
-  // END: โค้ดส่วนที่แก้ไข
+  // --- END: นี่คือจุดที่แก้ไข ---
 ];
 
 export default function Sidebar({
@@ -113,7 +114,6 @@ export default function Sidebar({
     }
   }, []);
 
-  // --- ส่วนที่แก้ไข: ดึงข้อมูลทั้งหมดจาก Firestore แบบ Real-time ---
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedBirthdayNotifications = localStorage.getItem("birthdayNotifications");
@@ -132,18 +132,15 @@ export default function Sidebar({
             const userDoc = querySnapshot.docs[0];
             const userData = userDoc.data();
 
-            // อัปเดต State ทั้งหมดด้วยข้อมูลล่าสุดจาก Firestore
             setLoggedInUsername(userData.username || "");
             setGroupName(userData.groupName || "");
             setProfileImageUrl(userData.profileImageUrl || null);
           } else {
             console.error("User not found in Firestore with email:", email);
-            // อาจจะต้องการ Logout หรือแสดงสถานะผู้ใช้ที่ไม่รู้จัก
             handleLogout();
           }
         });
 
-        // Cleanup function: ยกเลิก listener เมื่อ component ถูก unmount
         return () => unsubscribe();
       }
     }
