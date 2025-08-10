@@ -560,12 +560,12 @@ export default function SignUp() {
           margin-bottom: -5px;
           padding-left: 5px;
         }
-        .login-form-wrapper::before, .login-form-wrapper::after {
+
+        /* --- START: โค้ดเอฟเฟค Glowing Border และ Twinkling Stars --- */
+        .login-form-wrapper::before {
             content: "";
             position: absolute;
             z-index: -1;
-        }
-        .login-form-wrapper::before {
             top: -4px; left: -4px; right: -4px; bottom: -4px;
             border-radius: 1.8rem;
             background: linear-gradient(165deg, #0059ff, #200cff, #010334, #020a24, #000000);
@@ -574,11 +574,111 @@ export default function SignUp() {
             filter: blur(8px);
             opacity: 0.9;
         }
+
         @keyframes glowing-border {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+
+        .login-form-wrapper::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          border-radius: 1.6rem;
+          pointer-events: none;
+          z-index: 3;
+          background:
+            radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.9) 2px, transparent 2.5px),
+            radial-gradient(circle at 88% 70%, rgba(255, 255, 255, 0.95) 2.2px, transparent 2.7px),
+            radial-gradient(circle at 45% 92%, rgba(255, 255, 255, 0.85) 1.8px, transparent 2.3px),
+            radial-gradient(circle at 60% 8%, rgba(255, 255, 255, 0.9) 1.9px, transparent 2.4px),
+            radial-gradient(circle at 5% 60%, rgba(255, 255, 255, 0.8) 1.7px, transparent 2.2px),
+            radial-gradient(circle at 75% 15%, rgba(255, 255, 255, 0.92) 2.1px, transparent 2.6px),
+            radial-gradient(circle at 20% 85%, rgba(255, 255, 255, 0.88) 1.9px, transparent 2.4px),
+            radial-gradient(circle at 25% 75%, rgba(255, 255, 255, 0.7) 1.5px, transparent 2px),
+            radial-gradient(circle at 75% 25%, rgba(255, 255, 255, 0.75) 1.6px, transparent 2.1px),
+            radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.65) 1.4px, transparent 1.9px),
+            radial-gradient(circle at 70% 40%, rgba(255, 255, 255, 0.7) 1.3px, transparent 1.8px),
+            radial-gradient(circle at 10% 40%, rgba(255, 255, 255, 0.6) 1.1px, transparent 1.6px),
+            radial-gradient(circle at 95% 45%, rgba(255, 255, 255, 0.7) 1.5px, transparent 2px),
+            radial-gradient(circle at 50% 55%, rgba(255, 255, 255, 0.8) 1.7px, transparent 2.2px),
+            radial-gradient(circle at 30% 65%, rgba(255, 255, 255, 0.72) 1.6px, transparent 2.1px),
+            radial-gradient(circle at 80% 5%, rgba(255, 255, 255, 0.68) 1.4px, transparent 1.9px),
+            radial-gradient(circle at 2% 80%, rgba(255, 255, 255, 0.4) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 98% 20%, rgba(255, 255, 255, 0.45) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 20% 5%, rgba(255, 255, 255, 0.5) 1px, transparent 1.5px),
+            radial-gradient(circle at 80% 95%, rgba(255, 255, 255, 0.55) 1.1px, transparent 1.6px),
+            radial-gradient(circle at 15% 30%, rgba(255, 255, 255, 0.4) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 85% 60%, rgba(255, 255, 255, 0.5) 1px, transparent 1.5px),
+            radial-gradient(circle at 30% 10%, rgba(255, 255, 255, 0.4) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 70% 85%, rgba(255, 255, 255, 0.45) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 40% 5%, rgba(255, 255, 255, 0.5) 1px, transparent 1.5px),
+            radial-gradient(circle at 60% 90%, rgba(255, 255, 255, 0.55) 1.1px, transparent 1.6px),
+            radial-gradient(circle at 5% 5%, rgba(255, 255, 255, 0.6) 1.2px, transparent 1.7px),
+            radial-gradient(circle at 95% 95%, rgba(255, 255, 255, 0.65) 1.3px, transparent 1.8px),
+            radial-gradient(circle at 3% 35%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 97% 65%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 18% 48%, rgba(255, 255, 255, 0.42) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 82% 52%, rgba(255, 255, 255, 0.48) 1px, transparent 1.5px),
+            radial-gradient(circle at 4% 10%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 96% 90%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 22% 2%, rgba(255, 255, 255, 0.4) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 78% 98%, rgba(255, 255, 255, 0.45) 1px, transparent 1.5px),
+            radial-gradient(circle at 1% 50%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 99% 50%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 40% 12%, rgba(255, 255, 255, 0.42) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 60% 88%, rgba(255, 255, 255, 0.48) 1px, transparent 1.5px),
+            radial-gradient(circle at 10% 90%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 90% 10%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 5% 25%, rgba(255, 255, 255, 0.4) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 95% 75%, rgba(255, 255, 255, 0.45) 1px, transparent 1.5px),
+            radial-gradient(circle at 25% 15%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 75% 85%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 35% 3%, rgba(255, 255, 255, 0.42) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 65% 97%, rgba(255, 255, 255, 0.48) 1px, transparent 1.5px),
+            radial-gradient(circle at 8% 40%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 92% 60%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 14% 70%, rgba(255, 255, 255, 0.4) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 86% 30%, rgba(255, 255, 255, 0.45) 1px, transparent 1.5px),
+            radial-gradient(circle at 45% 20%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 55% 80%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 38% 70%, rgba(255, 255, 255, 0.42) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 62% 30%, rgba(255, 255, 255, 0.48) 1px, transparent 1.5px),
+            radial-gradient(circle at 28% 92%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 72% 8%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 10% 55%, rgba(255, 255, 255, 0.4) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 90% 45%, rgba(255, 255, 255, 0.45) 1px, transparent 1.5px),
+            radial-gradient(circle at 20% 60%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 80% 40%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 50% 1%, rgba(255, 255, 255, 0.42) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 50% 99%, rgba(255, 255, 255, 0.48) 1px, transparent 1.5px),
+            radial-gradient(circle at 30% 45%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 70% 55%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px),
+            radial-gradient(circle at 48% 28%, rgba(255, 255, 255, 0.4) 0.9px, transparent 1.4px),
+            radial-gradient(circle at 52% 72%, rgba(255, 255, 255, 0.45) 1px, transparent 1.5px),
+            radial-gradient(circle at 5% 75%, rgba(255, 255, 255, 0.3) 0.7px, transparent 1.2px),
+            radial-gradient(circle at 95% 25%, rgba(255, 255, 255, 0.35) 0.8px, transparent 1.3px);
+          background-size: 800px 800px;
+          animation: twinkle 4s infinite ease-in-out;
+          opacity: 0;
+        }
+
+        @keyframes twinkle {
+          0% {
+            opacity: 0;
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+          }
+        }
+        /* --- END: โค้ดเอฟเฟค --- */
       `}</style>
     </main>
   );
