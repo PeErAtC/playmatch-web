@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useRouter } from 'next/router'; // เพิ่ม...
 import Swal from "sweetalert2";
 import { db } from "../lib/firebaseConfig";
 import {
@@ -16,7 +15,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 
-// --- (ส่วนอื่นๆ ของโค้ดที่ไม่เปลี่ยนแปลง) ---
+// --- Constants ---
 const courts = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
 const packageSessionLimits = {
   Basic: 15,
@@ -54,13 +53,8 @@ const getScoreByResult = (result) => {
   if (result === "DRAW") return "1/1";
   return "";
 };
-// --- (จบส่วนที่ไม่เปลี่ยนแปลง) ---
-
 
 const Match = () => {
-  const router = useRouter(); // เพิ่ม...
-  const [isExpired, setIsExpired] = useState(false); // เพิ่ม...
-
   const [matchDate, setMatchDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [topic, setTopic] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -92,6 +86,21 @@ const Match = () => {
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const sessionStateRef = useRef();
+
+  const [paymentInfo, setPaymentInfo] = useState(null);
+
+  // State for Connection Status
+  const [isOnline, setIsOnline] = useState(isBrowser ? navigator.onLine : true);
+  const [lastSuccessfulSave, setLastSuccessfulSave] = useState(null);
+  const [isSavingError, setIsSavingError] = useState(false);
+
+  // Initialize state from sessionStorage to persist across reloads
+  const [backupDocId, setBackupDocId] = useState(() => {
+    if (isBrowser) {
+      return sessionStorage.getItem("adminBackupDocId") || null;
+    }
+    return null;
+  });
 
   const getUserKey = (baseKey) => loggedInEmail ? `${loggedInEmail}_${baseKey}` : null;
 
@@ -137,14 +146,15 @@ const Match = () => {
     }
   }, [earlyPayers, isBrowser, loggedInEmail, isOpen]);
 
+  // Auto-save useEffect
   useEffect(() => {
     if (!isOpen || !loggedInEmail || !isBrowser) {
         return;
     }
     const autoSaveToFirebase = async () => {
-        console.log("Auto-saving session to Firebase...");
         if (!currentUserId) {
             console.error("Auto-save failed: Could not find user ID.");
+            setIsSavingError(true); // Set error state
             return;
         }
 
@@ -152,19 +162,32 @@ const Match = () => {
             ...sessionStateRef.current,
             lastUpdated: serverTimestamp()
         };
-        const backupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
 
+        const userBackupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
         try {
-            await setDoc(backupDocRef, dataToBackup);
-            console.log("Firebase auto-save successful.");
+            await setDoc(userBackupDocRef, dataToBackup);
+            console.log("Firebase user auto-save successful.");
+
+            if (backupDocId) {
+                const adminBackupDocRef = doc(db, "backupMatch", backupDocId);
+                await updateDoc(adminBackupDocRef, dataToBackup);
+                console.log("Admin permanent backup updated successfully.");
+            }
+
+            // On Success
             setShowSaveIndicator(true);
+            setLastSuccessfulSave(new Date()); // Record successful save time
+            setIsSavingError(false); // Clear any previous error
+
         } catch (error) {
             console.error("Error during Firebase auto-save:", error);
+            setIsSavingError(true); // Set error state on failure
         }
     };
-    const intervalId = setInterval(autoSaveToFirebase, 60000);
+
+    const intervalId = setInterval(autoSaveToFirebase, 10000);
     return () => clearInterval(intervalId);
-  }, [isOpen, loggedInEmail, isBrowser, currentUserId]);
+  }, [isOpen, loggedInEmail, isBrowser, currentUserId, backupDocId]);
 
   useEffect(() => {
     if (showSaveIndicator) {
@@ -175,7 +198,25 @@ const Match = () => {
     }
   }, [showSaveIndicator]);
 
-  // แก้ไข... เพิ่มการตรวจสอบวันหมดอายุในฟังก์ชันนี้
+  // Effect to handle browser online/offline status
+  useEffect(() => {
+    if (!isBrowser) return;
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      setIsSavingError(false); // Clear error when connection is back
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [isBrowser]);
+
   const fetchMembers = async () => {
     try {
       if (!loggedInEmail) return;
@@ -191,16 +232,6 @@ const Match = () => {
       const userDoc = userSnap.docs[0];
       const userId = userDoc.id;
       const userData = userDoc.data();
-
-      // --- ส่วนที่แก้ไข: ตรวจสอบวันหมดอายุ ---
-      if (userData.expiryDate) {
-          const expiry = userData.expiryDate.toDate();
-          const now = new Date();
-          if (expiry < now) {
-              setIsExpired(true); // ตั้งค่า state ว่าหมดอายุแล้ว
-          }
-      }
-      // --- จบส่วนที่แก้ไข ---
 
       setCurrentUserId(userId);
       setUserPackage(userData.packageType || 'Basic');
@@ -223,7 +254,7 @@ const Match = () => {
       });
       memberList.sort((a, b) => getLevelOrderIndex(a.level, currentLevelOrder) - getLevelOrderIndex(b.level, currentLevelOrder));
       setMembers(memberList);
-    } catch (err) {
+    } catch (err)      {
       console.error("Error fetching members:", err);
       setMembers([]);
     }
@@ -232,6 +263,28 @@ const Match = () => {
   useEffect(() => {
     fetchMembers();
   }, [loggedInEmail, isBrowser, selectedRegion]);
+
+  // Effect to fetch payment information
+  useEffect(() => {
+    const fetchPaymentInfo = async () => {
+      if (!currentUserId) return;
+      try {
+        const paymentDocRef = doc(db, "paymentInfo", currentUserId);
+        const paymentDocSnap = await getDoc(paymentDocRef);
+        if (paymentDocSnap.exists()) {
+          setPaymentInfo(paymentDocSnap.data());
+          console.log("Payment info loaded successfully.");
+        } else {
+          setPaymentInfo(null); // Set to null if no data found
+          console.log("No payment information found for this user.");
+        }
+      } catch (error) {
+        console.error("Error fetching payment info:", error);
+      }
+    };
+
+    fetchPaymentInfo();
+  }, [currentUserId]);
 
   useEffect(() => {
     if (members.length === 0 && matches.length === 0) { return; }
@@ -309,6 +362,8 @@ const Match = () => {
     setEarlyExitCalculationResult(null);
     setSelectedMemberForEarlyExit("");
     setEarlyPayers([]);
+    setBackupDocId(null);
+    sessionStorage.removeItem("adminBackupDocId"); // Clear persisted backup ID
 
     if (isBrowser && loggedInEmail) {
       localStorage.removeItem(getUserKey("isOpen"));
@@ -319,11 +374,11 @@ const Match = () => {
 
     if (currentUserId) {
         try {
-            const backupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
-            await deleteDoc(backupDocRef);
-            console.log("Firebase session backup cleared.");
+            const userBackupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
+            await deleteDoc(userBackupDocRef);
+            console.log("Firebase user session backup cleared.");
         } catch (error) {
-            console.error("Failed to clear Firebase session backup:", error);
+            console.error("Failed to clear Firebase user session backup:", error);
         }
     }
   };
@@ -359,10 +414,7 @@ const Match = () => {
             }
         }
 
-        if (!currentUserId) {
-            console.log("Waiting for user ID to check Firebase backup...");
-            return;
-        }
+        if (!currentUserId) return;
 
         console.log("localStorage is empty or corrupt, checking Firebase for backup...");
         const backupDocRef = doc(db, `users/${currentUserId}/ActiveSession/current_session_backup`);
@@ -406,7 +458,7 @@ const Match = () => {
         }
     };
 
-    loadSession();
+    if(currentUserId) loadSession();
   }, [isBrowser, loggedInEmail, currentUserId]);
 
   useEffect(() => {
@@ -460,8 +512,16 @@ const Match = () => {
       return;
     }
 
-    const shuffled = [...availableMembers].sort(() => 0.5 - Math.random());
-    const selectedPlayers = shuffled.slice(0, 4);
+    // Sort available members first by the number of games played (ascending),
+    // then randomize the order for players with the same number of games.
+    const sortedPlayers = [...availableMembers].sort((a, b) => {
+      if (a.gamesPlayed < b.gamesPlayed) return -1; // Player 'a' has played fewer games, so 'a' comes first.
+      if (a.gamesPlayed > b.gamesPlayed) return 1;  // Player 'b' has played fewer games, so 'b' comes first.
+      return 0.5 - Math.random(); // If games are equal, randomize their order.
+    });
+
+    // Select the first 4 players from the sorted list.
+    const selectedPlayers = sortedPlayers.slice(0, 4);
 
     const newMatch = {
       matchId: padId(matches.length + 1, 4),
@@ -629,18 +689,7 @@ const Match = () => {
       </option>
     ));
 
-  // แก้ไข... เพิ่มการตรวจสอบวันหมดอายุก่อนเริ่มก๊วน
   const handleStartGroup = async () => {
-    // --- ส่วนที่เพิ่มเข้ามา: ตรวจสอบวันหมดอายุก่อน ---
-    if (isExpired) {
-        Swal.fire({
-            icon: 'error',
-            title: 'บัญชีของคุณหมดอายุแล้ว',
-            text: 'กรุณาต่ออายุการใช้งานเพื่อเริ่มก๊วนใหม่',
-        });
-        return;
-    }
-
     if (!currentUserId) {
         Swal.fire("เกิดข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้ กรุณาลองอีกครั้ง", "error");
         return;
@@ -673,6 +722,27 @@ const Match = () => {
       Swal.fire({ title: "กรุณาระบุหัวเรื่อง", text: "เพิ่มหัวเรื่องเพื่อค้นหาใน History", icon: "warning" });
       return;
     }
+
+    try {
+        const initialBackupData = {
+            ownerId: currentUserId,
+            ownerEmail: loggedInEmail,
+            topic: topic,
+            matchDate: matchDate,
+            sessionStartedAt: serverTimestamp(),
+            matches: [],
+        };
+        const backupCollectionRef = collection(db, "backupMatch");
+        const newDocRef = await addDoc(backupCollectionRef, initialBackupData);
+        setBackupDocId(newDocRef.id);
+        sessionStorage.setItem("adminBackupDocId", newDocRef.id);
+        console.log("Admin permanent backup document created with ID:", newDocRef.id);
+    } catch (error) {
+        console.error("Fatal: Could not create admin backup document. Aborting session start.", error);
+        Swal.fire("เกิดข้อผิดพลาดร้ายแรง", "ไม่สามารถสร้างข้อมูลสำรองหลักได้ กรุณาติดต่อผู้ดูแลระบบ", "error");
+        return;
+    }
+
     if (isBrowser && loggedInEmail) {
       localStorage.setItem(getUserKey("isOpen"), "true");
       localStorage.setItem(getUserKey("matches"), JSON.stringify([]));
@@ -694,12 +764,8 @@ const Match = () => {
   const handleEndGroup = async () => {
     if (isSaving) {
       Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'info',
-        title: 'กำลังบันทึกข้อมูล...',
-        showConfirmButton: false,
-        timer: 2000
+        toast: true, position: 'top-end', icon: 'info', title: 'กำลังบันทึกข้อมูล...',
+        showConfirmButton: false, timer: 2000
       });
       return;
     }
@@ -708,11 +774,8 @@ const Match = () => {
       Swal.fire({
         title: "คุณแน่ใจหรือไม่?",
         text: "ตอนนี้ยังไม่มีแมตช์ที่สร้างไว้ การปิดก๊วนจะรีเซ็ตทุกอย่างและคุณจะต้องเริ่มใหม่ทั้งหมด",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonColor: "#3085d6",
-        cancelButtonColor: "#d33",
-        confirmButtonText: "ใช่, ปิดก๊วนและรีเซ็ต",
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33", confirmButtonText: "ใช่, ปิดก๊วนและรีเซ็ต",
         cancelButtonText: "ยกเลิก",
       }).then((result) => {
         if (result.isConfirmed) {
@@ -845,8 +908,9 @@ const Match = () => {
     if (hours > 0) return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
     return `${pad(minutes)}:${pad(remainingSeconds)}`;
   };
-  const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
+
   const paginatedMatches = matches.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
 
   const calculatePlayerSummary = () => {
     if (!selectedMemberForEarlyExit) {
@@ -888,6 +952,28 @@ const Match = () => {
 
     setEarlyExitCalculationResult(result);
 
+    // Build Payment Info HTML
+    let paymentDetailsHtml = '';
+    if (paymentInfo && (paymentInfo.accountName || paymentInfo.accountNumber || paymentInfo.qrCodeUrl)) {
+        paymentDetailsHtml = `
+            <hr style="margin: 20px 0 15px; border-top: 1px solid #eee;">
+            <h4 style="text-align: center; color: #007bff; margin-bottom: 15px;">ข้อมูลสำหรับชำระเงิน</h4>
+        `;
+        if (paymentInfo.accountName) {
+            paymentDetailsHtml += `<p style="margin-bottom: 8px; font-size: 16px;"><strong>ชื่อบัญชี:</strong> <span style="float: right;">${paymentInfo.accountName}</span></p>`;
+        }
+        if (paymentInfo.accountNumber) {
+            paymentDetailsHtml += `<p style="margin-bottom: 8px; font-size: 16px;"><strong>เลขที่บัญชี:</strong> <span style="float: right;">${paymentInfo.accountNumber}</span></p>`;
+        }
+        if (paymentInfo.qrCodeUrl) {
+            paymentDetailsHtml += `
+              <div style="text-align: center; margin-top: 15px; margin-bottom: 10px;">
+                <img src="${paymentInfo.qrCodeUrl}" alt="QR Code" style="max-width: 180px; max-height: 180px; border: 1px solid #ccc; border-radius: 8px;" />
+              </div>
+            `;
+        }
+    }
+
     Swal.fire({
       title: `ยอดรวมสำหรับ ${result.name}`,
       html: `
@@ -898,8 +984,11 @@ const Match = () => {
           <p style="margin-bottom: 8px;"><strong>ค่าลูก:</strong> <span style="float: right; color: #007bff;">${result.ballCost} บาท</span></p>
           <p style="margin-bottom: 8px;"><strong>ค่าสนาม:</strong> <span style="float: right; color: #007bff;">${result.courtCost} บาท</span></p>
           <p style="margin-bottom: 8px;"><strong>ค่าจัดก๊วน:</strong> <span style="float: right; color: #007bff;">${result.organizeFee} บาท</span></p>
+
+          ${paymentDetailsHtml}
+
           <hr style="margin: 15px 0; border-top: 2px solid #5cb85c;">
-          <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมโดยประมาณ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
+          <h3 style="color: #d9534f; margin-top: 15px; text-align: center;"><strong>ยอดรวมที่ต้องชำระ:</strong> <span style="float: right; font-size: 20px;">${result.estimatedTotalCost} บาท</span></h3>
         </div>
       `,
       icon: "info",
@@ -921,6 +1010,7 @@ const Match = () => {
       }
     });
   };
+
   const handleClearEarlyExitSelection = () => {
     setSelectedMemberForEarlyExit("");
     setEarlyExitCalculationResult(null);
@@ -957,27 +1047,8 @@ const Match = () => {
     });
   };
 
-  // เพิ่ม... ฟังก์ชันสำหรับออกจากระบบ
-  const handleLogout = () => {
-    localStorage.removeItem("loggedInEmail");
-    router.push('/login'); // แก้ไข path ไปยังหน้า login ของคุณ
-  };
-
   return (
     <div style={{ padding: "15px", backgroundColor: "#f0f2f5", minHeight: "100vh", fontFamily: "'Kanit', sans-serif" }}>
-      {/* เพิ่ม... หน้าต่างทับเมื่อหมดอายุ */}
-      {isExpired && (
-        <div className="expiry-overlay">
-          <div className="expiry-content">
-            <h3>บัญชีของคุณหมดอายุแล้ว</h3>
-            <p>กรุณาต่ออายุการใช้งานเพื่อเข้าถึงข้อมูลต่อ</p>
-            <button onClick={handleLogout} className="logout-button">
-              ออกจากระบบ
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="card control-panel-card">
         <div className="control-panel">
           <div className="date-topic-group">
@@ -1002,6 +1073,25 @@ const Match = () => {
               <span style={{ color: "#2196f3", fontWeight: 600 }}>Total Activity Time</span>
               <span style={{ fontWeight: 600, color: "#222", fontSize: "15px" }}>- {formatTime(activityTime)}</span>
             </div>
+
+            {/* Connection Status Indicator */}
+            {isOpen && (
+              <div className={`connection-status ${!isOnline || isSavingError ? 'offline' : 'online'}`}>
+                <span className="status-dot"></span>
+                {!isOnline ? (
+                  <span>คุณกำลังออฟไลน์</span>
+                ) : isSavingError ? (
+                  <span>การเชื่อมต่อมีปัญหา</span>
+                ) : (
+                  <span>
+                    {lastSuccessfulSave
+                      ? `สำรองล่าสุด: ${lastSuccessfulSave.toLocaleTimeString('th-TH')}`
+                      : 'เชื่อมต่ออยู่'}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className={`save-indicator ${showSaveIndicator ? 'visible' : ''}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17.5 22h.5c2.2 0 4-1.8 4-4v-6c0-2.2-1.8-4-4-4h-1.4c-.4-2.8-2.8-5-5.6-5s-5.2 2.2-5.6 5H4c-2.2 0-4 1.8-4 4v6c0 2.2 1.8 4 4 4h.5"/>
@@ -1158,7 +1248,6 @@ const Match = () => {
 
       </div>
       <style jsx>{`
-        /* --- Existing styles --- */
         .card { background-color: #ffffff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); margin-bottom: 30px; }
         .control-panel { display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px; justify-content: space-between; align-items: flex-start; }
         .financial-summary-card { padding-top: 15px; }
@@ -1211,31 +1300,95 @@ const Match = () => {
         .pagination-controls button { background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 12px; transition: background-color 0.3s ease; }
         .pagination-controls button:hover:not(:disabled) { background-color: #0056b3; }
         .pagination-controls button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        .add-match-controls { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 25px; }
+        .add-match-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 25px;
+        }
         .add-match-button { display: block; width: fit-content; margin: 0; padding: 12px 30px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background-color 0.3s ease; }
         .add-match-button.random-match-button { background-color: #4bf196; }
         .add-match-button:hover:not(:disabled) { background-color: #0056b3; }
         .add-match-button.random-match-button:hover:not(:disabled) { background-color: #3fc57b; }
         .add-match-button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        .save-indicator { position: absolute; bottom: -50px; left: 50%; z-index: 10; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #2e7d32; background-color: #e8f5e9; padding: 8px 12px; border-radius: 8px; border: 1px solid #a5d6a7; opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(10px); transition: all 0.5s ease-in-out; }
-        .save-indicator.visible { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
-        .save-indicator svg { stroke: #2e7d32; }
-        .action-button:disabled { background-color: #cccccc; cursor: not-allowed; }
 
-        /* เพิ่ม... CSS สำหรับหน้าต่างหมดอายุ */
-        .expiry-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
-        .expiry-content { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-width: 400px; margin: 20px; }
-        .expiry-content h3 { margin-top: 0; font-size: 24px; color: #d32f2f; }
-        .expiry-content p { font-size: 16px; color: #555; margin-bottom: 30px; }
-        .logout-button { background-color: #d32f2f; color: white; padding: 12px 25px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
-        .logout-button:hover { background-color: #b71c1c; }
+        .connection-status {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+        }
+        .connection-status.online {
+          background-color: #e8f5e9;
+          color: #2e7d32;
+        }
+        .connection-status.offline {
+          background-color: #fbe9e7;
+          color: #c62828;
+        }
+        .status-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background-color: currentColor;
+          animation: pulse 2s infinite;
+        }
+        .connection-status.offline .status-dot {
+          animation: none;
+        }
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.4; }
+          100% { opacity: 1; }
+        }
 
+        .save-indicator {
+          position: absolute;
+          bottom: -50px;
+          left: 50%;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #2e7d32;
+          background-color: #e8f5e9;
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid #a5d6a7;
+          opacity: 0;
+          visibility: hidden;
+          transform: translateX(-50%) translateY(10px);
+          transition: all 0.5s ease-in-out;
+        }
+        .save-indicator.visible {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(-50%) translateY(0);
+        }
+        .save-indicator svg {
+          stroke: #2e7d32;
+        }
+        .action-button:disabled {
+          background-color: #cccccc;
+          cursor: not-allowed;
+        }
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
           .date-topic-group, .action-time-group { flex-direction: column; align-items: stretch; }
           .control-input { width: 100%; }
           .action-button { width: 100%; }
-          .save-indicator { width: fit-content; bottom: -45px; left: 50%; transform: translateX(-50%) translateY(10px); }
+          .save-indicator {
+            width: fit-content;
+            bottom: -45px;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+          }
           .match-table thead { display: none; }
           .match-table, .match-table tbody, .match-table tr, .match-table td { display: block; width: 100%; }
           .match-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; padding: 10px; }
