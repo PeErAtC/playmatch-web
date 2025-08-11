@@ -107,8 +107,8 @@ export default function Login() {
           <Image
             src="/images/Logo-iconnew.png"
             alt="โลโก้ PlayMatch"
-            width={74}
-            height={86}
+            width={100}
+            height={105}
             priority
             style={{
               objectFit: "contain",
@@ -116,6 +116,9 @@ export default function Login() {
             }}
           />
         </div>
+        {/* เพิ่มโค้ดส่วนนี้ */}
+        <h1 className="main-title-login">PlayMatch</h1>
+        {/* สิ้นสุดการเพิ่มโค้ด */}
         <h1 className="login-title">เข้าสู่ระบบ</h1>
         <form className="login-form" onSubmit={handleSubmit} autoComplete="on">
           <input
@@ -146,14 +149,17 @@ export default function Login() {
             </button>
           </div>
           <div className="remember-me">
-            <input 
-              type="checkbox" 
-              id="rememberMe" 
-              name="rememberMe"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-            />
-            <label htmlFor="rememberMe">Remember me</label>
+            <div>
+              <input 
+                type="checkbox" 
+                id="rememberMe" 
+                name="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <label htmlFor="rememberMe">Remember me</label>
+            </div>
+            <a href="/signup" className="signup-link">สมัครใช้งานฟรี</a>
           </div>
           <button type="submit" disabled={loading}>
             {loading ? "กำลังเข้าสู่ระบบ..." : "Sign in"}
@@ -236,33 +242,44 @@ export default function Login() {
           pointer-events: none;
         }
         .login-form-wrapper {
-          position: relative;
-          z-index: 2;
-          background: rgba(255, 255, 255, 0.11);
-          box-shadow: 0 10px 40px 2px rgba(27, 54, 89, 0.23);
-          border-radius: 1.6rem;
-          padding: 44px 44px 26px 44px;
-          width: 100%;
-          max-width: 440px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          backdrop-filter: blur(12px) saturate(1.1);
-          border: 1.2px solid #4fa3f743;
-          height: fit-content;
-        }
+  position: relative;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.08); /* ปรับพื้นหลังให้โปร่งแสงและดูนุ่มนวลขึ้น */
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); /* เพิ่มเงาที่เข้มขึ้นและดูมีมิติ */
+  border-radius: 1.6rem;
+  padding: 44px 44px 26px 44px;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  backdrop-filter: blur(15px) saturate(1.2); /* เพิ่มความเบลอและ saturation ให้ดูมีชีวิตชีวา */
+  border: 1.2px solid rgba(79, 163, 247, 0.2); /* ปรับสีขอบให้โปร่งใสขึ้นเล็กน้อย */
+  height: fit-content;
+}
         .login-logo {
-          margin-bottom: 22px;
+          margin-bottom: -15px;
+        }
+        .main-title-login { /* เพิ่ม CSS สำหรับชื่อ PlayMatch */
+          font-size: 2.5rem;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          margin-bottom: 2px;
+          text-align: center;
+          background: linear-gradient(135deg, #ffffff, #ffffff);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          text-shadow: 0 0 8px rgba(7, 0, 111, 0.7), 0 0 16px rgba(170, 255, 255, 0.4);
         }
         .login-title {
-          font-size: 2rem;
-          font-weight: 700;
-          color: #ffffff;
-          letter-spacing: 0.03em;
-          margin-bottom: 26px;
-          text-align: center;
-          text-shadow: 0 2px 18px #1e375d55;
-        }
+  font-size: 1.25rem;
+  font-weight: 500; /* ลดความหนาของตัวอักษรลงเล็กน้อย */
+  color: #b0c4de; /* เปลี่ยนสีให้ดูนุ่มนวลขึ้น */
+  letter-spacing: 0.08em; /* เพิ่มระยะห่างระหว่างตัวอักษร */
+  margin-bottom: 28px;
+  text-align: center;
+  text-shadow: none; /* ลบเงาข้อความออกเพื่อให้ดูสะอาดตา */
+}
         .login-form {
           display: flex;
           flex-direction: column;
@@ -323,13 +340,33 @@ export default function Login() {
           color: #2976d6;
         }
         .remember-me {
-          display: flex;
+          display: flex; /* ทำให้องค์ประกอบภายในอยู่บรรทัดเดียวกัน */
           align-items: center;
-          gap: 7px;
-          color: #3a5ca8;
+          justify-content: space-between; /* จัดองค์ประกอบให้ชิดซ้ายและขวา */
+          width: 100%;
+          color: #c7d9ff;
           font-size: 0.98rem;
           margin-bottom: 4px;
           user-select: none;
+          font-weight: 500;
+        }
+        .remember-me input[type="checkbox"] {
+          accent-color: #4fa3f7;
+          width: 16px;
+          height: 16px;
+          margin-right: 5px; /* เพิ่มระยะห่างระหว่าง checkbox กับข้อความ */
+        }
+
+        /* สไตล์สำหรับลิงก์ "สมัครใช้งานฟรี" */
+        .signup-link {
+          color: #9cd6ff;
+          font-size: 0.93rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: color 0.2s ease-in-out;
+        }
+        .signup-link:hover {
+          color: #4fa3f7;
         }
         .remember-me input[type="checkbox"] {
           accent-color: #4fa3f7;
