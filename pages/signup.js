@@ -64,7 +64,7 @@ export default function SignUp() {
             <p class="swal-custom-contact-info">
               หากต้องการเพิ่มสมาชิกมากกว่า 12 คน<br>
               สามารถติดต่อผู้ดูแลเพื่อสมัครแพ็กเกจ <strong>Basic หรือ Pro</strong><br>
-              (ทดลองใช้ฟรี 30 วันไม่มีค่าใช้จ่ายก่อน)
+              (ทดลองใช้ฟรีก่อน 30 วันไม่มีค่าใช้จ่าย)
             </p>
           </div>
         `,
@@ -266,10 +266,10 @@ export default function SignUp() {
         </form>
 
         <div className="login-sub-action">
-          มีบัญชีอยู่แล้ว? <Link href="/login">เข้าสู่ระบบที่นี่</Link>
+          มีบัญชีอยู่แล้ว? <a href="/login">เข้าสู่ระบบที่นี่</a>
         </div>
         <div className="login-copyright">
-          © 2025–2026 PlayMatch version 1.5.4
+          © 2025–2026 PlayMatch version 1.6.4
         </div>
       </div>
 
