@@ -628,7 +628,7 @@ const CouponsPage = () => {
                     flex-shrink: 0;
                 }
                 .tabs button { padding: 6px 16px; border: none; background: none; cursor: pointer; font-size: 13px; color: #555; border-radius: 6px; transition: all 0.3s; }
-                .tabs button.active { background-color: #ffffff; color: #000; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                .tabs button.active { background-color: #ffffff; color: #00; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
                 .per-page-selector { 
                     display: flex; 
                     align-items: center; 
