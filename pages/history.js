@@ -120,7 +120,7 @@ const History = () => {
           fetchedMatches.reverse();
         }
 
-        setMatches(fetchedMatches); // อัปเดต state ของ matches
+        setMatches(fetchedMatches); 
 
         if (fetchedMatches.length > 0) {
           setFirstVisible(documentSnapshots.docs[0]);
@@ -224,12 +224,9 @@ const History = () => {
           />
         </div>
 
-        {/* --- START: นี่คือจุดที่แก้ไข --- */}
-        {/* ใช้ matches.length เพื่อแสดงจำนวนรายการบนหน้าจอปัจจุบัน */}
         <div className="total-matches-display">
           <span>จำนวนกิจกรรม {matches.length} รายการ</span>
         </div>
-        {/* --- END: นี่คือจุดที่แก้ไข --- */}
       </div>
 
       <div className="history-controls-container">
@@ -289,15 +286,15 @@ const History = () => {
             )}
             {!isLoading && matches.length > 0 && matches.map((match, idx) => (
               <tr key={match.id || idx} className={idx % 2 === 0 ? "even-row" : "odd-row"}>
-                <td>{formatDate(match.matchDate)}</td>
-                <td>
+                <td data-label="วันเดือนปีที่จัด">{formatDate(match.matchDate)}</td>
+                <td data-label="หัวเรื่อง">
                   {match.topic}
                   {isNewMatch(match) && (<span className="new-match-indicator"> (ใหม่)</span>)}
                 </td>
-                <td>
+                <td data-label="เวลารวมกิจกรรม">
                   {match.totalTime ? `${Math.floor(match.totalTime / 60).toString().padStart(2, '0')}:${(match.totalTime % 60).toString().padStart(2, '0')} นาที` : 'N/A'}
                 </td>
-                <td>
+                <td data-label="รายละเอียด">
                   <button onClick={() => showMatchDetailsInNewTab(match.id)} className="detail-button">
                     ดูรายละเอียด
                   </button>
@@ -313,7 +310,6 @@ const History = () => {
         </table>
       </div>
 
-      {/* CSS is unchanged */}
       <style jsx>{`
         .main-content * {
           font-family: 'Kanit', sans-serif;
@@ -371,14 +367,15 @@ const History = () => {
           color: #333;
           white-space: nowrap;
         }
+
         .history-controls-container {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 1fr auto;
             align-items: center;
             margin-bottom: 20px;
-            flex-wrap: wrap; 
             gap: 15px;
         }
+
         .pagination-controls {
           display: flex;
           justify-content: flex-start;
@@ -388,6 +385,7 @@ const History = () => {
         .per-page-selector {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             gap: 10px;
         }
         .per-page-selector label {
@@ -517,8 +515,10 @@ const History = () => {
         .ranking-status.not-saved {
           color: #dc3545;
         }
+
         @media (max-width: 768px) {
           .main-content { padding: 15px; }
+          .table-responsive-container { overflow-x: hidden; }
           .search-and-total-row {
             grid-template-columns: 1fr;
             gap: 15px;
@@ -535,8 +535,61 @@ const History = () => {
             width: 100%;
           }
           .total-matches-display { justify-content: flex-start; }
-          .matches-table { min-width: 600px; }
+
+          .matches-table thead {
+            display: none;
+          }
+
+          .matches-table, .matches-table tbody, .matches-table tr, .matches-table td {
+            display: block;
+            width: 100%;
+          }
+
+          .matches-table {
+             min-width: unset;
+             box-shadow: none;
+             background: none;
+          }
+
+          .matches-table tr {
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 10px;
+          }
+
+          .matches-table td {
+            text-align: right;
+            padding-left: 50%;
+            position: relative;
+            border: none;
+            border-bottom: 1px solid #f0f0f0;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            white-space: normal;
+          }
+          .matches-table td:last-child {
+             border-bottom: none;
+          }
+
+          .matches-table td:before {
+            content: attr(data-label);
+            position: absolute;
+            left: 10px;
+            width: 45%;
+            padding-right: 10px;
+            text-align: left;
+            font-weight: bold;
+            color: #333;
+          }
+
+          .ranking-status {
+             margin-top: 8px;
+          }
         }
+
         @media (max-width: 480px) {
           .main-content { padding: 10px; }
           .search-and-total-row { padding: 10px; }
@@ -549,10 +602,13 @@ const History = () => {
             padding: 5px 12px;
             font-size: 12px;
           }
-          .history-controls-container {
-            flex-direction: column;
-            align-items: flex-start;
+          /* START: ลบโค้ดส่วนนี้ออกเพื่อให้แสดงผลบรรทัดเดียวกันบนมือถือ */
+          /* .history-controls-container {
+            grid-template-columns: 1fr;
+            justify-items: start;
           }
+          */
+          /* END: ลบโค้ดส่วนนี้ออก */
         }
       `}</style>
     </div>
