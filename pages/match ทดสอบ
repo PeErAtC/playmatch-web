@@ -1369,7 +1369,7 @@ const Match = () => {
         .action-button.start-group:hover { background-color: #3fc57b; }
         .action-button.end-group { background-color: #f44336; }
         .action-button.end-group:hover { background-color: #d32f2f; }
-        .activity-time-display { background-color: #e3f2fd; padding: 10px 15px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+        .activity-time-display { background-color: #e3f2fd; padding: 10px 15px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .action-time-group {
           display: flex;
           flex-wrap: wrap;
@@ -1405,6 +1405,7 @@ const Match = () => {
         .connection-status {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 8px;
           padding: 6px 12px;
           border-radius: 8px;
@@ -1499,9 +1500,20 @@ const Match = () => {
             font-weight: bold;
         }
 
+        @media (max-width: 1100px) {
+          .control-panel {
+            justify-content: center;
+          }
+        }
+
         @media (max-width: 768px) {
           .control-panel { flex-direction: column; align-items: stretch; }
-          .date-topic-group, .action-time-group { flex-direction: column; align-items: stretch; }
+          .date-topic-group, 
+          .action-time-group {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch; /* <<< แก้ไขจาก center เป็น stretch */
+          }
           .control-input { width: 100%; }
           .action-button { width: 100%; }
           .save-indicator {
